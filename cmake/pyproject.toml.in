@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "@PY_FFI_MODULE_NAME@"
+version = "@CMAKE_PROJECT_VERSION@"
+description = "Python binding for @CMAKE_PROJECT_NAME@: @CMAKE_PROJECT_DESCRIPTION@"
+readme = { file = "README.md", content-type = "text/markdown" }
+requires-python = ">=3.10"
+license = { text = "CC BY-NC-ND 4.0" }
+keywords = [
+    "nil",
+    "gate",
+    "DAG",
+    "graph"
+]
+
+[project.urls]
+Homepage = "https://github.com/njaldea/@CMAKE_PROJECT_NAME@"
+Repository = "https://github.com/njaldea/@CMAKE_PROJECT_NAME@"
+Documentation = "https://github.com/njaldea/@CMAKE_PROJECT_NAME@/blob/master/src/ffi/python/README.md"
+
+[tool.setuptools]
+packages = ["@PY_FFI_MODULE_NAME@"]
+
+[tool.setuptools.package-data]
+@PY_FFI_MODULE_NAME@ = [@PY_FFI_PACKAGE_DATA@]
