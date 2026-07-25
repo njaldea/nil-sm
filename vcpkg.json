@@ -1,7 +1,11 @@
 {
     "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
-    "name": "nil-template",
-    "dependencies": [],
+    "name": "nil-sml",
+    "dependencies": [
+        "nil-cmake",
+        "nil-xalt",
+        "bext-sml"
+    ],
     "features": {
         "test": {
             "description": "Enable tests",
