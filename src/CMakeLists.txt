@@ -13,3 +13,4 @@ nil_install_headers(${PROJECT_NAME} INTERFACE)
 nil_install_targets(${PROJECT_NAME})
 
 add_test_subdirectory()
+add_subdirectory(test2)

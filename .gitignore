@@ -2,3 +2,5 @@
 .build
 .configure
 .vs
+.devcontainer
+.github

@@ -230,12 +230,12 @@ namespace nil::sml
             )
             {
                 static_assert(
-                    requires(state_t& state_value_ref, const EV& ev) {
+                    requires(state_t& state_value_ref, const EV& ev, A*... contexts) {
                         {
-                            api_t::template on_event<EV>(state_value_ref, ev)
+                            api_t::template on_event<EV>(state_value_ref, ev, contexts...)
                         } -> concepts::is_allowed_to_use_for_on_event_result;
                     },
-                    "API must expose on_event<Event>(state_value, event) with an allowed "
+                    "API must expose on_event<Event>(state_value, event, contexts...) with an allowed "
                     "return type"
                 );
                 auto result = std::apply(
@@ -360,11 +360,7 @@ namespace nil::sml
                 : state_contexts(init_state_contexts)
                 , api_contexts(init_api_contexts)
                 , queue(init_queue)
-                , current_state(std::apply(
-                      [&](StateContexts*... contexts)
-                      { return api_t::make(init_parent, contexts...); },
-                      *init_state_contexts
-                  ))
+                , current_state(api_t::make(init_parent, init_state_contexts, init_api_contexts))
                 , regions(init_regions(this, queue, state_contexts, api_contexts, regions_t()))
             {
             }
@@ -609,12 +605,16 @@ namespace nil::sml
             using regions_t = nil::xalt::coalesce_t<T, regions_tag>;
             using events_t = nil::xalt::coalesce_t<T, events_tag>;
 
-            template <typename Parent, typename... Contexts>
-            static state_t make(Parent* parent, Contexts*... contexts)
+            template <typename Parent, typename... StateCtxs, typename APICtxs>
+            static state_t make(Parent* parent, std::tuple<StateCtxs*...>* state_contexts, APICtxs* /* api_contexts */)
             {
-                if constexpr (std::is_constructible_v<T, Parent*, Contexts*...>)
+                if constexpr (requires() { T(parent, std::declval<StateCtxs*>()...) ; })
                 {
-                    return T(parent, contexts...);
+                    return std::apply([parent](auto*... contexts) { return T(parent, contexts...); }, *state_contexts);
+                }
+                else if constexpr (requires() { T(parent); })
+                {
+                    return T(parent);
                 }
                 else
                 {
@@ -628,11 +628,11 @@ namespace nil::sml
             }
 
             template <typename E>
-            static auto on_event(state_t& state, const E& event, auto*... api_contexts)
+            static auto on_event(state_t& state, const E& event, auto*... /* api_contexts */)
             {
                 if constexpr (concepts::has_on_event<state_t, E>)
                 {
-                    return state.on_event(event, api_contexts...);
+                    return state.on_event(event);
                 }
                 else
                 {
@@ -640,11 +640,11 @@ namespace nil::sml
                 }
             }
 
-            static auto on_enter(state_t& state, auto*... api_contexts)
+            static auto on_enter(state_t& state, auto*... /* api_contexts */)
             {
                 if constexpr (concepts::has_on_enter<state_t>)
                 {
-                    return state.on_enter(api_contexts...);
+                    return state.on_enter();
                 }
                 else
                 {
@@ -652,11 +652,11 @@ namespace nil::sml
                 }
             }
 
-            static auto on_exit(state_t& state, auto*... api_contexts)
+            static auto on_exit(state_t& state, auto*... /* api_contexts */)
             {
                 if constexpr (concepts::has_on_exit<state_t>)
                 {
-                    return state.on_exit(api_contexts...);
+                    return state.on_exit();
                 }
                 else
                 {
@@ -664,11 +664,11 @@ namespace nil::sml
                 }
             }
 
-            static auto on_regions_complete(state_t& state, auto*... api_contexts)
+            static auto on_regions_complete(state_t& state, auto*... /* api_contexts */)
             {
                 if constexpr (concepts::has_on_regions_complete<state_t>)
                 {
-                    return state.on_regions_complete(api_contexts...);
+                    return state.on_regions_complete();
                 }
                 else
                 {
@@ -690,16 +690,16 @@ namespace nil::sml
         using regions_t = nil::xalt::coalesce_t<T, regions_t_tag>;
         using events_t = nil::xalt::coalesce_t<T, events_t_tag>;
 
-        template <typename Parent, typename... Contexts>
-        static state_t make(Parent* parent, Contexts*... contexts)
+        template <typename Parent, typename StateCtxs, typename APICtxs>
+        static state_t make(Parent* parent, StateCtxs* state_contexts, APICtxs* api_contexts)
         {
-            if constexpr (requires() { T::make(parent, contexts...); })
+            if constexpr (requires() { T::make(parent, state_contexts, api_contexts); })
             {
-                return T::make(parent, contexts...);
+                return T::make(parent, state_contexts, api_contexts);
             }
             else
             {
-                return detail::default_api<inner_t>::make(parent, contexts...);
+                return detail::default_api<inner_t>::make(parent, state_contexts, api_contexts);
             }
         }
 
@@ -757,6 +757,12 @@ namespace nil::sml
     {
         template <typename T>
         using coalesce_default_api = coalesce_api<default_api<T>>;
+
+        template <typename... Regions>
+        struct root
+        {
+            using regions = nil::xalt::tlist<Regions...>;
+        };
     }
 
     template <
@@ -778,11 +784,6 @@ namespace nil::sml
         nil::xalt::tlist<APIContexts...>,
         API>
     {
-        struct RootState
-        {
-            using regions = nil::xalt::tlist<Regions...>;
-        };
-
     public:
         explicit SM(
             std::tuple<StateContexts*...> init_state_contexts = {},
@@ -813,7 +814,7 @@ namespace nil::sml
         std::tuple<StateContexts*...> state_contexts;
         std::tuple<APIContexts*...> api_contexts;
         detail::State<
-            RootState,
+            detail::root<Regions...>,
             nil::xalt::tlist<StateContexts...>,
             nil::xalt::tlist<APIContexts...>,
             API>
