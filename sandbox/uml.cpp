@@ -1,3 +1,4 @@
+#include "nil/sm/formatter/xstate.hpp"
 #include <nil/sm/uml.hpp>
 
 #include <iostream>
@@ -329,7 +330,6 @@ namespace sandbox::uml_example
 
 int main()
 {
-    nil::sm::DefaultSM<sandbox::uml_example::order_workflow> sm{nullptr, nullptr};
-    nil::sm::uml::operator<<(std::cout, sm);
+    std::cout << nil::sm::xstate<nil::sm::DefaultSM<sandbox::uml_example::order_workflow>>();
     return 0;
 }

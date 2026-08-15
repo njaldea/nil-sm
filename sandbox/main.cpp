@@ -2,9 +2,6 @@
 
 #include <cstdio>
 #include <iostream>
-#include <ranges>
-#include <sstream>
-#include <vector>
 
 namespace demo::events
 {
