@@ -23,7 +23,7 @@ namespace nil::sm
     {
         std::size_t state = 0;
         std::size_t region = 0;
-        std::size_t region_count = 1;
+        std::size_t subregions = 1;
         std::string_view name;
         const state_metadata* parent = nullptr;
     };
@@ -849,7 +849,7 @@ namespace nil::sm
             : detail::IState(state_metadata{
                   .state = init_state,
                   .region = init_region,
-                  .region_count = regions_t::size,
+                  .subregions = regions_t::size,
                   .name = detail::type_name<T>(),
                   .parent = init_parent_metadata
               })
@@ -1147,7 +1147,7 @@ namespace nil::sm
             : detail::IState(state_metadata{
                   .state = 0,
                   .region = 0,
-                  .region_count = regions_t::size,
+                  .subregions = regions_t::size,
                   .name = "[--]",
                   .parent = nullptr
               })

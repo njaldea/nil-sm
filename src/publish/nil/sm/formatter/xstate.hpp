@@ -11,15 +11,6 @@
 
 namespace nil::sm::formatter::xstate
 {
-    inline std::ostream& indent(std::ostream& os, std::size_t depth)
-    {
-        for (std::size_t i = 0; i < depth; ++i)
-        {
-            os << "  ";
-        }
-        return os;
-    }
-
     inline void render_node(std::ostream& os, std::size_t depth, const ir::state_node& node);
 
     inline std::string format_target(std::string_view target_id)

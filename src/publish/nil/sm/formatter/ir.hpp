@@ -1,5 +1,6 @@
 #pragma once
 
+#include <ostream>
 #include <string>
 #include <variant>
 #include <vector>
@@ -79,4 +80,69 @@ namespace nil::sm::ir
     {
         std::vector<state_node> roots;
     };
+}
+
+namespace nil::sm::formatter
+{
+    inline std::ostream& indent(std::ostream& os, std::size_t depth)
+    {
+        for (std::size_t i = 0; i < depth; ++i)
+        {
+            os << "    ";
+        }
+
+        return os;
+    }
+
+    inline std::string_view action_name(ir::entry_response response)
+    {
+        switch (response)
+        {
+            case ir::entry_response::noop:
+                return "NOOP";
+            case ir::entry_response::emit:
+                return "Emit";
+        }
+        return "";
+    }
+
+    inline std::string_view action_name(ir::exit_response response)
+    {
+        switch (response)
+        {
+            case ir::exit_response::noop:
+                return "NOOP";
+            case ir::exit_response::emit:
+                return "Emit";
+        }
+        return "";
+    }
+
+    inline std::string_view action_name(ir::regions_finalized_response response)
+    {
+        switch (response)
+        {
+            case ir::regions_finalized_response::noop:
+                return "NOOP";
+            case ir::regions_finalized_response::emit:
+                return "Emit";
+        }
+        return "";
+    }
+
+    inline std::string_view action_name(ir::event_response response)
+    {
+        switch (response)
+        {
+            case ir::event_response::discard:
+                return "Discard";
+            case ir::event_response::forward:
+                return "Forward";
+            case ir::event_response::defer:
+                return "Defer";
+            case ir::event_response::emit:
+                return "Emit";
+        }
+        return "";
+    }
 }

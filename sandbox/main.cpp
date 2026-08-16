@@ -123,7 +123,7 @@ struct SandboxAPI
     {
         auto r = nil::sm::default_api<T>::make(parent, state_contexts, nullptr, metadata);
 
-        if (metadata.region_count == 0)
+        if (metadata.subregions == 0)
         {
             print(std::cout, &metadata);
             std::cout << std::endl;

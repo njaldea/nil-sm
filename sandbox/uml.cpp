@@ -328,8 +328,44 @@ namespace sandbox::uml_example
     };
 }
 
-int main()
+int main(int argc, const char** argv)
 {
-    std::cout << nil::sm::xstate<nil::sm::DefaultSM<sandbox::uml_example::order_workflow>>();
-    return 0;
+    using SM = nil::sm::DefaultSM<sandbox::uml_example::order_workflow>;
+    if (argc > 1)
+    {
+        std::string_view t = argv[1];
+        if (t == "puml")
+        {
+            std::cout << nil::sm::puml<SM>();
+            return 0;
+        }
+        if (t == "mermaid")
+        {
+            std::cout << nil::sm::mermaid<SM>();
+            return 0;
+        }
+        if (t == "dot")
+        {
+            std::cout << nil::sm::dot<SM>();
+            return 0;
+        }
+        if (t == "scxml")
+        {
+            std::cout << nil::sm::scxml<SM>();
+            return 0;
+        }
+        if (t == "xstate")
+        {
+            std::cout << nil::sm::xstate<SM>();
+            return 0;
+        }
+    }
+
+    std::cout << "- puml\n"
+                 "- mermaid\n"
+                 "- dot\n"
+                 "- scxml\n"
+                 "- xstate\n"
+              << std::flush;
+    return 1;
 }

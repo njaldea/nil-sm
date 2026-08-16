@@ -322,7 +322,7 @@ namespace nil::sm::formatter::detail
         return nil::sm::state_metadata{
             .state = state,
             .region = region,
-            .region_count = API<StateT>::regions_t::size,
+            .subregions = API<StateT>::regions_t::size,
             .name = nil::sm::detail::type_name<StateT>(),
             .parent = parent,
         };
