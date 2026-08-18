@@ -26,6 +26,7 @@ struct MyAPI
     // Regions and events lists (usually coalesced from State itself).
     using regions_t = nil::xalt::coalesce_t<State, nil::sm::detail::regions_tag>;
     using events_t  = nil::xalt::coalesce_t<State, nil::sm::detail::events_tag>;
+    using captures_t = nil::xalt::coalesce_t<State, nil::sm::detail::captures_tag>;
 
     // --- Required static methods ---
 
@@ -37,6 +38,11 @@ struct MyAPI
         api_context_t* api_contexts,
         const nil::sm::state_metadata& metadata
     );
+
+    // Checked before child regions for events listed in captures_t. Falling through
+    // (Unhandled/Forward) proceeds to the normal on_event/region-dispatch flow.
+    template <typename E>
+    static auto on_capture(state_t& state, const E& event, api_context_t* api_contexts);
 
     // Dispatches an event. Return type must satisfy the on_event return constraints.
     template <typename E>

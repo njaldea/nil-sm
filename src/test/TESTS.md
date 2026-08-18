@@ -94,6 +94,11 @@
 | [multiple_defers_all_flushed](19_sm_defer_handling.cpp#L204) | Multiple deferred events all flushed in order when transit occurs |
 | [orthogonal_regions_defer_independently](19_sm_defer_handling.cpp#L228) | Two orthogonal regions each defer different event types independently; both flush on transit |
 | [make_intercepted_construction_observer_called](20_sm_coalesce_api.cpp#L157) | Partial API defines only `make`; construction observer fires, on_event falls through to default |
+| [capture_discards_without_dispatching_to_region](22_sm_capture_handling.cpp#L8) | `on_capture` returns `Discard`; region's `on_event` never runs |
+| [undeclared_capture_falls_through_to_region](22_sm_capture_handling.cpp#L52) | Event not in `captures` list skips `on_capture`; region handles it normally |
+| [capture_forward_dispatches_to_region_instead_of_bubbling](22_sm_capture_handling.cpp#L96) | `on_capture` returns `Forward`; propagates down to region instead of bubbling up (opposite of `on_event` `Forward`) |
+| [capture_transit_replaces_state_without_region_reacting](22_sm_capture_handling.cpp#L140) | `on_capture` returns `Transit`; whole state replaced directly, region's `on_event` never runs |
+| [parent_capture_preempts_nested_child_capture](22_sm_capture_handling.cpp#L190) | Parent's `on_capture` handles the event before the nested child's own `on_capture` is ever checked |
 | [on_enter_intercepted_enter_observer_called](20_sm_coalesce_api.cpp#L170) | Partial API defines only `on_enter`; entry observer fires, make and on_event fall through to defaults |
 | [on_event_intercepted_event_observer_called](20_sm_coalesce_api.cpp#L183) | Partial API defines only `on_event`; event observer fires per dispatch, all other hooks use defaults |
 | [custom_make_spreads_tuple_context_to_state_args](20_sm_coalesce_api.cpp#L202) | Custom API `make` uses `std::apply` to spread a tuple state context into individual state constructor args |

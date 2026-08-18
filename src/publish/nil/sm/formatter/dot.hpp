@@ -30,6 +30,11 @@ namespace nil::sm::formatter::dot
                 {
                     result = "on [**] / " + std::string(action_name(info.response));
                 }
+                else if constexpr (std::is_same_v<T, ir::capture_action_info>)
+                {
+                    result = "on " + info.event_name + " [c] / "
+                        + std::string(action_name(info.response));
+                }
                 else
                 {
                     result
@@ -122,18 +127,19 @@ namespace nil::sm::formatter::dot
     {
         for (const auto& transition : node.transitions)
         {
-            indent(os, depth) << transition.source_id << " -> ";
+            indent(os, depth) << source_id(transition) << " -> ";
 
-            if (transition.target_id == "[*]")
+            if (target_id(transition) == "[*]")
             {
                 os << current_term_node;
             }
             else
             {
-                os << transition.target_id;
+                os << target_id(transition);
             }
 
-            os << " [label=\"" << transition.event_name << "\"";
+            os << " [label=\"" << event_name(transition) << (is_capture(transition) ? " [c]" : "")
+               << "\"";
 
             // Use ltail with compound graphs when transitioning from composite state
             if (!node.regions.empty())

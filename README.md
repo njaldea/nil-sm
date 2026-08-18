@@ -119,6 +119,27 @@ Each region handles the same event, then the parent decides based on their colle
 
 **Important:** Users never explicitly return `Unhandled`. The library generates this automatically when a state has no handler for an event.
 
+### Event Capture
+
+A state can declare a `captures` list to intercept an event **before** it reaches child regions:
+
+```cpp
+struct guard
+{
+	using captures = nil::xalt::tlist<e_abort>;
+	using regions = nil::xalt::tlist<child>;
+
+	static auto on_capture(const e_abort&) { return nil::sm::Terminate{}; }
+};
+```
+
+**Order of checks:**
+1. `on_capture(...)` runs first, before child regions ever see the event
+2. If it returns `Unhandled` (event not in `captures`) or `Forward`, the event proceeds to the normal flow — child regions, then this state's own `on_event(...)`
+3. Any other return (`Discard`, `Transit<S>`, `Terminate`, `Defer`, `Emit<...>`) short-circuits: child regions never receive the event
+
+**Important:** `Forward` means the opposite of what it means for `on_event`. For `on_event`, `Forward` bubbles the event *up* to the parent. For `on_capture`, `Forward` lets the event fall *down* into the regions instead of intercepting it.
+
 ---
 
 ## Public API Reference
@@ -148,6 +169,7 @@ For states requiring injected context, use `default_api` with a context type —
 Custom API adapters (used via `SM<API, ...>` or `coalesce_api`) follow this hook shape:
 
 - `make(parent, state_contexts, api_contexts, metadata)`
+- `on_capture(state, event, api_contexts)`
 - `on_event(state, event, api_contexts)`
 - `on_enter(state, api_contexts)`
 - `on_exit(state, api_contexts)`
@@ -337,6 +359,7 @@ A state is a struct/class with optional declarations:
 struct MyState
 {
 	using events = nil::xalt::tlist<EventA, EventB>;  // Optional
+	using captures = nil::xalt::tlist<EventC>;  // Optional; checked before regions
 	using regions = nil::xalt::tlist<ChildA, ChildB>;  // Optional
 	
 	// Optional lifecycle hooks
@@ -345,6 +368,7 @@ struct MyState
 	auto on_regions_finalized() { return nil::sm::NOOP{}; }
 	
 	// Event handlers
+	static auto on_capture(const EventC&) { return nil::sm::Terminate{}; }
 	static auto on_event(const EventA&) { return nil::sm::Discard{}; }
 	static auto on_event(const EventB&) { return nil::sm::Forward{}; }
 };
@@ -352,6 +376,7 @@ struct MyState
 
 **Defaults:**
 - If `events` is omitted → empty list
+- If `captures` is omitted → empty list (no interception)
 - If `regions` is omitted → no children
 - If `on_enter()` / `on_exit()` / `on_regions_finalized()` are omitted → not called
 
@@ -569,6 +594,32 @@ struct root { using regions = nil::xalt::tlist<deferrer>; };
 nil::sm::DefaultSM<root> sm{nullptr, nullptr};
 sm.post(e_save{});  // deferred — stored
 sm.post(e_go{});    // transit to receiver; e_save flushed and handled
+```
+
+---
+
+### 7. Capture Example
+
+Capture intercepts before the child region ever reacts.
+
+```cpp
+struct e_intercept {};
+
+struct child
+{
+	using events = nil::xalt::tlist<e_intercept>;
+	static auto on_event(const e_intercept&) { return nil::sm::Discard{}; }
+};
+
+struct root
+{
+	using regions = nil::xalt::tlist<child>;
+	using captures = nil::xalt::tlist<e_intercept>;
+	static auto on_capture(const e_intercept&) { return nil::sm::Terminate{}; }
+};
+
+nil::sm::DefaultSM<root> sm{nullptr, nullptr};
+sm.post(e_intercept{});  // captured by root; child::on_event never runs
 ```
 
 ---

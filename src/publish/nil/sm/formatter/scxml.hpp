@@ -60,7 +60,7 @@ namespace nil::sm::formatter::scxml
     {
         return std::ranges::any_of(
             node.transitions,
-            [](const auto& t) { return t.target_id == "[*]"; }
+            [](const auto& t) { return target_id(t) == "[*]"; }
         );
     }
 
@@ -129,6 +129,22 @@ namespace nil::sm::formatter::scxml
                     {
                         indent(os, depth)
                             << "<transition event=\"" << sanitize_event(info.event_name) << "\">\n";
+                        if (info.response == ir::event_response::emit)
+                        {
+                            indent(os, depth + 1) << "<raise event=\"" << state_id << ".emit\"/>\n";
+                        }
+                        else
+                        {
+                            indent(os, depth + 1)
+                                << "<!-- Response: " << action_name(info.response) << " -->\n";
+                        }
+                        indent(os, depth) << "</transition>\n";
+                    }
+                    else if constexpr (std::is_same_v<T, ir::capture_action_info>)
+                    {
+                        indent(os, depth)
+                            << "<transition event=\"" << sanitize_event(info.event_name) << "\">\n";
+                        indent(os, depth + 1) << "<!-- captured before regions -->\n";
                         if (info.response == ir::event_response::emit)
                         {
                             indent(os, depth + 1) << "<raise event=\"" << state_id << ".emit\"/>\n";
@@ -217,11 +233,15 @@ namespace nil::sm::formatter::scxml
         // Outgoing transitions defined on this state target self_target
         for (const auto& transition : node.transitions)
         {
-            const bool is_target_final = (transition.target_id == "[*]");
+            const bool is_target_final = (target_id(transition) == "[*]");
             const std::string target
-                = is_target_final ? self_target : resolve_id(transition.target_id, id_map);
-            const std::string ev = sanitize_event(transition.event_name);
+                = is_target_final ? self_target : resolve_id(target_id(transition), id_map);
+            const std::string ev = sanitize_event(event_name(transition));
 
+            if (is_capture(transition))
+            {
+                indent(os, depth + 1) << "<!-- captured before regions -->\n";
+            }
             indent(os, depth + 1) << "<transition event=\"" << ev << "\" target=\"" << target
                                   << "\"/>\n";
         }
@@ -301,11 +321,15 @@ namespace nil::sm::formatter::scxml
         // Outgoing transitions on the parallel state target self_target
         for (const auto& transition : node.transitions)
         {
-            const bool is_target_final = (transition.target_id == "[*]");
+            const bool is_target_final = (target_id(transition) == "[*]");
             const std::string target
-                = is_target_final ? self_target : resolve_id(transition.target_id, id_map);
-            const std::string ev = sanitize_event(transition.event_name);
+                = is_target_final ? self_target : resolve_id(target_id(transition), id_map);
+            const std::string ev = sanitize_event(event_name(transition));
 
+            if (is_capture(transition))
+            {
+                indent(os, depth + 1) << "<!-- captured before regions -->\n";
+            }
             indent(os, depth + 1) << "<transition event=\"" << ev << "\" target=\"" << target
                                   << "\"/>\n";
         }

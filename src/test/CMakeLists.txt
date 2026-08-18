@@ -21,6 +21,7 @@ add_test_executable(
     18_sm_on_exit.cpp
     19_sm_defer_handling.cpp
     20_sm_coalesce_api.cpp
+    22_sm_capture_handling.cpp
 )
 target_link_libraries(sm_test PRIVATE sml)
 target_link_libraries(sm_test PRIVATE GTest::gmock)

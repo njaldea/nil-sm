@@ -136,7 +136,7 @@ namespace nil::sm::formatter::xstate
             {
                 const auto& tx = node.transitions[i];
                 indent(os, depth + 2)
-                    << "\"" << tx.event_name << "\": \"" << format_target(tx.target_id) << "\"";
+                    << "\"" << event_name(tx) << "\": \"" << format_target(target_id(tx)) << "\"";
                 if (i + 1 < node.transitions.size())
                 {
                     os << ",";

@@ -36,6 +36,7 @@ public:
     MOCK_METHOD(void, on_exit_called, (const void* state_id), ());
     MOCK_METHOD(void, on_make_called, (const void* state_id), ());
     MOCK_METHOD(void, on_event_called, (const void* state_id, const void* event_id), ());
+    MOCK_METHOD(void, on_capture_called, (const void* state_id, const void* event_id), ());
     MOCK_METHOD(void, on_regions_finalized_called, (const void* state_id), ());
 };
 
@@ -60,6 +61,7 @@ struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
     using api_t = nil::sm::default_api<State, state_context_t, api_context_t>;
     using regions_t = nil::xalt::coalesce_t<State, nil::sm::detail::regions_tag>;
     using events_t = nil::xalt::coalesce_t<State, nil::sm::detail::events_tag>;
+    using captures_t = nil::xalt::coalesce_t<State, nil::sm::detail::captures_tag>;
 
     // Make the state - delegate to default_api
     template <typename Parent>
@@ -113,6 +115,16 @@ struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
             api_contexts->on_event_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
         }
         return api_t::on_event(state, event, api_contexts);
+    }
+
+    template <typename E>
+    static auto on_capture(state_t& state, const E& event, api_context_t* api_contexts)
+    {
+        if constexpr (!std::is_same_v<state_t, nil::sm::fin>)
+        {
+            api_contexts->on_capture_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
+        }
+        return api_t::on_capture(state, event, api_contexts);
     }
 };
 

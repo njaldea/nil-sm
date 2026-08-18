@@ -228,6 +228,13 @@ namespace nil::sm::detail
             static_cast<api_context_t*>(nullptr)
         ));
 
+        template <typename E>
+        using capture_result_t = decltype(api_t::template on_capture<E>(
+            std::declval<state_t&>(),
+            std::declval<const E&>(),
+            static_cast<api_context_t*>(nullptr)
+        ));
+
         template <typename EventList>
         struct collect_targets;
 
@@ -239,9 +246,21 @@ namespace nil::sm::detail
                     std::remove_cvref_t<event_result_t<E>>>::type...>;
         };
 
+        template <typename CaptureList>
+        struct collect_capture_targets;
+
+        template <typename... E>
+        struct collect_capture_targets<nil::xalt::tlist<E...>>
+        {
+            using type =
+                typename nil::xalt::tlist<>::template join<typename transit_targets_from_action<
+                    std::remove_cvref_t<capture_result_t<E>>>::type...>;
+        };
+
     public:
         using type = typename nil::xalt::tlist<>::template join<
             typename collect_targets<typename api_t::events_t>::type,
+            typename collect_capture_targets<typename api_t::captures_t>::type,
             typename transit_targets_from_action<
                 std::remove_cvref_t<decltype(api_t::on_regions_finalized(
                     std::declval<state_t&>(),
@@ -557,6 +576,11 @@ namespace nil::sm::concepts
         { t.on_event(event) } -> is_allowed_to_use_for_on_event_result;
     };
 
+    template <typename T, typename E>
+    concept has_on_capture = requires(T t, E event) {
+        { t.on_capture(event) } -> is_allowed_to_use_for_on_event_result;
+    };
+
     template <typename T>
     concept is_allowed_to_use_for_lifecycle_hook
         = std::is_same_v<T, NOOP> || nil::xalt::is_of_template_v<T, Emit>;
@@ -612,6 +636,7 @@ namespace nil::sm::detail
 {
     NIL_XALT_COALESCE_TAG(regions, nil::xalt::tlist<>);
     NIL_XALT_COALESCE_TAG(events, nil::xalt::tlist<>);
+    NIL_XALT_COALESCE_TAG(captures, nil::xalt::tlist<>);
 
     using on_event_t = std::variant<
         Terminate,
@@ -688,6 +713,66 @@ namespace nil::sm::detail
 
         static constexpr auto handlers = std::array<event_handler, sizeof...(E)>{
             event_handler{.id = nil::xalt::type_id<E>, .invoke = &call<E>}...
+        };
+
+    public:
+        static on_event_t dispatch(const Emit& event, state_t& state, api_context_t* api_contexts)
+        {
+            for (const auto& handler : handlers)
+            {
+                if (handler.id == event.id)
+                {
+                    return handler.invoke(state, event.data, api_contexts);
+                }
+            }
+
+            return Unhandled();
+        }
+    };
+
+    template <typename S, typename E>
+    struct capture_dispatcher;
+
+    template <typename S, typename... E>
+    struct capture_dispatcher<S, nil::xalt::tlist<E...>>
+    {
+    private:
+        using api_t = typename S::api_t;
+        using state_t = typename api_t::state_t;
+        using api_context_t = typename api_t::api_context_t;
+
+        struct capture_handler
+        {
+            const void* id = nullptr;
+            on_event_t (*invoke)(state_t&, const void*, void*) = nullptr;
+        };
+
+        template <typename EV>
+        static on_event_t call(state_t& state_value, const void* event, void* api_contexts)
+        {
+            static_assert(
+                requires() {
+                    {
+                        api_t::template on_capture<EV>(
+                            state_value,
+                            *static_cast<const EV*>(event),
+                            static_cast<api_context_t*>(api_contexts)
+                        )
+                    } -> concepts::is_allowed_to_use_for_on_event_result;
+                },
+                "API must expose on_capture<Event>(state_value, event, contexts...) with an "
+                "allowed return type"
+            );
+            auto result = api_t::template on_capture<EV>(
+                state_value,
+                *static_cast<const EV*>(event),
+                static_cast<api_context_t*>(api_contexts)
+            );
+            return S::template to_runtime_action_as<on_event_t>(result);
+        }
+
+        static constexpr auto handlers = std::array<capture_handler, sizeof...(E)>{
+            capture_handler{.id = nil::xalt::type_id<E>, .invoke = &call<E>}...
         };
 
     public:
@@ -793,7 +878,9 @@ namespace nil::sm
         using state_t = typename api_t::state_t;
         using regions_t = typename api_t::regions_t;
         using events_t = typename api_t::events_t;
+        using captures_t = typename api_t::captures_t;
         using event_dispatch_t = detail::event_dispatcher<self_t, events_t>;
+        using capture_dispatch_t = detail::capture_dispatcher<self_t, captures_t>;
         using state_context_t = typename api_t::state_context_t;
         using api_context_t = typename api_t::api_context_t;
         using on_event_results_t = std::array<detail::on_event_t, regions_t::size>;
@@ -924,6 +1011,20 @@ namespace nil::sm
                         },
                         on_regions_finalized()
                     );
+                }
+            }
+
+            if (!is_regions_finalized_event)
+            {
+                auto capture_result = capture_dispatch_t::dispatch(
+                    e,
+                    current_state,
+                    static_cast<api_context_t*>(contexts->api)
+                );
+                if (!std::holds_alternative<Unhandled>(capture_result)
+                    && !std::holds_alternative<Forward>(capture_result))
+                {
+                    return capture_result;
                 }
             }
 
@@ -1253,6 +1354,7 @@ namespace nil::sm
         using api_context_t = A;
         using regions_t = nil::xalt::coalesce_t<T, detail::regions_tag>;
         using events_t = nil::xalt::coalesce_t<T, detail::events_tag>;
+        using captures_t = nil::xalt::coalesce_t<T, detail::captures_tag>;
 
         template <typename Parent>
         static state_t make(
@@ -1290,6 +1392,17 @@ namespace nil::sm
         {
             static_assert(concepts::has_on_event<state_t, E>);
             return state.on_event(event);
+        }
+
+        template <typename E>
+        static auto on_capture(
+            state_t& state,
+            const E& event,
+            api_context_t* /* api_contexts */
+        )
+        {
+            static_assert(concepts::has_on_capture<state_t, E>);
+            return state.on_capture(event);
         }
 
         static auto on_enter(state_t& state, api_context_t* /* api_contexts */)
@@ -1346,10 +1459,12 @@ namespace nil::sm
             NIL_XALT_COALESCE_TAG(state_t, defaulter_t::state_t);
             NIL_XALT_COALESCE_TAG(events_t, defaulter_t::events_t);
             NIL_XALT_COALESCE_TAG(regions_t, defaulter_t::regions_t);
+            NIL_XALT_COALESCE_TAG(captures_t, defaulter_t::captures_t);
 
             using state_t = nil::xalt::coalesce_t<T, state_t_tag>;
             using regions_t = nil::xalt::coalesce_t<T, regions_t_tag>;
             using events_t = nil::xalt::coalesce_t<T, events_t_tag>;
+            using captures_t = nil::xalt::coalesce_t<T, captures_t_tag>;
 
             template <typename Parent>
             static state_t make(
@@ -1382,6 +1497,19 @@ namespace nil::sm
                 else
                 {
                     return defaulter_t::on_event(state, event, api_contexts);
+                }
+            }
+
+            template <typename E>
+            static auto on_capture(state_t& state, const E& event, api_context_t* api_contexts)
+            {
+                if constexpr (requires() { API<T>::on_capture(state, event, api_contexts); })
+                {
+                    return API<T>::on_capture(state, event, api_contexts);
+                }
+                else
+                {
+                    return defaulter_t::on_capture(state, event, api_contexts);
                 }
             }
 

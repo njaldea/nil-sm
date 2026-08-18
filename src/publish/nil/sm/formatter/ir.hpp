@@ -54,18 +54,34 @@ namespace nil::sm::ir
         event_response response;
     };
 
+    struct capture_action_info
+    {
+        std::string event_name;
+        event_response response;
+    };
+
     using action_info = std::variant<
         entry_action_info,
         exit_action_info,
         regions_finalized_action_info,
-        event_action_info>;
+        event_action_info,
+        capture_action_info>;
 
-    struct transition_info
+    struct transition_event_info
     {
         std::string source_id;
         std::string target_id; // [*] as sentinel for termination
         std::string event_name;
     };
+
+    struct transition_capture_info
+    {
+        std::string source_id;
+        std::string target_id; // [*] as sentinel for termination
+        std::string event_name;
+    };
+
+    using transition_info = std::variant<transition_event_info, transition_capture_info>;
 
     struct state_node
     {
@@ -144,5 +160,34 @@ namespace nil::sm::formatter
                 return "Emit";
         }
         return "";
+    }
+
+    inline const std::string& source_id(const ir::transition_info& transition)
+    {
+        return std::visit(
+            [](const auto& info) -> const std::string& { return info.source_id; },
+            transition
+        );
+    }
+
+    inline const std::string& target_id(const ir::transition_info& transition)
+    {
+        return std::visit(
+            [](const auto& info) -> const std::string& { return info.target_id; },
+            transition
+        );
+    }
+
+    inline const std::string& event_name(const ir::transition_info& transition)
+    {
+        return std::visit(
+            [](const auto& info) -> const std::string& { return info.event_name; },
+            transition
+        );
+    }
+
+    inline bool is_capture(const ir::transition_info& transition)
+    {
+        return std::holds_alternative<ir::transition_capture_info>(transition);
     }
 }

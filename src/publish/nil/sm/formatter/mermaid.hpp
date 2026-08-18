@@ -23,6 +23,11 @@ namespace nil::sm::formatter::mermaid
                 {
                     return std::string("on [**] / ") + std::string(action_name(info.response));
                 }
+                else if constexpr (std::is_same_v<T, ir::capture_action_info>)
+                {
+                    return "on " + info.event_name + " [c] / "
+                        + std::string(action_name(info.response));
+                }
                 else
                 {
                     return "on " + info.event_name + " / "
@@ -53,8 +58,9 @@ namespace nil::sm::formatter::mermaid
     {
         for (const auto& transition : node.transitions)
         {
-            indent(os, depth) << transition.source_id << " --> " << transition.target_id << " : "
-                              << transition.event_name << "\n";
+            indent(os, depth) << source_id(transition) << " --> " << target_id(transition) << " : "
+                              << event_name(transition) << (is_capture(transition) ? " [c]" : "")
+                              << "\n";
         }
     }
 

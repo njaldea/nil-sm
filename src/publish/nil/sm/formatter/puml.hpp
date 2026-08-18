@@ -31,6 +31,11 @@ namespace nil::sm::formatter::puml
                     indent(os, depth)
                         << node_id << " : on [**] / " << action_name(info.response) << "\n";
                 }
+                else if constexpr (std::is_same_v<T, ir::capture_action_info>)
+                {
+                    indent(os, depth) << node_id << " : on " << info.event_name << " [c] / "
+                                      << action_name(info.response) << "\n";
+                }
                 else
                 {
                     indent(os, depth) << node_id << " : on " << info.event_name << " / "
@@ -49,8 +54,9 @@ namespace nil::sm::formatter::puml
         }
         for (const auto& transition : node.transitions)
         {
-            indent(os, depth) << transition.source_id << " --> " << transition.target_id << " : "
-                              << transition.event_name << "\n";
+            indent(os, depth) << source_id(transition) << " --> " << target_id(transition) << " : "
+                              << event_name(transition) << (is_capture(transition) ? " [c]" : "")
+                              << "\n";
         }
     }
 

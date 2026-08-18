@@ -90,7 +90,9 @@ namespace nil::sm::formatter::detail
         }
         else if constexpr (std::is_same_v<R, Terminate>)
         {
-            node.transitions.push_back({std::string(source_id), "[*]", "[**]"});
+            node.transitions.emplace_back(
+                ir::transition_event_info{std::string(source_id), "[*]", "[**]"}
+            );
         }
         else if constexpr (nil::xalt::is_of_template_v<R, Transit>)
         {
@@ -101,9 +103,11 @@ namespace nil::sm::formatter::detail
                 node_metadata.region,
                 target_state
             );
-            node.transitions.push_back(
-                {std::string(source_id), stable_state_id(target_metadata), "[**]"}
-            );
+            node.transitions.emplace_back(ir::transition_event_info{
+                std::string(source_id),
+                stable_state_id(target_metadata),
+                "[**]"
+            });
         }
         else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
         {
@@ -125,8 +129,15 @@ namespace nil::sm::formatter::detail
         }
     }
 
-    template <template <typename...> typename API, typename RegionInitial, typename E, typename R>
-    void emit_event_action(
+    template <
+        template <typename...>
+        typename API,
+        typename RegionInitial,
+        typename E,
+        typename R,
+        typename ActionInfoT,
+        typename TransitionInfoT>
+    void emit_reaction_action(
         const nil::sm::state_metadata& node_metadata,
         ir::state_node& node,
         std::string_view source_id
@@ -136,24 +147,26 @@ namespace nil::sm::formatter::detail
 
         if constexpr (std::is_same_v<R, Terminate>)
         {
-            node.transitions.push_back({std::string(source_id), "[*]", std::string(event_name)});
+            node.transitions.push_back(
+                TransitionInfoT{std::string(source_id), "[*]", std::string(event_name)}
+            );
         }
         else if constexpr (std::is_same_v<R, Discard>)
         {
             node.actions.emplace_back(
-                ir::event_action_info{std::string(event_name), ir::event_response::discard}
+                ActionInfoT{std::string(event_name), ir::event_response::discard}
             );
         }
         else if constexpr (std::is_same_v<R, Forward>)
         {
             node.actions.emplace_back(
-                ir::event_action_info{std::string(event_name), ir::event_response::forward}
+                ActionInfoT{std::string(event_name), ir::event_response::forward}
             );
         }
         else if constexpr (std::is_same_v<R, Defer>)
         {
             node.actions.emplace_back(
-                ir::event_action_info{std::string(event_name), ir::event_response::defer}
+                ActionInfoT{std::string(event_name), ir::event_response::defer}
             );
         }
         else if constexpr (std::is_same_v<R, Unhandled>)
@@ -169,25 +182,28 @@ namespace nil::sm::formatter::detail
                 node_metadata.region,
                 target_state
             );
-            node.transitions.push_back(
-                {std::string(source_id), stable_state_id(target_metadata), std::string(event_name)}
-            );
+            node.transitions.push_back(TransitionInfoT{
+                std::string(source_id),
+                stable_state_id(target_metadata),
+                std::string(event_name)
+            });
         }
         else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
         {
-            node.actions.emplace_back(
-                ir::event_action_info{std::string(event_name), ir::event_response::emit}
+            node.actions.emplace_back(ActionInfoT{std::string(event_name), ir::event_response::emit}
             );
         }
         else if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
         {
             [&]<typename... V>(nil::xalt::tlist<V...>)
             {
-                (emit_event_action<API, RegionInitial, E, std::remove_cvref_t<V>>(
-                     node_metadata,
-                     node,
-                     source_id
-                 ),
+                (emit_reaction_action<
+                     API,
+                     RegionInitial,
+                     E,
+                     std::remove_cvref_t<V>,
+                     ActionInfoT,
+                     TransitionInfoT>(node_metadata, node, source_id),
                  ...);
             }(nil::xalt::to_tlist_t<R>{});
         }
@@ -202,17 +218,15 @@ namespace nil::sm::formatter::detail
     void emit_events(
         const nil::sm::state_metadata& node_metadata,
         ir::state_node& node,
-        std::string_view source_id,
-        nil::xalt::tlist<E...> events
+        [[maybe_unused]] std::string_view source_id,
+        nil::xalt::tlist<E...> /* events */
     )
     {
-        (void)events;
-        (void)source_id;
         using api_t = API<T>;
         using state_t = typename api_t::state_t;
         using api_context_t = typename api_t::api_context_t;
 
-        (emit_event_action<
+        (emit_reaction_action<
              API,
              RegionInitial,
              E,
@@ -220,7 +234,40 @@ namespace nil::sm::formatter::detail
                  std::declval<state_t&>(),
                  std::declval<const E&>(),
                  static_cast<api_context_t*>(nullptr)
-             ))>>(node_metadata, node, source_id),
+             ))>,
+             ir::event_action_info,
+             ir::transition_event_info>(node_metadata, node, source_id),
+         ...);
+    }
+
+    template <
+        template <typename...>
+        typename API,
+        typename T,
+        typename RegionInitial,
+        typename... E>
+    void emit_captures(
+        const nil::sm::state_metadata& node_metadata,
+        ir::state_node& node,
+        [[maybe_unused]] std::string_view source_id,
+        nil::xalt::tlist<E...> /* captures */
+    )
+    {
+        using api_t = API<T>;
+        using state_t = typename api_t::state_t;
+        using api_context_t = typename api_t::api_context_t;
+
+        (emit_reaction_action<
+             API,
+             RegionInitial,
+             E,
+             std::remove_cvref_t<decltype(api_t::template on_capture<E>(
+                 std::declval<state_t&>(),
+                 std::declval<const E&>(),
+                 static_cast<api_context_t*>(nullptr)
+             ))>,
+             ir::capture_action_info,
+             ir::transition_capture_info>(node_metadata, node, source_id),
          ...);
     }
 
@@ -248,6 +295,12 @@ namespace nil::sm::formatter::detail
         );
         emit_lifecycle_action<on_exit_result_t, ir::exit_action_info, ir::exit_response>(
             node.actions
+        );
+        emit_captures<API, T, RegionInitial>(
+            node_metadata,
+            node,
+            source_id,
+            typename api_t::captures_t{}
         );
         emit_events<API, T, RegionInitial>(
             node_metadata,
