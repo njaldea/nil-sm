@@ -137,8 +137,16 @@ namespace
             || (r1 == region_rx::unhandled && r2 == region_rx::unhandled);
     }
 
+    constexpr bool parent_should_be_called_after_transits(region_rx r1, region_rx r2)
+    {
+        return parent_should_be_called(
+            r1 == region_rx::transit ? region_rx::discard : r1,
+            r2 == region_rx::transit ? region_rx::discard : r2
+        );
+    }
+
     template <typename T>
-    using MatrixTestAPI = nil::sm::default_api<T, RegressionMatrixObserver, void>;
+    using MatrixTestAPI = nil::sm::api::Default<T, RegressionMatrixObserver, void>;
 
     template <typename... Regions>
     using MatrixTestSM = nil::sm::SM<MatrixTestAPI, Regions...>;
@@ -155,28 +163,46 @@ namespace
         MatrixTestSM<root> sm(&obs, {});
 
         {
-            // Expectations vary by which regions handle the event
+            testing::InSequence sequence;
+
             if constexpr (K1 != region_rx::unhandled)
             {
-                EXPECT_CALL(obs, on_source_event(1, testing::_)).Times(testing::AtLeast(1));
+                EXPECT_CALL(obs, on_source_event(1, testing::_)).Times(1);
             }
             if constexpr (K2 != region_rx::unhandled)
             {
-                EXPECT_CALL(obs, on_source_event(2, testing::_)).Times(testing::AtLeast(1));
+                EXPECT_CALL(obs, on_source_event(2, testing::_)).Times(1);
             }
             if constexpr (parent_should_be_called(K1, K2))
             {
-                EXPECT_CALL(obs, on_parent_event(testing::_)).Times(testing::AtLeast(1));
+                EXPECT_CALL(obs, on_parent_event(testing::_)).Times(1);
             }
+            sm.post(e1{});
+        }
+
+        {
+            testing::InSequence sequence;
+
             if constexpr (K1 == region_rx::transit)
             {
-                EXPECT_CALL(obs, on_target_event(1, testing::_)).Times(testing::AtLeast(1));
+                EXPECT_CALL(obs, on_target_event(1, testing::_)).Times(1);
+            }
+            else if constexpr (K1 != region_rx::unhandled)
+            {
+                EXPECT_CALL(obs, on_source_event(1, testing::_)).Times(1);
             }
             if constexpr (K2 == region_rx::transit)
             {
-                EXPECT_CALL(obs, on_target_event(2, testing::_)).Times(testing::AtLeast(1));
+                EXPECT_CALL(obs, on_target_event(2, testing::_)).Times(1);
             }
-            sm.post(e1{});
+            else if constexpr (K2 != region_rx::unhandled)
+            {
+                EXPECT_CALL(obs, on_source_event(2, testing::_)).Times(1);
+            }
+            if constexpr (parent_should_be_called_after_transits(K1, K2))
+            {
+                EXPECT_CALL(obs, on_parent_event(testing::_)).Times(1);
+            }
             sm.post(e1{});
         }
     }
@@ -188,17 +214,14 @@ TEST(sm_feature_regression_matrix, orthogonal_two_region_reaction_matrix)
     run_matrix_case<region_rx::unhandled, region_rx::forward>("UF");
     run_matrix_case<region_rx::unhandled, region_rx::discard>("UD");
     run_matrix_case<region_rx::unhandled, region_rx::transit>("UT");
-
     run_matrix_case<region_rx::forward, region_rx::unhandled>("FU");
     run_matrix_case<region_rx::forward, region_rx::forward>("FF");
     run_matrix_case<region_rx::forward, region_rx::discard>("FD");
     run_matrix_case<region_rx::forward, region_rx::transit>("FT");
-
     run_matrix_case<region_rx::discard, region_rx::unhandled>("DU");
     run_matrix_case<region_rx::discard, region_rx::forward>("DF");
     run_matrix_case<region_rx::discard, region_rx::discard>("DD");
     run_matrix_case<region_rx::discard, region_rx::transit>("DT");
-
     run_matrix_case<region_rx::transit, region_rx::unhandled>("TU");
     run_matrix_case<region_rx::transit, region_rx::forward>("TF");
     run_matrix_case<region_rx::transit, region_rx::discard>("TD");

@@ -122,7 +122,7 @@ namespace
     };
 
     template <typename T>
-    using ExitTestAPI = nil::sm::default_api<T, ExitObserver, void>;
+    using ExitTestAPI = nil::sm::api::Default<T, ExitObserver, void>;
 
     template <typename... Regions>
     using ExitTestSM = nil::sm::SM<ExitTestAPI, Regions...>;
@@ -131,9 +131,12 @@ namespace
 TEST(sm_feature_on_exit, invokes_on_exit_on_state_destruction)
 {
     testing::StrictMock<ExitObserver> obs;
+    testing::InSequence sequence;
 
-    ExitTestSM<exit_only_state> sm(&obs, {});
-    EXPECT_CALL(obs, on_exit_called()).Times(1);
+    {
+        ExitTestSM<exit_only_state> sm(&obs, {});
+        EXPECT_CALL(obs, on_exit_called()).Times(1);
+    }
 }
 
 TEST(sm_feature_on_exit, destroys_child_before_parent_on_exit)
@@ -141,9 +144,11 @@ TEST(sm_feature_on_exit, destroys_child_before_parent_on_exit)
     testing::StrictMock<ExitObserver> obs;
     testing::InSequence sequence;
 
-    ExitTestSM<parent_exit_state> sm(&obs, {});
-    EXPECT_CALL(obs, on_exit_from_state(1)).Times(1);
-    EXPECT_CALL(obs, on_exit_from_state(2)).Times(1);
+    {
+        ExitTestSM<parent_exit_state> sm(&obs, {});
+        EXPECT_CALL(obs, on_exit_from_state(1)).Times(1);
+        EXPECT_CALL(obs, on_exit_from_state(2)).Times(1);
+    }
 }
 
 TEST(sm_feature_on_exit, destroys_regions_in_reverse_order)
@@ -151,18 +156,20 @@ TEST(sm_feature_on_exit, destroys_regions_in_reverse_order)
     testing::StrictMock<ExitObserver> obs;
     testing::InSequence sequence;
 
-    ExitTestSM<r1_exit_state, r2_exit_state> sm(&obs, {});
-    EXPECT_CALL(obs, on_exit_from_state(2)).Times(1);
-    EXPECT_CALL(obs, on_exit_from_state(1)).Times(1);
+    {
+        ExitTestSM<r1_exit_state, r2_exit_state> sm(&obs, {});
+        EXPECT_CALL(obs, on_exit_from_state(2)).Times(1);
+        EXPECT_CALL(obs, on_exit_from_state(1)).Times(1);
+    }
 }
 
 TEST(sm_feature_on_exit, supports_emit_action_on_exit)
 {
     testing::StrictMock<ExitObserver> obs;
 
-    ExitTestSM<exit_emit_state> sm(&obs, {});
+    {
+        ExitTestSM<exit_emit_state> sm(&obs, {});
 
-    // on_exit emit is queued during State teardown and freed when the queue is destroyed.
-    // Test passes if no exceptions thrown and SM cleanly destructs the emitted payload.
-    SUCCEED();
+        // Destruction is the trigger; strict mock verification covers unexpected observer calls.
+    }
 }

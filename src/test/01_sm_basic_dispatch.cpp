@@ -89,8 +89,10 @@ TEST(sm_feature_basic_dispatch, leaf_event_forwarded)
     EXPECT_CALL(mock, on_enter_called(type_id<LeafStateForward>)).Times(1);
     TestSM<LeafStateForward> sm(nullptr, &mock);
 
-    EXPECT_CALL(mock, on_event_called(type_id<LeafStateForward>, type_id<e1>)).Times(1);
-    sm.post(e1{});
+    {
+        EXPECT_CALL(mock, on_event_called(type_id<LeafStateForward>, type_id<e1>)).Times(1);
+        sm.post(e1{});
+    }
 
     EXPECT_CALL(mock, on_exit_called(type_id<LeafStateForward>)).Times(1);
 }
@@ -105,8 +107,10 @@ TEST(sm_feature_basic_dispatch, leaf_event_discarded)
     EXPECT_CALL(mock, on_enter_called(type_id<LeafStateDiscard>)).Times(1);
     TestSM<LeafStateDiscard> sm(nullptr, &mock);
 
-    EXPECT_CALL(mock, on_event_called(type_id<LeafStateDiscard>, type_id<e1>)).Times(1);
-    sm.post(e1{});
+    {
+        EXPECT_CALL(mock, on_event_called(type_id<LeafStateDiscard>, type_id<e1>)).Times(1);
+        sm.post(e1{});
+    }
 
     EXPECT_CALL(mock, on_exit_called(type_id<LeafStateDiscard>)).Times(1);
 }
@@ -121,7 +125,9 @@ TEST(sm_feature_basic_dispatch, leaf_event_unhandled)
     EXPECT_CALL(mock, on_enter_called(type_id<LeafStateUnhandled>)).Times(1);
     TestSM<LeafStateUnhandled> sm(nullptr, &mock);
 
-    sm.post(e1{});
+    {
+        sm.post(e1{});
+    }
 
     EXPECT_CALL(mock, on_exit_called(type_id<LeafStateUnhandled>)).Times(1);
 }
@@ -136,10 +142,12 @@ TEST(sm_feature_basic_dispatch, leaf_event_terminate)
     EXPECT_CALL(mock, on_enter_called(type_id<LeafStateTerminate>)).Times(1);
     TestSM<LeafStateTerminate> sm(nullptr, &mock);
 
-    // Returns Terminate → state exits during apply_sub_transits; region nulled (no dtor exit)
-    EXPECT_CALL(mock, on_event_called(type_id<LeafStateTerminate>, type_id<e1>)).Times(1);
-    EXPECT_CALL(mock, on_exit_called(type_id<LeafStateTerminate>)).Times(1);
-    sm.post(e1{});
+    {
+        // Returns Terminate → state exits during apply_sub_transits; region nulled (no dtor exit)
+        EXPECT_CALL(mock, on_event_called(type_id<LeafStateTerminate>, type_id<e1>)).Times(1);
+        EXPECT_CALL(mock, on_exit_called(type_id<LeafStateTerminate>)).Times(1);
+        sm.post(e1{});
+    }
 }
 
 // Test: leaf emits an event; emitted event is enqueued and dispatched; state stays alive
@@ -152,9 +160,11 @@ TEST(sm_feature_basic_dispatch, leaf_event_emit)
     EXPECT_CALL(mock, on_enter_called(type_id<LeafStateEmit>)).Times(1);
     TestSM<LeafStateEmit> sm(nullptr, &mock);
 
-    // Returns Emit<e2> → e2 enqueued; no e2 handler so dropped; state stays alive
-    EXPECT_CALL(mock, on_event_called(type_id<LeafStateEmit>, type_id<e1>)).Times(1);
-    sm.post(e1{});
+    {
+        // Returns Emit<e2> → e2 enqueued; no e2 handler so dropped; state stays alive
+        EXPECT_CALL(mock, on_event_called(type_id<LeafStateEmit>, type_id<e1>)).Times(1);
+        sm.post(e1{});
+    }
 
     EXPECT_CALL(mock, on_exit_called(type_id<LeafStateEmit>)).Times(1);
 }
@@ -169,12 +179,14 @@ TEST(sm_feature_basic_dispatch, leaf_event_transit)
     EXPECT_CALL(mock, on_enter_called(type_id<LeafStateTransit>)).Times(1);
     TestSM<LeafStateTransit> sm(nullptr, &mock);
 
-    // Returns Transit<LeafStateDiscard> → source exits, target created
-    EXPECT_CALL(mock, on_event_called(type_id<LeafStateTransit>, type_id<e1>)).Times(1);
-    EXPECT_CALL(mock, on_exit_called(type_id<LeafStateTransit>)).Times(1);
-    EXPECT_CALL(mock, on_make_called(type_id<LeafStateDiscard>)).Times(1);
-    EXPECT_CALL(mock, on_enter_called(type_id<LeafStateDiscard>)).Times(1);
-    sm.post(e1{});
+    {
+        // Returns Transit<LeafStateDiscard> → source exits, target created
+        EXPECT_CALL(mock, on_event_called(type_id<LeafStateTransit>, type_id<e1>)).Times(1);
+        EXPECT_CALL(mock, on_exit_called(type_id<LeafStateTransit>)).Times(1);
+        EXPECT_CALL(mock, on_make_called(type_id<LeafStateDiscard>)).Times(1);
+        EXPECT_CALL(mock, on_enter_called(type_id<LeafStateDiscard>)).Times(1);
+        sm.post(e1{});
+    }
 
     EXPECT_CALL(mock, on_exit_called(type_id<LeafStateDiscard>)).Times(1);
 }
@@ -189,9 +201,13 @@ TEST(sm_feature_basic_dispatch, state_ignores_unregistered_event)
     EXPECT_CALL(mock, on_enter_called(type_id<LeafStateRegular>)).Times(1);
     TestSM<LeafStateRegular> sm(nullptr, &mock);
 
-    EXPECT_CALL(mock, on_event_called(type_id<LeafStateRegular>, type_id<e1>)).Times(1);
-    sm.post(e1{});
-    sm.post(e2{}); // e2 is not handled
+    {
+        EXPECT_CALL(mock, on_event_called(type_id<LeafStateRegular>, type_id<e1>)).Times(1);
+        sm.post(e1{});
+    }
+    {
+        sm.post(e2{}); // e2 is not handled
+    }
 
     EXPECT_CALL(mock, on_exit_called(type_id<LeafStateRegular>)).Times(1);
 }

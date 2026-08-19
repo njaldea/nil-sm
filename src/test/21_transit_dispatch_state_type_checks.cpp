@@ -8,8 +8,9 @@ namespace
 {
     template <typename Initial>
     using dispatch_for = nil::sm::detail::region_state_factory<
-        nil::sm::default_api<Initial>,
-        typename nil::sm::detail::region_reachability_graph<nil::sm::default_api, Initial>::states>;
+        nil::sm::api::Default<Initial>,
+        typename nil::sm::detail::region_reachability_graph<nil::sm::api::Default, Initial>::
+            states>;
 
     template <typename Dispatch, typename Target>
     consteval bool dispatch_contains_target_id()

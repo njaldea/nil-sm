@@ -124,7 +124,7 @@ namespace
     };
 
     template <typename T>
-    using EmitTestAPI = nil::sm::default_api<T, EmitObserver, void>;
+    using EmitTestAPI = nil::sm::api::Default<T, EmitObserver, void>;
 
     template <typename... Regions>
     using EmitTestSM = nil::sm::SM<EmitTestAPI, Regions...>;
@@ -153,6 +153,7 @@ namespace
 TEST(sm_feature_emit_handling, emit_from_leaf_reaction)
 {
     testing::StrictMock<EmitObserver> obs;
+    testing::InSequence sequence;
 
     EmitTestSM<EmitLeaf, EmitSink> sm(&obs, {});
     {
@@ -182,6 +183,7 @@ TEST(sm_feature_emit_handling, emit_during_forward_path)
 TEST(sm_feature_emit_handling, emit_from_parent_reaction)
 {
     testing::StrictMock<EmitObserver> obs;
+    testing::InSequence sequence;
 
     EmitTestSM<EmitParent, EmitSink> sm(&obs, {});
     {
@@ -214,6 +216,7 @@ TEST(sm_feature_emit_handling, emit_from_orthogonal_regions)
     };
 
     testing::StrictMock<EmitObserver> obs;
+    testing::InSequence sequence;
 
     EmitTestSM<EmitLeaf1, EmitLeaf2, EmitSink> sm(&obs, {});
     {

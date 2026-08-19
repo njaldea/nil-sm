@@ -42,7 +42,7 @@ namespace
     };
 
     template <typename T>
-    using OnEnterTestAPI = nil::sm::default_api<T, OnEnterObserver, void*>;
+    using OnEnterTestAPI = nil::sm::api::Default<T, OnEnterObserver, void*>;
 
     template <typename... Regions>
     using OnEnterTestSM = nil::sm::SM<OnEnterTestAPI, Regions...>;
@@ -54,9 +54,12 @@ TEST(sm_feature_on_enter, on_enter_can_publish_event)
     using sink = on_enter_emit_sink<struct tag_on_enter_sink>;
 
     testing::StrictMock<OnEnterObserver> obs;
+    testing::InSequence sequence;
 
-    EXPECT_CALL(obs, on_event).Times(1);
-    OnEnterTestSM<publisher, sink> sm(&obs, {});
+    {
+        EXPECT_CALL(obs, on_event).Times(1);
+        OnEnterTestSM<publisher, sink> sm(&obs, {});
+    }
 }
 
 // Test: state with on_enter returning NOOP does not enqueue any event

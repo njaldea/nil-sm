@@ -115,7 +115,7 @@ template <typename S, typename A>
 struct api_t
 {
     template <typename T>
-    using type = nil::sm::default_api<T, S, A>;
+    using type = nil::sm::api::Default<T, S, A>;
 };
 
 TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_context_args)
@@ -183,6 +183,7 @@ TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_tw
 TEST(sm_feature_state_construction_contexts, child_constructor_receives_parent_user_state_type)
 {
     testing::StrictMock<ConstructionObserver> obs;
+    testing::InSequence sequence;
 
     EXPECT_CALL(obs, on_correct_parent_type()).Times(1);
 

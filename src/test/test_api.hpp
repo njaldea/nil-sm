@@ -58,12 +58,12 @@ struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
     using state_t = State;
     using state_context_t = std::tuple<StateContexts*...>;
     using api_context_t = testing::StrictMock<APIMock>;
-    using api_t = nil::sm::default_api<State, state_context_t, api_context_t>;
+    using api_t = nil::sm::api::Default<State, state_context_t, api_context_t>;
     using regions_t = nil::xalt::coalesce_t<State, nil::sm::detail::regions_tag>;
     using events_t = nil::xalt::coalesce_t<State, nil::sm::detail::events_tag>;
     using captures_t = nil::xalt::coalesce_t<State, nil::sm::detail::captures_tag>;
 
-    // Make the state - delegate to default_api
+    // Make the state - delegate to api::Default
     template <typename Parent>
     static state_t make(
         Parent* parent,

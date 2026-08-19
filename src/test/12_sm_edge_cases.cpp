@@ -7,7 +7,7 @@
 namespace
 {
     template <typename T>
-    using EdgeCaseTestAPI = nil::sm::default_api<T, testing::StrictMock<StateMock>, void>;
+    using EdgeCaseTestAPI = nil::sm::api::Default<T, testing::StrictMock<StateMock>, void>;
 
     // Wrapper to create SM with StateMock context
     template <typename... Regions>
@@ -189,6 +189,7 @@ TEST(sm_feature_edge_cases, state_with_no_regions)
     using root = discard_on_e1<tag_root>;
 
     testing::StrictMock<StateMock> mock;
+    testing::InSequence sequence;
     const void* root_id = type_id<root>;
     const void* e1_id = type_id<e1>;
 
@@ -213,6 +214,7 @@ TEST(sm_feature_edge_cases, state_with_no_events)
     using root = root_with_regions<tag_root, child>;
 
     testing::StrictMock<StateMock> mock;
+    testing::InSequence sequence;
     const void* child_id = type_id<child>;
     const void* e1_id = type_id<e1>;
 
@@ -232,6 +234,7 @@ TEST(sm_feature_edge_cases, composite_with_empty_regions)
     using root = empty_regions_root<tag_root>;
 
     testing::StrictMock<StateMock> mock;
+    testing::InSequence sequence;
     const void* root_id = type_id<root>;
     const void* e1_id = type_id<e1>;
 
@@ -261,6 +264,7 @@ TEST(sm_feature_edge_cases, deep_hierarchy_ten_plus_levels)
     using n1 = chain_node<struct tag1, n2>;
 
     testing::StrictMock<StateMock> mock;
+    testing::InSequence sequence;
     const void* leaf_id = type_id<leaf>;
     const void* e1_id = type_id<e1>;
 
@@ -283,6 +287,7 @@ TEST(sm_feature_edge_cases, many_orthogonal_regions)
     using r7 = discard_on_e1<struct tag7>;
 
     testing::StrictMock<StateMock> mock;
+    testing::InSequence sequence;
     const void* e1_id = type_id<e1>;
 
     EdgeCaseSM<r0, r1, r2, r3, r4, r5, r6, r7> sm(&mock, {});
@@ -297,6 +302,7 @@ TEST(sm_feature_edge_cases, event_not_present_anywhere)
     using root = root_with_regions<struct root_tag, no_events_region<struct child_tag>>;
 
     testing::StrictMock<StateMock> mock;
+    testing::InSequence sequence;
 
     EdgeCaseSM<root> sm(&mock, {});
     {

@@ -198,7 +198,7 @@ namespace
     };
 
     template <typename T>
-    using RegionsTestAPI = nil::sm::default_api<T, RegionsCompleteObserver, void>;
+    using RegionsTestAPI = nil::sm::api::Default<T, RegionsCompleteObserver, void>;
 
     template <typename... Regions>
     using RegionsTestSM = nil::sm::SM<RegionsTestAPI, Regions...>;
@@ -207,39 +207,49 @@ namespace
 TEST(sm_feature_on_regions_finalized, triggers_only_when_all_regions_terminated)
 {
     testing::StrictMock<RegionsCompleteObserver> obs;
+    testing::InSequence sequence;
 
-    using root_tt = completion_parent<terminate_leaf, terminate_leaf>;
-    RegionsTestSM<root_tt> sm_tt(&obs, {});
     {
-        EXPECT_CALL(obs, on_complete_called(1)).Times(1);
-        sm_tt.post(e1{});
+        using root_tt = completion_parent<terminate_leaf, terminate_leaf>;
+        RegionsTestSM<root_tt> sm_tt(&obs, {});
+        {
+            EXPECT_CALL(obs, on_complete_called(1)).Times(1);
+            sm_tt.post(e1{});
+        }
     }
 
-    EXPECT_CALL(obs, on_complete_called).Times(0);
-    using root_tk = completion_parent<terminate_leaf, keep_leaf>;
-    RegionsTestSM<root_tk> sm_tk(&obs, {});
     {
-        sm_tk.post(e1{});
+        using root_tk = completion_parent<terminate_leaf, keep_leaf>;
+        RegionsTestSM<root_tk> sm_tk(&obs, {});
+        {
+            EXPECT_CALL(obs, on_complete_called).Times(0);
+            sm_tk.post(e1{});
+        }
     }
 
-    EXPECT_CALL(obs, on_complete_called).Times(0);
-    using root_kt = completion_parent<keep_leaf, terminate_leaf>;
-    RegionsTestSM<root_kt> sm_kt(&obs, {});
     {
-        sm_kt.post(e1{});
+        using root_kt = completion_parent<keep_leaf, terminate_leaf>;
+        RegionsTestSM<root_kt> sm_kt(&obs, {});
+        {
+            EXPECT_CALL(obs, on_complete_called).Times(0);
+            sm_kt.post(e1{});
+        }
     }
 
-    EXPECT_CALL(obs, on_complete_called).Times(0);
-    using root_kk = completion_parent<keep_leaf, keep_leaf>;
-    RegionsTestSM<root_kk> sm_kk(&obs, {});
     {
-        sm_kk.post(e1{});
+        using root_kk = completion_parent<keep_leaf, keep_leaf>;
+        RegionsTestSM<root_kk> sm_kk(&obs, {});
+        {
+            EXPECT_CALL(obs, on_complete_called).Times(0);
+            sm_kk.post(e1{});
+        }
     }
 }
 
 TEST(sm_feature_on_regions_finalized, explicit_target_reaches_nested_state_only)
 {
     testing::StrictMock<RegionsCompleteObserver> obs;
+    testing::InSequence sequence;
     void* captured_parent = nullptr;
 
     EXPECT_CALL(obs, on_child_constructed)
@@ -258,6 +268,7 @@ TEST(sm_feature_on_regions_finalized, explicit_target_reaches_nested_state_only)
 TEST(sm_feature_on_regions_finalized, on_regions_finalized_can_emit_follow_up_event)
 {
     testing::StrictMock<RegionsCompleteObserver> obs;
+    testing::InSequence sequence;
 
     RegionsTestSM<emitting_parent, emit_sink> sm(&obs, {});
 
@@ -270,6 +281,7 @@ TEST(sm_feature_on_regions_finalized, on_regions_finalized_can_emit_follow_up_ev
 TEST(sm_feature_on_regions_finalized, on_regions_finalized_can_transit_targeted_state)
 {
     testing::StrictMock<RegionsCompleteObserver> obs;
+    testing::InSequence sequence;
     void* captured_parent = nullptr;
 
     EXPECT_CALL(obs, on_transit_before)

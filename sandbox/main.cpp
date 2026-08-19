@@ -121,7 +121,7 @@ struct SandboxAPI
         const nil::sm::Metadata& metadata
     )
     {
-        auto r = nil::sm::default_api<T>::make(parent, state_contexts, nullptr, metadata);
+        auto r = nil::sm::api::Default<T>::make(parent, state_contexts, nullptr, metadata);
 
         if (metadata.subregions == 0)
         {
@@ -134,7 +134,7 @@ struct SandboxAPI
 
     static auto on_enter(T& state, SandboxAPIContext* /* api_contexts */)
     {
-        return nil::sm::default_api<T>::on_enter(state, nullptr);
+        return nil::sm::api::Default<T>::on_enter(state, nullptr);
     }
 };
 
@@ -147,15 +147,14 @@ int main()
     using top_state = demo::states::multi_region<random_flavor>;
 
     SandboxAPIContext api_context;
-    nil::sm::SM<nil::sm::coalesce_api<SandboxAPI>::type, top_state> ss{nullptr, &api_context};
+    nil::sm::SM<nil::sm::api::Coalesce<SandboxAPI>::type, top_state> ss{nullptr, &api_context};
 
     {
         demo::events::e1 e;
         ss.post(e);
     }
     {
-        demo::events::e1 e;
-        ss.post(e);
+        ss.post<demo::events::e1>();
     }
     {
         demo::events::e2 e;

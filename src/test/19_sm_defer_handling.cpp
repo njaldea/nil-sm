@@ -71,7 +71,7 @@ namespace
     };
 
     template <typename T>
-    using DeferTestAPI = nil::sm::default_api<T, DeferObserver, void>;
+    using DeferTestAPI = nil::sm::api::Default<T, DeferObserver, void>;
 
     template <typename... Regions>
     using DeferTestSM = nil::sm::SM<DeferTestAPI, Regions...>;
@@ -165,6 +165,7 @@ namespace
     TEST(sm_feature_defer_handling, defer_then_transit_flushes_event)
     {
         testing::StrictMock<DeferObserver> obs;
+        testing::InSequence sequence;
 
         DeferTestSM<DeferTransitRoot> sm(&obs, {});
 
@@ -184,6 +185,7 @@ namespace
     TEST(sm_feature_defer_handling, deferred_payload_preserved)
     {
         testing::StrictMock<DeferObserver> obs;
+        testing::InSequence sequence;
 
         DeferTestSM<DataDeferTransitRoot> sm(&obs, {});
 
@@ -201,6 +203,7 @@ namespace
     TEST(sm_feature_defer_handling, multiple_defers_all_flushed)
     {
         testing::StrictMock<DeferObserver> obs;
+        testing::InSequence sequence;
 
         DeferTestSM<DeferTransitRoot> sm(&obs, {});
 
@@ -225,6 +228,7 @@ namespace
     TEST(sm_feature_defer_handling, orthogonal_regions_defer_independently)
     {
         testing::StrictMock<DeferObserver> obs;
+        testing::InSequence sequence;
 
         DeferTestSM<OrthogonalDeferRoot> sm(&obs, {});
 

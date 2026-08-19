@@ -5,12 +5,12 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-// Test 20: coalesce_api — partial API composition
-//
+// Test 20: api::Coalesce — partial API composition
+// Test 20: api::Coalesce — partial API composition
 // Demonstrates that a custom API can define only the hooks it cares about.
-// coalesce_api provides default behavior for any method not present in the
-// partial API, delegating to default_api<T>.
-
+// api::Coalesce provides default behavior for any method not present in the
+// api::Coalesce provides default behavior for any method not present in the
+// partial API, delegating to api::Default<T>.
 namespace
 {
     // ---- Shared state types ----
@@ -58,7 +58,7 @@ namespace
     };
 
     // Partial API: only defines `make`. All other methods (on_event, on_enter,
-    // on_exit, on_regions_finalized) are absent — coalesce_api fills them in.
+    // on_exit, on_regions_finalized) are absent — api::Coalesce fills them in.
     template <typename T>
     struct MakeOnlyAPI
     {
@@ -76,8 +76,8 @@ namespace
             {
                 api_contexts->on_construct();
             }
-            // Delegate construction to default_api
-            return nil::sm::default_api<T>::make(parent, state_contexts, nullptr, metadata);
+            // Delegate construction to api::Default
+            return nil::sm::api::Default<T>::make(parent, state_contexts, api_contexts, metadata);
         }
 
         // on_event, on_enter, on_exit, on_regions_finalized — not defined here
@@ -92,7 +92,7 @@ namespace
     };
 
     // Partial API: only defines `on_enter`. make, on_event, on_exit,
-    // on_regions_finalized — all fall through to defaults via coalesce_api.
+    // on_regions_finalized — all fall through to defaults via api::Coalesce.
     template <typename T>
     struct EnterOnlyAPI
     {
@@ -104,8 +104,8 @@ namespace
             {
                 api_contexts->on_enter_intercepted();
             }
-            // Delegate to default_api for actual state hook dispatch
-            return nil::sm::default_api<T>::on_enter(state, nullptr);
+            // Delegate to api::Default for actual state hook dispatch
+            return nil::sm::api::Default<T>::on_enter(state, api_contexts);
         }
 
         // make, on_event, on_exit, on_regions_finalized — not defined here
@@ -120,7 +120,7 @@ namespace
     };
 
     // Partial API: only defines `on_event`. make, on_enter, on_exit,
-    // on_regions_finalized — all fall through to defaults via coalesce_api.
+    // on_regions_finalized — all fall through to defaults via api::Coalesce.
     template <typename T>
     struct EventOnlyAPI
     {
@@ -133,7 +133,7 @@ namespace
             {
                 api_contexts->on_event_intercepted();
             }
-            return nil::sm::default_api<T>::template on_event<E>(state, event, nullptr);
+            return nil::sm::api::Default<T>::template on_event<E>(state, event, nullptr);
         }
 
         // make, on_enter, on_exit, on_regions_finalized — not defined here
@@ -170,7 +170,7 @@ namespace
     };
 
     // Custom API: make spreads a std::tuple state context into individual args.
-    // All other hooks use defaults via coalesce_api.
+    // All other hooks use defaults via api::Coalesce.
     template <typename T>
     struct SpreadMakeAPI
     {
@@ -209,11 +209,13 @@ TEST(sm_feature_coalesce_api, make_intercepted_construction_observer_called)
     testing::InSequence seq;
 
     EXPECT_CALL(obs, on_construct()).Times(1);
-    nil::sm::SM<nil::sm::coalesce_api<MakeOnlyAPI>::type, counting_leaf> sm{nullptr, &obs};
+    nil::sm::SM<nil::sm::api::Coalesce<MakeOnlyAPI>::type, counting_leaf> sm{nullptr, &obs};
 
-    // on_event falls through to default_api — counting_leaf handles e_tick
+    // on_event falls through to api::Default — counting_leaf handles e_tick
     {
         sm.post(e_tick{});
+    }
+    {
         sm.post(e_tick{});
     }
 }
@@ -224,10 +226,11 @@ TEST(sm_feature_coalesce_api, make_intercepted_construction_observer_called)
 TEST(sm_feature_coalesce_api, on_enter_intercepted_enter_observer_called)
 {
     testing::StrictMock<EnterObserver> obs;
+    testing::InSequence sequence;
 
     // lifecycle_leaf has on_enter — our interceptor fires, then calls default
     EXPECT_CALL(obs, on_enter_intercepted()).Times(1);
-    nil::sm::SM<nil::sm::coalesce_api<EnterOnlyAPI>::type, lifecycle_leaf> sm{nullptr, &obs};
+    nil::sm::SM<nil::sm::api::Coalesce<EnterOnlyAPI>::type, lifecycle_leaf> sm{nullptr, &obs};
 
     {
         sm.post(e_tick{}); // on_event falls through to default; state discards
@@ -239,8 +242,9 @@ TEST(sm_feature_coalesce_api, on_enter_intercepted_enter_observer_called)
 TEST(sm_feature_coalesce_api, on_event_intercepted_event_observer_called)
 {
     testing::StrictMock<EventObserver> obs;
+    testing::InSequence sequence;
 
-    nil::sm::SM<nil::sm::coalesce_api<EventOnlyAPI>::type, lifecycle_leaf> sm{nullptr, &obs};
+    nil::sm::SM<nil::sm::api::Coalesce<EventOnlyAPI>::type, lifecycle_leaf> sm{nullptr, &obs};
 
     {
         EXPECT_CALL(obs, on_event_intercepted()).Times(1);
@@ -260,7 +264,7 @@ TEST(sm_feature_coalesce_api, custom_make_spreads_tuple_context_to_state_args)
     CtxB b{.b = 32};
     auto ctx = std::tuple<CtxA*, CtxB*>(&a, &b);
 
-    nil::sm::SM<nil::sm::coalesce_api<SpreadMakeAPI>::type, spread_leaf> sm{&ctx, nullptr};
+    nil::sm::SM<nil::sm::api::Coalesce<SpreadMakeAPI>::type, spread_leaf> sm{&ctx, nullptr};
 
     // spread_leaf was constructed with sum = a.a + b.b = 42
     // (verified implicitly — SM would not compile if construction failed)

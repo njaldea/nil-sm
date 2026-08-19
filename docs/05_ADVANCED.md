@@ -1,5 +1,10 @@
 # nil/sml — Advanced: Customising the API Template Parameter
 
+This is a reference for library authors and advanced users. You do not need
+this document to build a normal state machine. Start with the [Guide](01_GUIDE.md)
+and [Extensibility](02_EXTENSIBILITY.md) first.
+
+For a practical walkthrough of custom APIs with examples, see [Extensibility](02_EXTENSIBILITY.md).
 `SM<API, Regions...>` takes an optional first template parameter: a `template <typename State> struct` that controls how states are constructed and how lifecycle hooks are dispatched.
 
 ## What the API must provide
