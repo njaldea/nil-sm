@@ -5,96 +5,100 @@
 #include <variant>
 #include <vector>
 
-namespace nil::sm::ir
+namespace nil::sm::ir::response
 {
-    enum class entry_response
+    enum class EEntry
     {
         noop,
         emit
     };
 
-    enum class exit_response
+    enum class EExit
     {
         noop,
         emit
     };
 
-    enum class regions_finalized_response
+    enum class ERegionsFinalized
     {
         noop,
         emit
     };
 
-    enum class event_response
+    enum class EEvent
     {
         discard,
         forward,
         defer,
         emit
     };
+}
 
-    struct entry_action_info
+namespace nil::sm::ir::action
+{
+    struct Entry
     {
-        entry_response response;
+        response::EEntry response;
     };
 
-    struct exit_action_info
+    struct Exit
     {
-        exit_response response;
+        response::EExit response;
     };
 
-    struct regions_finalized_action_info
+    struct RegionsFinalized
     {
-        regions_finalized_response response;
+        response::ERegionsFinalized response;
     };
 
-    struct event_action_info
-    {
-        std::string event_name;
-        event_response response;
-    };
-
-    struct capture_action_info
+    struct Event
     {
         std::string event_name;
-        event_response response;
+        response::EEvent response;
     };
 
-    using action_info = std::variant<
-        entry_action_info,
-        exit_action_info,
-        regions_finalized_action_info,
-        event_action_info,
-        capture_action_info>;
+    struct Capture
+    {
+        std::string event_name;
+        response::EEvent response;
+    };
 
-    struct transition_event_info
+    using Info = std::variant<Entry, Exit, RegionsFinalized, Event, Capture>;
+}
+
+namespace nil::sm::ir::transit
+{
+    struct Event
     {
         std::string source_id;
         std::string target_id; // [*] as sentinel for termination
         std::string event_name;
     };
 
-    struct transition_capture_info
+    struct Capture
     {
         std::string source_id;
         std::string target_id; // [*] as sentinel for termination
         std::string event_name;
     };
 
-    using transition_info = std::variant<transition_event_info, transition_capture_info>;
+    using Info = std::variant<Event, Capture>;
+}
 
-    struct state_node
+namespace nil::sm::ir
+{
+    struct Node
     {
         std::string id;
         std::string display_name;
-        std::vector<action_info> actions;
-        std::vector<transition_info> transitions;
-        std::vector<std::vector<state_node>> regions; // empty regions => leaf state
+        std::vector<action::Info> actions;
+        std::vector<transit::Info> transitions;
+        std::vector<std::vector<Node>> regions; // empty regions => leaf state
     };
 
-    struct model
+    struct Model
     {
-        std::vector<state_node> roots;
+        std::vector<Node> roots;
     };
 }
 
@@ -110,59 +114,59 @@ namespace nil::sm::formatter
         return os;
     }
 
-    inline std::string_view action_name(ir::entry_response response)
+    inline std::string_view action_name(ir::response::EEntry response)
     {
         switch (response)
         {
-            case ir::entry_response::noop:
+            case ir::response::EEntry::noop:
                 return "NOOP";
-            case ir::entry_response::emit:
+            case ir::response::EEntry::emit:
                 return "Emit";
         }
         return "";
     }
 
-    inline std::string_view action_name(ir::exit_response response)
+    inline std::string_view action_name(ir::response::EExit response)
     {
         switch (response)
         {
-            case ir::exit_response::noop:
+            case ir::response::EExit::noop:
                 return "NOOP";
-            case ir::exit_response::emit:
+            case ir::response::EExit::emit:
                 return "Emit";
         }
         return "";
     }
 
-    inline std::string_view action_name(ir::regions_finalized_response response)
+    inline std::string_view action_name(ir::response::ERegionsFinalized response)
     {
         switch (response)
         {
-            case ir::regions_finalized_response::noop:
+            case ir::response::ERegionsFinalized::noop:
                 return "NOOP";
-            case ir::regions_finalized_response::emit:
+            case ir::response::ERegionsFinalized::emit:
                 return "Emit";
         }
         return "";
     }
 
-    inline std::string_view action_name(ir::event_response response)
+    inline std::string_view action_name(ir::response::EEvent response)
     {
         switch (response)
         {
-            case ir::event_response::discard:
+            case ir::response::EEvent::discard:
                 return "Discard";
-            case ir::event_response::forward:
+            case ir::response::EEvent::forward:
                 return "Forward";
-            case ir::event_response::defer:
+            case ir::response::EEvent::defer:
                 return "Defer";
-            case ir::event_response::emit:
+            case ir::response::EEvent::emit:
                 return "Emit";
         }
         return "";
     }
 
-    inline const std::string& source_id(const ir::transition_info& transition)
+    inline const std::string& source_id(const ir::transit::Info& transition)
     {
         return std::visit(
             [](const auto& info) -> const std::string& { return info.source_id; },
@@ -170,7 +174,7 @@ namespace nil::sm::formatter
         );
     }
 
-    inline const std::string& target_id(const ir::transition_info& transition)
+    inline const std::string& target_id(const ir::transit::Info& transition)
     {
         return std::visit(
             [](const auto& info) -> const std::string& { return info.target_id; },
@@ -178,7 +182,7 @@ namespace nil::sm::formatter
         );
     }
 
-    inline const std::string& event_name(const ir::transition_info& transition)
+    inline const std::string& event_name(const ir::transit::Info& transition)
     {
         return std::visit(
             [](const auto& info) -> const std::string& { return info.event_name; },
@@ -186,8 +190,8 @@ namespace nil::sm::formatter
         );
     }
 
-    inline bool is_capture(const ir::transition_info& transition)
+    inline bool is_capture(const ir::transit::Info& transition)
     {
-        return std::holds_alternative<ir::transition_capture_info>(transition);
+        return std::holds_alternative<ir::transit::Capture>(transition);
     }
 }

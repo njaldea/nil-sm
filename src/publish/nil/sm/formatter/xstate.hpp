@@ -11,7 +11,7 @@
 
 namespace nil::sm::formatter::xstate
 {
-    inline void render_node(std::ostream& os, std::size_t depth, const ir::state_node& node);
+    inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node);
 
     inline std::string format_target(std::string_view target_id)
     {
@@ -25,7 +25,7 @@ namespace nil::sm::formatter::xstate
     inline void render_region_states(
         std::ostream& os,
         std::size_t depth,
-        const std::vector<ir::state_node>& region
+        const std::vector<ir::Node>& region
     )
     {
         for (const auto& r : region)
@@ -41,7 +41,7 @@ namespace nil::sm::formatter::xstate
     }
 
     // NOLINTNEXTLINE
-    inline void render_node(std::ostream& os, std::size_t depth, const ir::state_node& node)
+    inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
         indent(os, depth) << "\"" << node.display_name << "\": {\n";
         indent(os, depth + 1) << R"("id": ")" << node.id << "\",\n";
@@ -55,11 +55,11 @@ namespace nil::sm::formatter::xstate
                 [&](const auto& info)
                 {
                     using T = std::decay_t<decltype(info)>;
-                    if constexpr (std::is_same_v<T, ir::entry_action_info>)
+                    if constexpr (std::is_same_v<T, ir::action::Entry>)
                     {
                         has_entry = true;
                     }
-                    else if constexpr (std::is_same_v<T, ir::exit_action_info>)
+                    else if constexpr (std::is_same_v<T, ir::action::Exit>)
                     {
                         has_exit = true;
                     }
@@ -78,7 +78,7 @@ namespace nil::sm::formatter::xstate
                     [&](const auto& info)
                     {
                         using T = std::decay_t<decltype(info)>;
-                        if constexpr (std::is_same_v<T, ir::entry_action_info>)
+                        if constexpr (std::is_same_v<T, ir::action::Entry>)
                         {
                             if (!first_entry)
                             {
@@ -86,7 +86,7 @@ namespace nil::sm::formatter::xstate
                             }
                             indent(os, depth + 2)
                                 << "\""
-                                << (info.response == ir::entry_response::emit ? "Emit" : "NOOP")
+                                << (info.response == ir::response::EEntry::emit ? "Emit" : "NOOP")
                                 << "\"";
                             first_entry = false;
                         }
@@ -108,7 +108,7 @@ namespace nil::sm::formatter::xstate
                     [&](const auto& info)
                     {
                         using T = std::decay_t<decltype(info)>;
-                        if constexpr (std::is_same_v<T, ir::exit_action_info>)
+                        if constexpr (std::is_same_v<T, ir::action::Exit>)
                         {
                             if (!first_exit)
                             {
@@ -116,7 +116,7 @@ namespace nil::sm::formatter::xstate
                             }
                             indent(os, depth + 2)
                                 << "\""
-                                << (info.response == ir::exit_response::emit ? "Emit" : "NOOP")
+                                << (info.response == ir::response::EExit::emit ? "Emit" : "NOOP")
                                 << "\"";
                             first_exit = false;
                         }
@@ -192,7 +192,7 @@ namespace nil::sm::formatter::xstate
     }
 
     // NOLINTNEXTLINE
-    inline std::ostream& render(std::ostream& os, const ir::model& model)
+    inline std::ostream& render(std::ostream& os, const ir::Model& model)
     {
         os << "{\n";
         os << "  \"id\": \"SM\",\n";

@@ -27,7 +27,7 @@ namespace nil::sm::formatter::scxml
 
     // Recursively collect display-name-to-ID mappings
     inline void collect_id_mappings(
-        const std::vector<ir::state_node>& region,
+        const std::vector<ir::Node>& region,
         std::unordered_map<std::string, std::string>& id_map
     )
     {
@@ -56,7 +56,7 @@ namespace nil::sm::formatter::scxml
     }
 
     // Check only this node's own transitions (not descendants) for Terminate ([*])
-    inline bool own_has_terminate(const ir::state_node& node)
+    inline bool own_has_terminate(const ir::Node& node)
     {
         return std::ranges::any_of(
             node.transitions,
@@ -68,7 +68,7 @@ namespace nil::sm::formatter::scxml
     // own transitions are excluded (they resolve to their own dedicated own-final id instead),
     // and a parallel node breaks the chain entirely since each of its regions mints its own
     // fresh final id rather than forwarding current_final_id to its descendants.
-    inline bool leaf_descendant_has_terminate(const ir::state_node& node)
+    inline bool leaf_descendant_has_terminate(const ir::Node& node)
     {
         if (node.regions.empty())
         {
@@ -84,7 +84,7 @@ namespace nil::sm::formatter::scxml
         );
     }
 
-    inline bool region_has_terminate(const std::vector<ir::state_node>& region)
+    inline bool region_has_terminate(const std::vector<ir::Node>& region)
     {
         return std::ranges::any_of(
             region,
@@ -96,7 +96,7 @@ namespace nil::sm::formatter::scxml
     inline void render_actions(
         std::ostream& os,
         std::size_t depth,
-        const std::vector<ir::action_info>& actions,
+        const std::vector<ir::action::Info>& actions,
         const std::string& state_id
     )
     {
@@ -105,9 +105,9 @@ namespace nil::sm::formatter::scxml
             std::visit(
                 [&]<typename T>(const T& info)
                 {
-                    if constexpr (std::is_same_v<T, ir::entry_action_info>)
+                    if constexpr (std::is_same_v<T, ir::action::Entry>)
                     {
-                        if (info.response == ir::entry_response::emit)
+                        if (info.response == ir::response::EEntry::emit)
                         {
                             indent(os, depth) << "<onentry>\n";
                             indent(os, depth + 1)
@@ -115,9 +115,9 @@ namespace nil::sm::formatter::scxml
                             indent(os, depth) << "</onentry>\n";
                         }
                     }
-                    else if constexpr (std::is_same_v<T, ir::exit_action_info>)
+                    else if constexpr (std::is_same_v<T, ir::action::Exit>)
                     {
-                        if (info.response == ir::exit_response::emit)
+                        if (info.response == ir::response::EExit::emit)
                         {
                             indent(os, depth) << "<onexit>\n";
                             indent(os, depth + 1)
@@ -125,11 +125,11 @@ namespace nil::sm::formatter::scxml
                             indent(os, depth) << "</onexit>\n";
                         }
                     }
-                    else if constexpr (std::is_same_v<T, ir::event_action_info>)
+                    else if constexpr (std::is_same_v<T, ir::action::Event>)
                     {
                         indent(os, depth)
                             << "<transition event=\"" << sanitize_event(info.event_name) << "\">\n";
-                        if (info.response == ir::event_response::emit)
+                        if (info.response == ir::response::EEvent::emit)
                         {
                             indent(os, depth + 1) << "<raise event=\"" << state_id << ".emit\"/>\n";
                         }
@@ -140,12 +140,12 @@ namespace nil::sm::formatter::scxml
                         }
                         indent(os, depth) << "</transition>\n";
                     }
-                    else if constexpr (std::is_same_v<T, ir::capture_action_info>)
+                    else if constexpr (std::is_same_v<T, ir::action::Capture>)
                     {
                         indent(os, depth)
                             << "<transition event=\"" << sanitize_event(info.event_name) << "\">\n";
                         indent(os, depth + 1) << "<!-- captured before regions -->\n";
-                        if (info.response == ir::event_response::emit)
+                        if (info.response == ir::response::EEvent::emit)
                         {
                             indent(os, depth + 1) << "<raise event=\"" << state_id << ".emit\"/>\n";
                         }
@@ -156,11 +156,11 @@ namespace nil::sm::formatter::scxml
                         }
                         indent(os, depth) << "</transition>\n";
                     }
-                    else if constexpr (std::is_same_v<T, ir::regions_finalized_action_info>)
+                    else if constexpr (std::is_same_v<T, ir::action::RegionsFinalized>)
                     {
                         indent(os, depth)
                             << "<transition event=\"done.state." << state_id << "\">\n";
-                        if (info.response == ir::regions_finalized_response::emit)
+                        if (info.response == ir::response::ERegionsFinalized::emit)
                         {
                             indent(os, depth + 1)
                                 << "<raise event=\"" << state_id << ".regions_finalized.emit\"/>\n";
@@ -181,7 +181,7 @@ namespace nil::sm::formatter::scxml
     inline void render_node(
         std::ostream& os,
         std::size_t depth,
-        const ir::state_node& node,
+        const ir::Node& node,
         const std::string& current_final_id,
         const std::string& own_final_id,
         const std::unordered_map<std::string, std::string>& id_map
@@ -192,7 +192,7 @@ namespace nil::sm::formatter::scxml
     inline void render_child(
         std::ostream& os,
         std::size_t depth,
-        const ir::state_node& child,
+        const ir::Node& child,
         const std::string& parent_current_final_id,
         const std::unordered_map<std::string, std::string>& id_map
     )
@@ -210,7 +210,7 @@ namespace nil::sm::formatter::scxml
     inline void render_compound_state(
         std::ostream& os,
         std::size_t depth,
-        const ir::state_node& node,
+        const ir::Node& node,
         const std::string& current_final_id,
         const std::string& self_target,
         const std::string& state_id,
@@ -270,7 +270,7 @@ namespace nil::sm::formatter::scxml
         std::size_t depth,
         std::size_t index,
         const std::string& parent_state_id,
-        const std::vector<ir::state_node>& reg,
+        const std::vector<ir::Node>& reg,
         const std::unordered_map<std::string, std::string>& id_map
     )
     {
@@ -308,7 +308,7 @@ namespace nil::sm::formatter::scxml
     inline void render_parallel_state(
         std::ostream& os,
         std::size_t depth,
-        const ir::state_node& node,
+        const ir::Node& node,
         const std::string& self_target,
         const std::string& state_id,
         const std::unordered_map<std::string, std::string>& id_map
@@ -345,7 +345,7 @@ namespace nil::sm::formatter::scxml
     inline void render_node(
         std::ostream& os,
         std::size_t depth,
-        const ir::state_node& node,
+        const ir::Node& node,
         const std::string& current_final_id,
         const std::string& own_final_id,
         const std::unordered_map<std::string, std::string>& id_map
@@ -368,7 +368,7 @@ namespace nil::sm::formatter::scxml
         }
     }
 
-    inline std::ostream& render(std::ostream& os, const ir::model& model)
+    inline std::ostream& render(std::ostream& os, const ir::Model& model)
     {
         std::unordered_map<std::string, std::string> id_map;
         collect_id_mappings(model.roots, id_map);

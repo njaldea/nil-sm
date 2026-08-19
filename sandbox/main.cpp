@@ -94,7 +94,7 @@ struct SandboxAPI
 {
     using api_context_t = SandboxAPIContext;
 
-    static void print(std::ostream& out, const nil::sm::state_metadata* metadata)
+    static void print(std::ostream& out, const nil::sm::Metadata* metadata)
     {
         if (metadata == nullptr)
         {
@@ -118,7 +118,7 @@ struct SandboxAPI
         Parent* parent,
         void* state_contexts,
         SandboxAPIContext* /* api_contexts */,
-        const nil::sm::state_metadata& metadata
+        const nil::sm::Metadata& metadata
     )
     {
         auto r = nil::sm::default_api<T>::make(parent, state_contexts, nullptr, metadata);

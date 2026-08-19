@@ -36,7 +36,7 @@ struct MyAPI
         Parent* parent,
         state_context_t* state_contexts,
         api_context_t* api_contexts,
-        const nil::sm::state_metadata& metadata
+        const nil::sm::Metadata& metadata
     );
 
     // Checked before child regions for events listed in captures_t. Falling through
@@ -125,7 +125,7 @@ struct InstrumentedAPI
         Parent* parent,
         state_context_t* sc,
         api_context_t* ac,
-        const nil::sm::state_metadata& metadata
+        const nil::sm::Metadata& metadata
     )
     {
         std::get<0>(*ac)->on_make(nil::xalt::type_id<State>);
@@ -215,10 +215,10 @@ struct MakeOnlyAPI
         Parent* parent,
         void* state_contexts,
         ConstructionObserver* api_contexts,
-        const nil::sm::state_metadata& metadata
+        const nil::sm::Metadata& metadata
     )
     {
-        if constexpr (!std::is_same_v<T, nil::sm::fin>)
+        if constexpr (!std::is_same_v<T, nil::sm::Fin>)
         {
             api_contexts->on_constructed();
         }
@@ -249,7 +249,7 @@ struct EnterOnlyAPI
 
     static auto on_enter(T& state, EnterObserver* api_contexts)
     {
-        if constexpr (!std::is_same_v<T, nil::sm::fin>)
+        if constexpr (!std::is_same_v<T, nil::sm::Fin>)
         {
             api_contexts->on_entered();
         }
@@ -280,7 +280,7 @@ struct EventOnlyAPI
     template <typename E>
     static auto on_event(T& state, const E& event, EventObserver* api_contexts)
     {
-        if constexpr (!std::is_same_v<T, nil::sm::fin>)
+        if constexpr (!std::is_same_v<T, nil::sm::Fin>)
         {
             api_contexts->on_event_dispatched();
         }
@@ -326,10 +326,10 @@ struct SpreadMakeAPI
         Parent* parent,
         state_context_t* state_contexts,
         void* /*api_contexts*/,
-        const nil::sm::state_metadata& /* metadata */
+        const nil::sm::Metadata& /* metadata */
     )
     {
-        if constexpr (!std::is_same_v<T, nil::sm::fin>)
+        if constexpr (!std::is_same_v<T, nil::sm::Fin>)
         {
             return std::apply(
                 [parent](auto*... args) -> T { return T(parent, args...); },

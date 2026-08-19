@@ -19,13 +19,13 @@
 
 namespace nil::sm
 {
-    struct state_metadata final
+    struct Metadata final
     {
         std::size_t state = 0;
         std::size_t region = 0;
         std::size_t subregions = 1;
         std::string_view name;
-        const state_metadata* parent = nullptr;
+        const Metadata* parent = nullptr;
     };
 }
 
@@ -82,12 +82,12 @@ namespace nil::sm::detail
 
 namespace nil::sm
 {
-    struct fin final
+    struct Fin final
     {
         static constexpr auto name = "[**]";
     };
 
-    struct root final
+    struct Root final
     {
     };
 
@@ -338,7 +338,7 @@ namespace nil::sm::detail
             Parent* parent,
             Queues* qs,
             Contexts* contexts,
-            const state_metadata* parent_metadata
+            const Metadata* parent_metadata
         )
         {
             static constexpr auto table = make_table<Parent>(targets{});
@@ -364,7 +364,7 @@ namespace nil::sm::detail
         {
             const void* id = nullptr;
             std::unique_ptr<
-                IState> (*ctor)(Parent*, Queues*, Contexts*, std::size_t, std::size_t, const state_metadata*)
+                IState> (*ctor)(Parent*, Queues*, Contexts*, std::size_t, std::size_t, const Metadata*)
                 = nullptr;
         };
 
@@ -375,7 +375,7 @@ namespace nil::sm::detail
             Contexts* contexts,
             std::size_t region,
             std::size_t state,
-            const state_metadata* parent_metadata
+            const Metadata* parent_metadata
         )
         {
             return std::make_unique<State<state_api_t, Candidate>>(
@@ -412,7 +412,7 @@ namespace nil::sm::detail
             Parent* parent,
             Queues* qs,
             Contexts* contexts,
-            const state_metadata* parent_metadata
+            const Metadata* parent_metadata
         )
         {
             if constexpr (sizeof...(Region) > 0)
@@ -441,7 +441,7 @@ namespace nil::sm::detail
             Parent* parent,
             Queues* qs,
             Contexts* contexts,
-            const state_metadata* parent_metadata
+            const Metadata* parent_metadata
         )
         {
             using region_t = typename regions_t::template at<I>;
@@ -465,12 +465,12 @@ namespace nil::sm::detail
             Parent* parent,
             Queues* qs,
             Contexts* contexts,
-            const state_metadata* parent_metadata,
+            const Metadata* parent_metadata,
             std::index_sequence<I...> /* indices */
         )
         {
             using maker_t = std::unique_ptr<
-                IState> (*)(std::size_t, const void*, Parent*, Queues*, Contexts*, const state_metadata*);
+                IState> (*)(std::size_t, const void*, Parent*, Queues*, Contexts*, const Metadata*);
 
             static constexpr auto table
                 = std::array<maker_t, sizeof...(I)>{&make_for_region<I, Parent>...};
@@ -653,7 +653,7 @@ namespace nil::sm::detail
 
     struct IState
     {
-        explicit IState(state_metadata init_metadata)
+        explicit IState(Metadata init_metadata)
             : metadata(init_metadata)
         {
         }
@@ -666,7 +666,7 @@ namespace nil::sm::detail
 
         virtual on_event_t on_event(const Emit& e) = 0;
 
-        const state_metadata metadata;
+        const Metadata metadata;
     };
 
     template <typename S, typename E>
@@ -872,7 +872,7 @@ namespace nil::sm
     public:
         using api_t = API<T>;
         using self_t = State<API, T>;
-        using metadata_t = state_metadata;
+        using metadata_t = Metadata;
 
     private:
         using state_t = typename api_t::state_t;
@@ -933,7 +933,7 @@ namespace nil::sm
             std::size_t init_state,
             const metadata_t* init_parent_metadata
         )
-            : detail::IState(state_metadata{
+            : detail::IState(Metadata{
                   .state = init_state,
                   .region = init_region,
                   .subregions = regions_t::size,
@@ -1178,7 +1178,7 @@ namespace nil::sm
                             },
                             [this](std::size_t idx)
                             {
-                                return std::make_unique<State<API, fin>>(
+                                return std::make_unique<State<API, Fin>>(
                                     std::addressof(current_state),
                                     qs,
                                     contexts,
@@ -1220,10 +1220,10 @@ namespace nil::sm
     {
     public:
         static_assert(sizeof...(Regions) > 0);
-        using metadata_t = state_metadata;
+        using metadata_t = Metadata;
 
     private:
-        using state_t = root;
+        using state_t = Root;
         using regions_t = nil::xalt::tlist<Regions...>;
         using on_event_results_t = std::array<detail::on_event_t, regions_t::size>;
         using region_dispatcher_t = detail::region_dispatcher<API, regions_t>;
@@ -1245,7 +1245,7 @@ namespace nil::sm
 
     public:
         explicit RootState(detail::Queues* init_qs, detail::Contexts* init_contexts)
-            : detail::IState(state_metadata{
+            : detail::IState(Metadata{
                   .state = 0,
                   .region = 0,
                   .subregions = regions_t::size,
@@ -1327,7 +1327,7 @@ namespace nil::sm
                                 );
                             },
                             [this](std::size_t idx) {
-                                return std::make_unique<State<API, fin>>(
+                                return std::make_unique<State<API, Fin>>(
                                     &root_state,
                                     qs,
                                     contexts,
@@ -1361,7 +1361,7 @@ namespace nil::sm
             Parent* parent,
             state_context_t* state_contexts,
             api_context_t* /* api_contexts */,
-            state_metadata /* metadata */
+            Metadata /* metadata */
         )
         {
             if constexpr (requires() { T(parent, state_contexts); })
@@ -1471,7 +1471,7 @@ namespace nil::sm
                 Parent* parent,
                 state_context_t* state_contexts,
                 api_context_t* api_contexts,
-                const state_metadata& metadata
+                const Metadata& metadata
             )
             {
                 static constexpr auto api_has_make

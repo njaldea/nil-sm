@@ -175,9 +175,9 @@ Custom API adapters (used via `SM<API, ...>` or `coalesce_api`) follow this hook
 - `on_exit(state, api_contexts)`
 - `on_regions_finalized(state, api_contexts)`
 
-Only `make(...)` receives `state_metadata` explicitly. If you provide a custom `make` (including via `coalesce_api`), it must include the metadata parameter.
+Only `make(...)` receives `Metadata` explicitly. If you provide a custom `make` (including via `coalesce_api`), it must include the metadata parameter.
 
-`state_metadata` currently contains:
+`Metadata` currently contains:
 - `region` (`std::size_t`) — region slot index of the state instance
 
 Metadata is stored by the runtime on state instances (via the internal base) and can be surfaced by custom APIs/states when needed.

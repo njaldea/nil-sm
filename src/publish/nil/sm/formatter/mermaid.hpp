@@ -5,25 +5,25 @@
 
 namespace nil::sm::formatter::mermaid
 {
-    inline std::string action_label(const ir::action_info& action)
+    inline std::string action_label(const ir::action::Info& action)
     {
         return std::visit(
             [](const auto& info) -> std::string
             {
                 using T = std::decay_t<decltype(info)>;
-                if constexpr (std::is_same_v<T, ir::entry_action_info>)
+                if constexpr (std::is_same_v<T, ir::action::Entry>)
                 {
                     return std::string("on Enter / ") + std::string(action_name(info.response));
                 }
-                else if constexpr (std::is_same_v<T, ir::exit_action_info>)
+                else if constexpr (std::is_same_v<T, ir::action::Exit>)
                 {
                     return std::string("on Exit / ") + std::string(action_name(info.response));
                 }
-                else if constexpr (std::is_same_v<T, ir::regions_finalized_action_info>)
+                else if constexpr (std::is_same_v<T, ir::action::RegionsFinalized>)
                 {
                     return std::string("on [**] / ") + std::string(action_name(info.response));
                 }
-                else if constexpr (std::is_same_v<T, ir::capture_action_info>)
+                else if constexpr (std::is_same_v<T, ir::action::Capture>)
                 {
                     return "on " + info.event_name + " [c] / "
                         + std::string(action_name(info.response));
@@ -38,7 +38,7 @@ namespace nil::sm::formatter::mermaid
         );
     }
 
-    inline std::string title_label(const ir::state_node& node)
+    inline std::string title_label(const ir::Node& node)
     {
         if (node.actions.empty())
         {
@@ -54,7 +54,7 @@ namespace nil::sm::formatter::mermaid
         return label;
     }
 
-    inline void render_annotations(std::ostream& os, std::size_t depth, const ir::state_node& node)
+    inline void render_annotations(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
         for (const auto& transition : node.transitions)
         {
@@ -64,12 +64,12 @@ namespace nil::sm::formatter::mermaid
         }
     }
 
-    inline void render_node(std::ostream& os, std::size_t depth, const ir::state_node& node);
+    inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node);
 
     inline void render_region(
         std::ostream& os,
         std::size_t depth,
-        const std::vector<ir::state_node>& region,
+        const std::vector<ir::Node>& region,
         bool nested
     )
     {
@@ -84,7 +84,7 @@ namespace nil::sm::formatter::mermaid
         }
     }
 
-    inline void render_node(std::ostream& os, std::size_t depth, const ir::state_node& node)
+    inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
         if (!node.regions.empty())
         {
@@ -110,7 +110,7 @@ namespace nil::sm::formatter::mermaid
         }
     }
 
-    inline std::ostream& render(std::ostream& os, const ir::model& model)
+    inline std::ostream& render(std::ostream& os, const ir::Model& model)
     {
         os << "stateDiagram-v2\n";
         render_region(os, 0, model.roots, false);

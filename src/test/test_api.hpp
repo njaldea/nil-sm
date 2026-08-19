@@ -69,10 +69,10 @@ struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
         Parent* parent,
         state_context_t* state_contexts,
         api_context_t* api_contexts,
-        const nil::sm::state_metadata& metadata
+        const nil::sm::Metadata& metadata
     )
     {
-        if constexpr (!std::is_same_v<state_t, nil::sm::fin>)
+        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
         {
             api_contexts->on_make_called(nil::xalt::type_id<state_t>);
         }
@@ -82,7 +82,7 @@ struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
     // Lifecycle hooks that receive the mock from APIContexts
     static auto on_enter(state_t& state, api_context_t* api_contexts)
     {
-        if constexpr (!std::is_same_v<state_t, nil::sm::fin>)
+        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
         {
             api_contexts->on_enter_called(nil::xalt::type_id<state_t>);
         }
@@ -91,7 +91,7 @@ struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
 
     static auto on_exit(state_t& state, api_context_t* api_contexts)
     {
-        if constexpr (!std::is_same_v<state_t, nil::sm::fin>)
+        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
         {
             api_contexts->on_exit_called(nil::xalt::type_id<state_t>);
         }
@@ -100,7 +100,7 @@ struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
 
     static auto on_regions_finalized(state_t& state, api_context_t* api_contexts)
     {
-        if constexpr (!std::is_same_v<state_t, nil::sm::fin>)
+        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
         {
             api_contexts->on_regions_finalized_called(nil::xalt::type_id<state_t>);
         }
@@ -110,7 +110,7 @@ struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
     template <typename E>
     static auto on_event(state_t& state, const E& event, api_context_t* api_contexts)
     {
-        if constexpr (!std::is_same_v<state_t, nil::sm::fin>)
+        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
         {
             api_contexts->on_event_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
         }
@@ -120,7 +120,7 @@ struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
     template <typename E>
     static auto on_capture(state_t& state, const E& event, api_context_t* api_contexts)
     {
-        if constexpr (!std::is_same_v<state_t, nil::sm::fin>)
+        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
         {
             api_contexts->on_capture_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
         }

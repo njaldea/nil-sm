@@ -11,26 +11,26 @@
 
 namespace nil::sm::formatter::dot
 {
-    inline std::string format_action(const ir::action_info& action)
+    inline std::string format_action(const ir::action::Info& action)
     {
         std::string result;
         std::visit(
             [&](const auto& info)
             {
                 using T = std::decay_t<decltype(info)>;
-                if constexpr (std::is_same_v<T, ir::entry_action_info>)
+                if constexpr (std::is_same_v<T, ir::action::Entry>)
                 {
                     result = "on Enter / " + std::string(action_name(info.response));
                 }
-                else if constexpr (std::is_same_v<T, ir::exit_action_info>)
+                else if constexpr (std::is_same_v<T, ir::action::Exit>)
                 {
                     result = "on Exit / " + std::string(action_name(info.response));
                 }
-                else if constexpr (std::is_same_v<T, ir::regions_finalized_action_info>)
+                else if constexpr (std::is_same_v<T, ir::action::RegionsFinalized>)
                 {
                     result = "on [**] / " + std::string(action_name(info.response));
                 }
-                else if constexpr (std::is_same_v<T, ir::capture_action_info>)
+                else if constexpr (std::is_same_v<T, ir::action::Capture>)
                 {
                     result = "on " + info.event_name + " [c] / "
                         + std::string(action_name(info.response));
@@ -46,7 +46,7 @@ namespace nil::sm::formatter::dot
         return result;
     }
 
-    inline void render_node(std::ostream& os, std::size_t depth, const ir::state_node& node)
+    inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
         if (!node.regions.empty())
         {
@@ -121,7 +121,7 @@ namespace nil::sm::formatter::dot
     inline void render_transitions(
         std::ostream& os,
         std::size_t depth,
-        const ir::state_node& node,
+        const ir::Node& node,
         std::string_view current_term_node
     )
     {
@@ -160,7 +160,7 @@ namespace nil::sm::formatter::dot
         }
     }
 
-    inline std::ostream& render(std::ostream& os, const ir::model& model)
+    inline std::ostream& render(std::ostream& os, const ir::Model& model)
     {
         os << "digraph sm {\n"
               "    compound=true;\n"

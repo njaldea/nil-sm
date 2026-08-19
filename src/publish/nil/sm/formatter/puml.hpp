@@ -9,29 +9,29 @@ namespace nil::sm::formatter::puml
         std::ostream& os,
         std::size_t depth,
         std::string_view node_id,
-        const ir::action_info& action
+        const ir::action::Info& action
     )
     {
         std::visit(
             [&](const auto& info)
             {
                 using T = std::decay_t<decltype(info)>;
-                if constexpr (std::is_same_v<T, ir::entry_action_info>)
+                if constexpr (std::is_same_v<T, ir::action::Entry>)
                 {
                     indent(os, depth)
                         << node_id << " : on Enter / " << action_name(info.response) << "\n";
                 }
-                else if constexpr (std::is_same_v<T, ir::exit_action_info>)
+                else if constexpr (std::is_same_v<T, ir::action::Exit>)
                 {
                     indent(os, depth)
                         << node_id << " : on Exit / " << action_name(info.response) << "\n";
                 }
-                else if constexpr (std::is_same_v<T, ir::regions_finalized_action_info>)
+                else if constexpr (std::is_same_v<T, ir::action::RegionsFinalized>)
                 {
                     indent(os, depth)
                         << node_id << " : on [**] / " << action_name(info.response) << "\n";
                 }
-                else if constexpr (std::is_same_v<T, ir::capture_action_info>)
+                else if constexpr (std::is_same_v<T, ir::action::Capture>)
                 {
                     indent(os, depth) << node_id << " : on " << info.event_name << " [c] / "
                                       << action_name(info.response) << "\n";
@@ -46,7 +46,7 @@ namespace nil::sm::formatter::puml
         );
     }
 
-    inline void render_annotations(std::ostream& os, std::size_t depth, const ir::state_node& node)
+    inline void render_annotations(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
         for (const auto& action : node.actions)
         {
@@ -60,12 +60,12 @@ namespace nil::sm::formatter::puml
         }
     }
 
-    inline void render_node(std::ostream& os, std::size_t depth, const ir::state_node& node);
+    inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node);
 
     inline void render_region(
         std::ostream& os,
         std::size_t depth,
-        const std::vector<ir::state_node>& region,
+        const std::vector<ir::Node>& region,
         bool nested
     )
     {
@@ -80,7 +80,7 @@ namespace nil::sm::formatter::puml
         }
     }
 
-    inline void render_node(std::ostream& os, std::size_t depth, const ir::state_node& node)
+    inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
         if (!node.regions.empty())
         {
@@ -103,7 +103,7 @@ namespace nil::sm::formatter::puml
         render_annotations(os, depth, node);
     }
 
-    inline std::ostream& render(std::ostream& os, const ir::model& model)
+    inline std::ostream& render(std::ostream& os, const ir::Model& model)
     {
         os << "@startuml\n"
               "skin rose\n"

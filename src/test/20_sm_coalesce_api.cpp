@@ -69,10 +69,10 @@ namespace
             Parent* parent,
             void* state_contexts,
             MakeObserver* api_contexts,
-            const nil::sm::state_metadata& metadata
+            const nil::sm::Metadata& metadata
         )
         {
-            if constexpr (!std::is_same_v<T, nil::sm::fin>)
+            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
             {
                 api_contexts->on_construct();
             }
@@ -100,7 +100,7 @@ namespace
 
         static auto on_enter(T& state, EnterObserver* api_contexts)
         {
-            if constexpr (!std::is_same_v<T, nil::sm::fin>)
+            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
             {
                 api_contexts->on_enter_intercepted();
             }
@@ -129,7 +129,7 @@ namespace
         template <typename E>
         static auto on_event(T& state, const E& event, EventObserver* api_contexts)
         {
-            if constexpr (!std::is_same_v<T, nil::sm::fin>)
+            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
             {
                 api_contexts->on_event_intercepted();
             }
@@ -181,10 +181,10 @@ namespace
             Parent* parent,
             state_context_t* state_contexts,
             void* /* api_contexts */,
-            const nil::sm::state_metadata& /* metadata */
+            const nil::sm::Metadata& /* metadata */
         )
         {
-            if constexpr (!std::is_same_v<T, nil::sm::fin>)
+            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
             {
                 return std::apply(
                     [parent](auto*... args) -> T { return T(parent, args...); },
