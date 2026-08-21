@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../../sm.hpp"
+#include "../detail.hpp"
+#include "../structs.hpp"
 #include "ir.hpp"
 
 #include <cstdint>
@@ -26,17 +27,10 @@ namespace nil::sm::formatter::detail
     std::vector<std::vector<ir::Node>> build_regions(const nil::sm::Metadata* parent);
 
     template <template <typename...> typename API, typename T>
-    std::vector<ir::Node> build_region(
-        const nil::sm::Metadata* parent,
-        std::size_t index
-    );
+    std::vector<ir::Node> build_region(const nil::sm::Metadata* parent, std::size_t index);
 
     template <template <typename...> typename API, typename T, typename RegionInitial>
-    ir::Node build_node(
-        const nil::sm::Metadata* parent,
-        std::size_t region,
-        std::size_t state
-    );
+    ir::Node build_node(const nil::sm::Metadata* parent, std::size_t region, std::size_t state);
 
     template <template <typename...> typename API, typename Target, typename S, std::size_t I = 0>
     consteval std::size_t sibling_index_in_region()
@@ -90,8 +84,7 @@ namespace nil::sm::formatter::detail
         }
         else if constexpr (std::is_same_v<R, Terminate>)
         {
-            node.transitions.emplace_back(
-                ir::transit::Event{std::string(source_id), "[*]", "[**]"}
+            node.transitions.emplace_back(ir::transit::Event{std::string(source_id), "[*]", "[**]"}
             );
         }
         else if constexpr (nil::xalt::is_of_template_v<R, Transit>)
@@ -103,11 +96,9 @@ namespace nil::sm::formatter::detail
                 node_metadata.region,
                 target_state
             );
-            node.transitions.emplace_back(ir::transit::Event{
-                std::string(source_id),
-                stable_state_id(target_metadata),
-                "[**]"
-            });
+            node.transitions.emplace_back(
+                ir::transit::Event{std::string(source_id), stable_state_id(target_metadata), "[**]"}
+            );
         }
         else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
         {
@@ -190,7 +181,8 @@ namespace nil::sm::formatter::detail
         }
         else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
         {
-            node.actions.emplace_back(ActionInfoT{std::string(event_name), ir::response::EEvent::emit}
+            node.actions.emplace_back(
+                ActionInfoT{std::string(event_name), ir::response::EEvent::emit}
             );
         }
         else if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
@@ -293,8 +285,7 @@ namespace nil::sm::formatter::detail
         emit_lifecycle_action<on_enter_result_t, ir::action::Entry, ir::response::EEntry>(
             node.actions
         );
-        emit_lifecycle_action<on_exit_result_t, ir::action::Exit, ir::response::EExit>(
-            node.actions
+        emit_lifecycle_action<on_exit_result_t, ir::action::Exit, ir::response::EExit>(node.actions
         );
         emit_captures<API, T, RegionInitial>(
             node_metadata,
@@ -346,7 +337,7 @@ namespace nil::sm::formatter::detail
 
         hash_sv(hash, "nil::sm::uml::stable-id-v1");
 
-        auto ancestry = std::vector<const nil::sm::Metadata*> {};
+        auto ancestry = std::vector<const nil::sm::Metadata*>{};
         for (const auto* parent = metadata.parent; parent != nullptr; parent = parent->parent)
         {
             ancestry.push_back(parent);
@@ -382,10 +373,7 @@ namespace nil::sm::formatter::detail
     }
 
     template <template <typename...> typename API, typename T>
-    std::vector<ir::Node> build_region(
-        const nil::sm::Metadata* parent,
-        std::size_t index
-    )
+    std::vector<ir::Node> build_region(const nil::sm::Metadata* parent, std::size_t index)
     {
         using reachable_t = typename nil::sm::detail::region_reachability_graph<API, T>::states;
 
@@ -396,6 +384,11 @@ namespace nil::sm::formatter::detail
             (([&] { states.push_back(build_node<API, C, T>(parent, index, states.size())); }()),
              ...);
         }(reachable_t{});
+
+        if (!states.empty())
+        {
+            states.front().is_initial = true;
+        }
 
         return states;
     }
@@ -412,17 +405,14 @@ namespace nil::sm::formatter::detail
     }
 
     template <template <typename...> typename API, typename T, typename RegionInitial>
-    ir::Node build_node(
-        const nil::sm::Metadata* parent,
-        std::size_t region,
-        std::size_t state
-    )
+    ir::Node build_node(const nil::sm::Metadata* parent, std::size_t region, std::size_t state)
     {
         const auto metadata = make_metadata<API, T>(parent, region, state);
 
         auto node = ir::Node{
             .id = stable_state_id(metadata),
             .display_name = std::string(metadata.name),
+            .is_initial = false,
             .actions = {},
             .transitions = {},
             .regions = {},
@@ -441,16 +431,9 @@ namespace nil::sm::formatter::detail
         return node;
     }
 
-    template <typename... T>
-    struct Root
-    {
-        static constexpr auto name = "SM";
-        using regions = nil::xalt::tlist<T...>;
-    };
-
-    template <template <typename...> typename API, typename... T>
+    template <template <typename...> typename API, typename T>
     ir::Model build_ir()
     {
-        return ir::Model{.roots = build_region<API, Root<T...>>(nullptr, 0)};
+        return ir::Model{.roots = build_region<API, T>(nullptr, 0)};
     }
 }

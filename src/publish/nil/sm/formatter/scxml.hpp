@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../state.hpp"
 #include "detail.hpp"
 #include "ir.hpp"
 
@@ -62,6 +63,19 @@ namespace nil::sm::formatter::scxml
             node.transitions,
             [](const auto& t) { return target_id(t) == "[*]"; }
         );
+    }
+
+    // Find the region's initial state (flagged by the IR), if any
+    inline std::string initial_id_of(const std::vector<ir::Node>& region)
+    {
+        for (const auto& node : region)
+        {
+            if (node.is_initial)
+            {
+                return node.id;
+            }
+        }
+        return "";
     }
 
     // Check if a leaf anywhere in this subtree terminates into current_final_id. A composite's
@@ -220,10 +234,13 @@ namespace nil::sm::formatter::scxml
         const bool is_composite = !node.regions.empty();
 
         std::string initial_attr;
-        if (is_composite && !node.regions.front().empty())
+        if (is_composite)
         {
-            initial_attr
-                = " initial=\"" + resolve_id(node.regions.front().front().id, id_map) + "\"";
+            const auto initial_id = initial_id_of(node.regions.front());
+            if (!initial_id.empty())
+            {
+                initial_attr = " initial=\"" + resolve_id(initial_id, id_map) + "\"";
+            }
         }
 
         indent(os, depth) << "<state id=\"" << state_id << "\"" << initial_attr << ">\n";
@@ -376,11 +393,8 @@ namespace nil::sm::formatter::scxml
         os << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
            << R"(<scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0")";
 
-        // model.roots is always a single synthetic "SM" wrapper with one region holding the
-        // actual top-level state; it never has actions/transitions of its own, so unwrap it
-        // and expose that state directly as <scxml>'s top-level content.
-
-        const auto& top = model.roots.front().regions.front().front();
+        // model.roots holds the single actual top-level state directly.
+        const auto& top = model.roots.front();
         const std::string root_final_id = top.id + "_final";
         const std::string root_own_final_id = top.id + "_own_final";
 
@@ -401,12 +415,12 @@ namespace nil::sm
     template <typename SM>
     struct scxml;
 
-    template <template <typename...> typename API, typename... T>
-    struct scxml<SM<API, T...>>
+    template <template <typename...> typename API, typename T>
+    struct scxml<SM<API, T>>
     {
-        friend std::ostream& operator<<(std::ostream& os, const scxml<SM<API, T...>>& /* doc */)
+        friend std::ostream& operator<<(std::ostream& os, const scxml<SM<API, T>>& /* doc */)
         {
-            return formatter::scxml::render(os, formatter::detail::build_ir<API, T...>());
+            return formatter::scxml::render(os, formatter::detail::build_ir<API, T>());
         }
     };
 }

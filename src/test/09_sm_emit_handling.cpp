@@ -155,7 +155,12 @@ TEST(sm_feature_emit_handling, emit_from_leaf_reaction)
     testing::StrictMock<EmitObserver> obs;
     testing::InSequence sequence;
 
-    EmitTestSM<EmitLeaf, EmitSink> sm(&obs, {});
+    struct Root
+    {
+        using regions = nil::xalt::tlist<EmitLeaf, EmitSink>;
+    };
+
+    EmitTestSM<Root> sm(&obs, {});
     {
         EXPECT_CALL(obs, received_a(11)).Times(1);
         sm.post(e1{});
@@ -168,7 +173,12 @@ TEST(sm_feature_emit_handling, emit_during_forward_path)
     testing::StrictMock<EmitObserver> obs;
     testing::InSequence sequence;
 
-    EmitTestSM<ForwardParent, EmitSink> sm(&obs, {});
+    struct Root
+    {
+        using regions = nil::xalt::tlist<ForwardParent, EmitSink>;
+    };
+
+    EmitTestSM<Root> sm(&obs, {});
     {
         EXPECT_CALL(obs, received_a(21)).Times(1);
         EXPECT_CALL(obs, parent_handled()).Times(1);
@@ -185,7 +195,12 @@ TEST(sm_feature_emit_handling, emit_from_parent_reaction)
     testing::StrictMock<EmitObserver> obs;
     testing::InSequence sequence;
 
-    EmitTestSM<EmitParent, EmitSink> sm(&obs, {});
+    struct Root
+    {
+        using regions = nil::xalt::tlist<EmitParent, EmitSink>;
+    };
+
+    EmitTestSM<Root> sm(&obs, {});
     {
         EXPECT_CALL(obs, received_b(22)).Times(1);
         sm.post(e1{});
@@ -218,7 +233,12 @@ TEST(sm_feature_emit_handling, emit_from_orthogonal_regions)
     testing::StrictMock<EmitObserver> obs;
     testing::InSequence sequence;
 
-    EmitTestSM<EmitLeaf1, EmitLeaf2, EmitSink> sm(&obs, {});
+    struct Root
+    {
+        using regions = nil::xalt::tlist<EmitLeaf1, EmitLeaf2, EmitSink>;
+    };
+
+    EmitTestSM<Root> sm(&obs, {});
     {
         EXPECT_CALL(obs, received_a(11)).Times(2);
         sm.post(e1{});
@@ -231,7 +251,12 @@ TEST(sm_feature_emit_handling, multiple_emit_events_preserve_order)
     testing::StrictMock<EmitObserver> obs;
     testing::InSequence sequence;
 
-    EmitTestSM<EmitSequenceLeaf, EmitSink> sm(&obs, {});
+    struct Root
+    {
+        using regions = nil::xalt::tlist<EmitSequenceLeaf, EmitSink>;
+    };
+
+    EmitTestSM<Root> sm(&obs, {});
     {
         EXPECT_CALL(obs, received_a(31)).Times(1);
         sm.post(e1{});

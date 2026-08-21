@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../state.hpp"
 #include "detail.hpp"
 #include "ir.hpp"
 
@@ -20,6 +21,19 @@ namespace nil::sm::formatter::xstate
             return "done"; // Match the final state key name below
         }
         return "#" + std::string(target_id);
+    }
+
+    // Check only this node's own transitions (not descendants) for Terminate ([*])
+    inline bool own_has_terminate(const ir::Node& node)
+    {
+        for (const auto& tx : node.transitions)
+        {
+            if (target_id(tx) == "[*]")
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     inline void render_region_states(
@@ -44,7 +58,6 @@ namespace nil::sm::formatter::xstate
     inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
         indent(os, depth) << "\"" << node.display_name << "\": {\n";
-        indent(os, depth + 1) << R"("id": ")" << node.id << "\",\n";
 
         // Collect entry and exit actions
         bool has_entry = false;
@@ -67,6 +80,10 @@ namespace nil::sm::formatter::xstate
                 action
             );
         }
+
+        const bool has_more
+            = has_entry || has_exit || !node.transitions.empty() || !node.regions.empty();
+        indent(os, depth + 1) << R"("id": ")" << node.id << "\"" << (has_more ? ",\n" : "\n");
 
         if (has_entry)
         {
@@ -95,7 +112,10 @@ namespace nil::sm::formatter::xstate
                 );
             }
             os << "\n";
-            indent(os, depth + 1) << "],\n";
+            indent(os, depth + 1) << "]"
+                                  << (has_exit || !node.transitions.empty() || !node.regions.empty()
+                                          ? ",\n"
+                                          : "\n");
         }
 
         if (has_exit)
@@ -125,7 +145,9 @@ namespace nil::sm::formatter::xstate
                 );
             }
             os << "\n";
-            indent(os, depth + 1) << "],\n";
+            indent(os, depth + 1) << "]"
+                                  << (!node.transitions.empty() || !node.regions.empty() ? ",\n"
+                                                                                         : "\n");
         }
 
         // Map event transitions ("on" block)
@@ -195,56 +217,27 @@ namespace nil::sm::formatter::xstate
     inline std::ostream& render(std::ostream& os, const ir::Model& model)
     {
         os << "{\n";
-        os << "  \"id\": \"SM\",\n";
+        indent(os, 1) << "\"id\": \"SM\",\n";
         if (!model.roots.empty())
         {
             const auto& root = model.roots[0];
-            // Unwrap the top-level container state and promote its inner regions/states directly
-            if (!root.regions.empty())
+            indent(os, 1) << R"("initial": ")" << root.display_name << "\",\n";
+            indent(os, 1) << "\"states\": {\n";
+            render_node(os, 2, root);
+            // XState resolves a relative target like "done" against the transitioning node's
+            // *parent*, so root's own terminate transition needs "done" as root's sibling here.
+            if (own_has_terminate(root))
             {
-                if (root.regions.size() == 1)
-                {
-                    if (!root.regions[0].empty())
-                    {
-                        os << R"(  "initial": ")" << root.regions[0].front().display_name
-                           << "\",\n";
-                    }
-                    os << "  \"states\": {\n";
-                    render_region_states(os, 2, root.regions[0]);
-                    os << "  }\n";
-                }
-                else
-                {
-                    os << "  \"type\": \"parallel\",\n";
-                    os << "  \"states\": {\n";
-                    for (std::size_t r = 0; r < root.regions.size(); ++r)
-                    {
-                        indent(os, 2) << "\"region_" << r << "\": {\n";
-                        if (!root.regions[r].empty())
-                        {
-                            indent(os, 3) << R"("initial": ")"
-                                          << root.regions[r].front().display_name << "\",\n";
-                            indent(os, 3) << "\"states\": {\n";
-                            render_region_states(os, 4, root.regions[r]);
-                            indent(os, 3) << "}\n";
-                        }
-                        indent(os, 2) << "}";
-                        if (r + 1 < root.regions.size())
-                        {
-                            os << ",";
-                        }
-                        os << "\n";
-                    }
-                    os << "  }\n";
-                }
+                os << ",\n";
+                indent(os, 2) << "\"done\": {\n";
+                indent(os, 3) << "\"type\": \"final\"\n";
+                indent(os, 2) << "}\n";
             }
             else
             {
-                os << R"(  "initial": ")" << root.display_name << "\",\n";
-                os << "  \"states\": {\n";
-                render_node(os, 2, root);
-                os << "\n  }\n";
+                os << "\n";
             }
+            indent(os, 1) << "}\n";
         }
         os << "}\n";
         return os;
@@ -256,12 +249,12 @@ namespace nil::sm
     template <typename SM>
     struct xstate;
 
-    template <template <typename...> typename API, typename... T>
-    struct xstate<SM<API, T...>>
+    template <template <typename...> typename API, typename T>
+    struct xstate<SM<API, T>>
     {
-        friend std::ostream& operator<<(std::ostream& os, const xstate<SM<API, T...>>& /* d */)
+        friend std::ostream& operator<<(std::ostream& os, const xstate<SM<API, T>>& /* d */)
         {
-            return formatter::xstate::render(os, formatter::detail::build_ir<API, T...>());
+            return formatter::xstate::render(os, formatter::detail::build_ir<API, T>());
         }
     };
 }

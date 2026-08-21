@@ -270,14 +270,21 @@ TEST(sm_feature_orthogonal_transition_ordering, multiple_child_transitions)
         }
     };
 
+    struct Root
+    {
+        using regions = nil::xalt::tlist<R1Source, R2Source>;
+    };
+
     testing::StrictMock<APIMock> mock;
     testing::InSequence sequence;
 
+    EXPECT_CALL(mock, on_make_called(type_id<Root>)).Times(1);
+    EXPECT_CALL(mock, on_enter_called(type_id<Root>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R1Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R1Source>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2Source>)).Times(1);
-    TestSM<R1Source, R2Source> sm(nullptr, &mock);
+    TestSM<Root> sm(nullptr, &mock);
 
     // e1: both transit
     {
@@ -301,6 +308,7 @@ TEST(sm_feature_orthogonal_transition_ordering, multiple_child_transitions)
 
     EXPECT_CALL(mock, on_exit_called(type_id<R2Target>)).Times(1);
     EXPECT_CALL(mock, on_exit_called(type_id<R1Target>)).Times(1);
+    EXPECT_CALL(mock, on_exit_called(type_id<Root>)).Times(1);
 }
 
 // Test: nested child transitions within sibling regions
@@ -342,16 +350,23 @@ TEST(sm_feature_orthogonal_transition_ordering, nested_child_transitions)
         }
     };
 
+    struct Top
+    {
+        using regions = nil::xalt::tlist<Branch, Sibling>;
+    };
+
     testing::StrictMock<APIMock> mock;
     testing::InSequence sequence;
 
+    EXPECT_CALL(mock, on_make_called(type_id<Top>)).Times(1);
+    EXPECT_CALL(mock, on_enter_called(type_id<Top>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Branch>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Branch>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<LeafSource>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<LeafSource>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Sibling>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Sibling>)).Times(1);
-    TestSM<Branch, Sibling> sm(nullptr, &mock);
+    TestSM<Top> sm(nullptr, &mock);
 
     // e1: leaf transits, sibling discards
     {
@@ -373,6 +388,7 @@ TEST(sm_feature_orthogonal_transition_ordering, nested_child_transitions)
     EXPECT_CALL(mock, on_exit_called(type_id<Sibling>)).Times(1);
     EXPECT_CALL(mock, on_exit_called(type_id<LeafTarget>)).Times(1);
     EXPECT_CALL(mock, on_exit_called(type_id<Branch>)).Times(1);
+    EXPECT_CALL(mock, on_exit_called(type_id<Top>)).Times(1);
 }
 
 // Test: sibling regions transition independently
@@ -418,14 +434,21 @@ TEST(sm_feature_orthogonal_transition_ordering, sibling_transitions_independent)
         }
     };
 
+    struct Root
+    {
+        using regions = nil::xalt::tlist<R1Source, R2Source>;
+    };
+
     testing::StrictMock<APIMock> mock;
     testing::InSequence sequence;
 
+    EXPECT_CALL(mock, on_make_called(type_id<Root>)).Times(1);
+    EXPECT_CALL(mock, on_enter_called(type_id<Root>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R1Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R1Source>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2Source>)).Times(1);
-    TestSM<R1Source, R2Source> sm(nullptr, &mock);
+    TestSM<Root> sm(nullptr, &mock);
 
     // e1: both transit
     {
@@ -449,6 +472,7 @@ TEST(sm_feature_orthogonal_transition_ordering, sibling_transitions_independent)
 
     EXPECT_CALL(mock, on_exit_called(type_id<R2Target>)).Times(1);
     EXPECT_CALL(mock, on_exit_called(type_id<R1Target>)).Times(1);
+    EXPECT_CALL(mock, on_exit_called(type_id<Root>)).Times(1);
 }
 
 // Test: parent transition cancels pending child transitions

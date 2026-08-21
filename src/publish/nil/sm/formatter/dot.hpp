@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../state.hpp"
 #include "detail.hpp"
 #include "ir.hpp"
 
@@ -44,6 +45,18 @@ namespace nil::sm::formatter::dot
             action
         );
         return result;
+    }
+
+    inline std::string initial_id_of(const std::vector<ir::Node>& region)
+    {
+        for (const auto& node : region)
+        {
+            if (node.is_initial)
+            {
+                return node.id;
+            }
+        }
+        return "";
     }
 
     inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
@@ -98,8 +111,9 @@ namespace nil::sm::formatter::dot
                         render_node(os, depth + 2, sub_node);
                     }
 
-                    indent(os, depth + 2) << init_id << " -> " << region.front().id
-                                          << "[lhead=\"cluster_" << region.front().id << "\"];\n";
+                    const auto initial_id = initial_id_of(region);
+                    indent(os, depth + 2) << init_id << " -> " << initial_id << "[lhead=\"cluster_"
+                                          << initial_id << "\"];\n";
                 }
                 indent(os, depth + 1) << "}\n";
             }
@@ -173,6 +187,12 @@ namespace nil::sm::formatter::dot
             render_node(os, 1, node);
         }
 
+        if (const auto initial_id = initial_id_of(model.roots); !initial_id.empty())
+        {
+            indent(os, 1) << "root_init [shape=point, label=\"\"];\n";
+            indent(os, 1) << "root_init -> " << initial_id << ";\n";
+        }
+
         os << "\n    // Transitions\n";
         for (const auto& node : model.roots)
         {
@@ -189,12 +209,12 @@ namespace nil::sm
     template <typename SM>
     struct dot;
 
-    template <template <typename...> typename API, typename... T>
-    struct dot<SM<API, T...>>
+    template <template <typename...> typename API, typename T>
+    struct dot<SM<API, T>>
     {
-        friend std::ostream& operator<<(std::ostream& os, const dot<SM<API, T...>>& /* d */)
+        friend std::ostream& operator<<(std::ostream& os, const dot<SM<API, T>>& /* d */)
         {
-            return formatter::dot::render(os, formatter::detail::build_ir<API, T...>());
+            return formatter::dot::render(os, formatter::detail::build_ir<API, T>());
         }
     };
 }

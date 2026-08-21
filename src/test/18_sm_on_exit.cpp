@@ -156,8 +156,13 @@ TEST(sm_feature_on_exit, destroys_regions_in_reverse_order)
     testing::StrictMock<ExitObserver> obs;
     testing::InSequence sequence;
 
+    struct Root
     {
-        ExitTestSM<r1_exit_state, r2_exit_state> sm(&obs, {});
+        using regions = nil::xalt::tlist<r1_exit_state, r2_exit_state>;
+    };
+
+    {
+        ExitTestSM<Root> sm(&obs, {});
         EXPECT_CALL(obs, on_exit_from_state(2)).Times(1);
         EXPECT_CALL(obs, on_exit_from_state(1)).Times(1);
     }

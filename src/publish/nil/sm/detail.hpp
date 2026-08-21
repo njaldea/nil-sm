@@ -1,6 +1,7 @@
 #pragma once
 
 #include "concepts.hpp"
+#include "structs.hpp"
 
 #include <nil/xalt/coalesce.hpp>
 #include <nil/xalt/tlist.hpp>
@@ -17,6 +18,141 @@
 
 namespace nil::sm::detail
 {
+    NIL_XALT_COALESCE_TAG(regions, nil::xalt::tlist<>);
+    NIL_XALT_COALESCE_TAG(events, nil::xalt::tlist<>);
+    NIL_XALT_COALESCE_TAG(captures, nil::xalt::tlist<>);
+
+    using on_event_t = std::variant<
+        Terminate,
+        Forward,
+        Discard,
+        Unhandled,
+        Defer,
+        Transit,
+        Emit //
+        >;
+    using on_enter_t = std::variant<Unhandled, NOOP, Emit>;
+    using on_exit_t = std::variant<Unhandled, NOOP, Emit>;
+    using on_regions_finalized_t = std::variant<Unhandled, NOOP, Terminate, Transit, Emit>;
+
+    struct IState
+    {
+        explicit IState(Metadata init_metadata)
+            : metadata(init_metadata)
+        {
+        }
+
+        IState(IState&&) = delete;
+        IState(const IState&) = delete;
+        IState& operator=(IState&&) = delete;
+        IState& operator=(const IState&) = delete;
+        virtual ~IState() = default;
+
+        virtual on_event_t on_event(const Emit& e) = 0;
+
+        const Metadata metadata;
+    };
+
+    class Queues final
+    {
+    public:
+        Queues() = default;
+        Queues(Queues&&) = delete;
+        Queues(const Queues&) = delete;
+        Queues& operator=(Queues&&) = delete;
+        Queues& operator=(const Queues&) = delete;
+
+        void push_emit(Emit e)
+        {
+            emit.push(e);
+        }
+
+        void push_defer(Emit e)
+        {
+            defer.push(e);
+        }
+
+        void flush(IState& state)
+        {
+            while (!defer.empty())
+            {
+                auto emitted = defer.front();
+                defer.pop();
+                state.on_event(emitted);
+                emitted.deleter(emitted.data);
+            }
+
+            while (!emit.empty())
+            {
+                auto emitted = emit.front();
+                emit.pop();
+                state.on_event(emitted);
+                emitted.deleter(emitted.data);
+            }
+        }
+
+        ~Queues()
+        {
+            while (!defer.empty())
+            {
+                auto emitted = defer.front();
+                defer.pop();
+                emitted.deleter(emitted.data);
+            }
+
+            while (!emit.empty())
+            {
+                auto emitted = emit.front();
+                emit.pop();
+                emitted.deleter(emitted.data);
+            }
+        }
+
+    private:
+        std::queue<Emit> emit;
+        std::queue<Emit> defer;
+    };
+
+    struct Region
+    {
+        Queues* qs = nullptr;
+        std::unique_ptr<IState> active_state;
+        std::vector<Emit> deferred;
+        bool terminated = false;
+
+        Region(Queues* init_qs, std::unique_ptr<IState> init_active_state)
+            : qs(init_qs)
+            , active_state(std::move(init_active_state))
+        {
+        }
+
+        Region(Region&&) = default;
+        Region& operator=(Region&&) = default;
+        Region(const Region&) = delete;
+        Region& operator=(const Region&) = delete;
+
+        void transit_out()
+        {
+            active_state.reset();
+            for (auto& event : deferred)
+            {
+                qs->push_defer(event);
+            }
+            deferred.clear();
+        }
+
+        ~Region()
+        {
+            transit_out();
+        }
+    };
+
+    struct Contexts
+    {
+        void* state;
+        void* api;
+    };
+
     template <typename R>
     struct transit_targets_from_action
     {
@@ -310,105 +446,57 @@ namespace nil::sm::detail
         }
     };
 
-    template <typename RegionsArray, typename PushDefer>
-    void flush_deferred_events_for_region(
-        RegionsArray& regions,
-        std::size_t region_idx,
-        PushDefer&& push_defer
-    )
-    {
-        auto& deferred = regions[region_idx].deferred;
-        for (auto& event : deferred)
-        {
-            std::forward<PushDefer>(push_defer)(event);
-        }
-        deferred.clear();
-    }
-
-    template <
-        typename R,
-        typename RegionsArray,
-        typename MakeTransitState,
-        typename MakeTerminatedState,
-        typename PushEmit,
-        typename PushDefer>
+    template <typename Action, typename MakeTransitState, typename MakeTerminatedState>
     void apply_region_runtime_action(
         std::size_t i,
-        R& r,
+        Action& r,
         const Emit& e,
-        RegionsArray& regions,
-        MakeTransitState&& make_transit_state,
-        MakeTerminatedState&& make_terminated_state,
-        PushEmit&& push_emit,
-        PushDefer&& push_defer
+        Region& region,
+        const MakeTransitState& make_transit_state,
+        const MakeTerminatedState& make_terminated_state
     )
     {
-        if constexpr (std::is_same_v<R, Transit>)
+        if constexpr (std::is_same_v<Action, Transit>)
         {
-            regions[i].active_state.reset();
-            regions[i].active_state
-                = std::forward<MakeTransitState>(make_transit_state)(i, r.target);
-            flush_deferred_events_for_region(regions, i, std::forward<PushDefer>(push_defer));
+            region.transit_out();
+            region.active_state = make_transit_state(i, r.target);
         }
-        else if constexpr (std::is_same_v<R, Emit>)
+        else if constexpr (std::is_same_v<Action, Emit>)
         {
-            std::forward<PushEmit>(push_emit)(r);
+            region.qs->push_emit(r);
         }
-        else if constexpr (std::is_same_v<R, Terminate>)
+        else if constexpr (std::is_same_v<Action, Terminate>)
         {
-            regions[i].active_state.reset();
-            regions[i].active_state = std::forward<MakeTerminatedState>(make_terminated_state)(i);
-            regions[i].terminated = true;
-            flush_deferred_events_for_region(regions, i, std::forward<PushDefer>(push_defer));
+            region.transit_out();
+            region.active_state = make_terminated_state(i);
+            region.terminated = true;
         }
-        else if constexpr (std::is_same_v<R, Defer>)
+        else if constexpr (std::is_same_v<Action, Defer>)
         {
-            regions[i].deferred.push_back(Emit{
-                .id = e.id,
-                .deleter = e.deleter,
-                .cloner = e.cloner,
-                .data = e.cloner(e.data),
-            });
+            region.deferred.push_back(e.clone());
         }
     }
-}
 
-namespace nil::sm::detail
-{
-    NIL_XALT_COALESCE_TAG(regions, nil::xalt::tlist<>);
-    NIL_XALT_COALESCE_TAG(events, nil::xalt::tlist<>);
-    NIL_XALT_COALESCE_TAG(captures, nil::xalt::tlist<>);
-
-    using on_event_t = std::variant<
-        Terminate,
-        Forward,
-        Discard,
-        Unhandled,
-        Defer,
-        Transit,
-        Emit //
-        >;
-    using on_enter_t = std::variant<Unhandled, NOOP, Emit>;
-    using on_exit_t = std::variant<Unhandled, NOOP, Emit>;
-    using on_regions_finalized_t = std::variant<Unhandled, NOOP, Terminate, Transit, Emit>;
-
-    struct IState
+    template <typename O, typename R>
+    static O to_runtime_action_as(R& r)
     {
-        explicit IState(Metadata init_metadata)
-            : metadata(init_metadata)
+        if constexpr (nil::xalt::is_of_template_v<std::remove_cvref_t<R>, std::variant>)
         {
+            return std::visit([]<typename V>(V& v) { return to_runtime_action_as<O>(v); }, r);
         }
-
-        IState(IState&&) = delete;
-        IState(const IState&) = delete;
-        IState& operator=(IState&&) = delete;
-        IState& operator=(const IState&) = delete;
-        virtual ~IState() = default;
-
-        virtual on_event_t on_event(const Emit& e) = 0;
-
-        const Metadata metadata;
-    };
+        else if constexpr (nil::xalt::is_of_template_v<R, ::nil::sm::Transit>)
+        {
+            return O{detail::Transit{.target = nil::xalt::type_id<typename R::type>}};
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, ::nil::sm::Emit>)
+        {
+            return O{detail::Emit(std::move(r))};
+        }
+        else
+        {
+            return O{r};
+        }
+    }
 
     template <typename S, typename E>
     struct event_dispatcher;
@@ -449,7 +537,7 @@ namespace nil::sm::detail
                 *static_cast<const EV*>(event),
                 static_cast<api_context_t*>(api_contexts)
             );
-            return S::template to_runtime_action_as<on_event_t>(result);
+            return detail::to_runtime_action_as<on_event_t>(result);
         }
 
         static constexpr auto handlers = std::array<event_handler, sizeof...(E)>{
@@ -509,7 +597,7 @@ namespace nil::sm::detail
                 *static_cast<const EV*>(event),
                 static_cast<api_context_t*>(api_contexts)
             );
-            return S::template to_runtime_action_as<on_event_t>(result);
+            return detail::to_runtime_action_as<on_event_t>(result);
         }
 
         static constexpr auto handlers = std::array<capture_handler, sizeof...(E)>{
@@ -529,78 +617,5 @@ namespace nil::sm::detail
 
             return Unhandled();
         }
-    };
-
-    class Queues final
-    {
-    public:
-        Queues() = default;
-        Queues(Queues&&) = delete;
-        Queues(const Queues&) = delete;
-        Queues& operator=(Queues&&) = delete;
-        Queues& operator=(const Queues&) = delete;
-
-        void push_emit(Emit e)
-        {
-            emit.push(e);
-        }
-
-        void push_defer(Emit e)
-        {
-            defer.push(e);
-        }
-
-        void flush(IState& state)
-        {
-            while (!defer.empty())
-            {
-                auto emitted = defer.front();
-                defer.pop();
-                state.on_event(emitted);
-                emitted.deleter(emitted.data);
-            }
-
-            while (!emit.empty())
-            {
-                auto emitted = emit.front();
-                emit.pop();
-                state.on_event(emitted);
-                emitted.deleter(emitted.data);
-            }
-        }
-
-        ~Queues()
-        {
-            while (!defer.empty())
-            {
-                auto emitted = defer.front();
-                defer.pop();
-                emitted.deleter(emitted.data);
-            }
-
-            while (!emit.empty())
-            {
-                auto emitted = emit.front();
-                emit.pop();
-                emitted.deleter(emitted.data);
-            }
-        }
-
-    private:
-        std::queue<Emit> emit;
-        std::queue<Emit> defer;
-    };
-
-    struct Region
-    {
-        std::unique_ptr<IState> active_state;
-        std::vector<Emit> deferred;
-        bool terminated = false;
-    };
-
-    struct Contexts
-    {
-        void* state;
-        void* api;
     };
 }

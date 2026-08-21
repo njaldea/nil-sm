@@ -91,6 +91,7 @@ namespace nil::sm::ir
     {
         std::string id;
         std::string display_name;
+        bool is_initial = false; // first state of its region/root list
         std::vector<action::Info> actions;
         std::vector<transit::Info> transitions;
         std::vector<std::vector<Node>> regions; // empty regions => leaf state

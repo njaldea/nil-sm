@@ -93,17 +93,25 @@ TEST(sm_feature_state_lifetime, orthogonal_region_destruction)
         // no events
     };
 
+    struct Root
+    {
+        using regions = nil::xalt::tlist<R1, R2>;
+    };
+
     testing::StrictMock<APIMock> mock;
     testing::InSequence sequence;
 
+    EXPECT_CALL(mock, on_make_called(type_id<Root>)).Times(1);
+    EXPECT_CALL(mock, on_enter_called(type_id<Root>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R1>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R1>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2>)).Times(1);
-    TestSM<R1, R2> sm(nullptr, &mock);
+    TestSM<Root> sm(nullptr, &mock);
 
     EXPECT_CALL(mock, on_exit_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_exit_called(type_id<R1>)).Times(1);
+    EXPECT_CALL(mock, on_exit_called(type_id<Root>)).Times(1);
 }
 
 // Test: parent destruction destroys all children in order

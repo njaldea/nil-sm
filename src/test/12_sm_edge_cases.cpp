@@ -290,7 +290,12 @@ TEST(sm_feature_edge_cases, many_orthogonal_regions)
     testing::InSequence sequence;
     const void* e1_id = type_id<e1>;
 
-    EdgeCaseSM<r0, r1, r2, r3, r4, r5, r6, r7> sm(&mock, {});
+    struct Root
+    {
+        using regions = nil::xalt::tlist<r0, r1, r2, r3, r4, r5, r6, r7>;
+    };
+
+    EdgeCaseSM<Root> sm(&mock, {});
     {
         EXPECT_CALL(mock, on_state_event(testing::_, e1_id)).Times(8);
         sm.post(e1{});

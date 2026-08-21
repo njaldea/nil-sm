@@ -12,12 +12,13 @@ contract, read [Advanced](05_ADVANCED.md).
 The main type is:
 
 ```cpp
-nil::sm::SM<API, Regions...>
+nil::sm::SM<API, Root>
 ```
 
-`API` tells the machine how to construct states and call their hooks. The
-library provides a default API, so you only need a custom API when you want to
-add application behavior.
+`API` tells the machine how to construct states and call their hooks. `Root`
+is your single top-level state (it can declare its own `regions` if you need
+multiple orthogonal top-level regions). The library provides a default API, so
+you only need a custom API when you want to add application behavior.
 
 ## Contexts
 

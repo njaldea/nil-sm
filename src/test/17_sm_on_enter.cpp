@@ -56,9 +56,14 @@ TEST(sm_feature_on_enter, on_enter_can_publish_event)
     testing::StrictMock<OnEnterObserver> obs;
     testing::InSequence sequence;
 
+    struct Root
+    {
+        using regions = nil::xalt::tlist<publisher, sink>;
+    };
+
     {
         EXPECT_CALL(obs, on_event).Times(1);
-        OnEnterTestSM<publisher, sink> sm(&obs, {});
+        OnEnterTestSM<Root> sm(&obs, {});
     }
 }
 

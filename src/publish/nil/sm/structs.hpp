@@ -67,6 +67,16 @@ namespace nil::sm::detail
         void (*deleter)(void*) = nullptr;
         void* (*cloner)(void*) = nullptr;
         void* data = nullptr;
+
+        Emit clone() const
+        {
+            return Emit{
+                .id = id,
+                .deleter = deleter,
+                .cloner = cloner,
+                .data = cloner(data),
+            };
+        }
     };
 }
 
@@ -164,15 +174,23 @@ namespace nil::sm
             }
         }
 
+        // NOLINTNEXTLINE
+        operator detail::Emit() &&
+        {
+            return detail::Emit{
+                .id = id,
+                .deleter = deleter,
+                .cloner = cloner,
+                .data = std::exchange(data, nullptr),
+            };
+        }
+
     private:
         using type = T;
         const void* id = nullptr;
         void (*deleter)(void*) = nullptr;
         void* (*cloner)(void*) = nullptr;
         void* data = nullptr;
-
-        template <template <typename...> typename API, typename U>
-        friend class State;
     };
 
     template <template <typename...> typename API, typename T>

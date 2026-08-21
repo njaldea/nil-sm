@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../state.hpp"
 #include "detail.hpp"
 #include "ir.hpp"
 
@@ -56,6 +57,11 @@ namespace nil::sm::formatter::mermaid
 
     inline void render_annotations(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
+        if (node.is_initial)
+        {
+            indent(os, depth) << "[*] --> " << node.id << "\n";
+        }
+
         for (const auto& transition : node.transitions)
         {
             indent(os, depth) << source_id(transition) << " --> " << target_id(transition) << " : "
@@ -69,18 +75,12 @@ namespace nil::sm::formatter::mermaid
     inline void render_region(
         std::ostream& os,
         std::size_t depth,
-        const std::vector<ir::Node>& region,
-        bool nested
+        const std::vector<ir::Node>& region
     )
     {
         for (const auto& node : region)
         {
             render_node(os, depth, node);
-        }
-
-        if (!region.empty() && nested)
-        {
-            indent(os, depth) << "[*] --> " << region.front().id << "\n";
         }
     }
 
@@ -93,14 +93,13 @@ namespace nil::sm::formatter::mermaid
             indent(os, depth) << "state \"" << title_label(node) << "\" as " << node.id << " {\n";
             for (auto region_idx = std::size_t{0}; region_idx < node.regions.size(); ++region_idx)
             {
-                render_region(os, depth + 1, node.regions[region_idx], true);
+                render_region(os, depth + 1, node.regions[region_idx]);
                 if (region_idx + 1 < node.regions.size())
                 {
                     indent(os, depth + 1) << "--\n";
                 }
             }
             indent(os, depth) << "}\n";
-
             render_annotations(os, depth, node);
         }
         else
@@ -113,7 +112,7 @@ namespace nil::sm::formatter::mermaid
     inline std::ostream& render(std::ostream& os, const ir::Model& model)
     {
         os << "stateDiagram-v2\n";
-        render_region(os, 0, model.roots, false);
+        render_region(os, 0, model.roots);
         return os;
     }
 }
@@ -123,12 +122,12 @@ namespace nil::sm
     template <typename SM>
     struct mermaid;
 
-    template <template <typename...> typename API, typename... T>
-    struct mermaid<SM<API, T...>>
+    template <template <typename...> typename API, typename T>
+    struct mermaid<SM<API, T>>
     {
-        friend std::ostream& operator<<(std::ostream& os, const mermaid<SM<API, T...>>& /* mmd */)
+        friend std::ostream& operator<<(std::ostream& os, const mermaid<SM<API, T>>& /* mmd */)
         {
-            return formatter::mermaid::render(os, formatter::detail::build_ir<API, T...>());
+            return formatter::mermaid::render(os, formatter::detail::build_ir<API, T>());
         }
     };
 }

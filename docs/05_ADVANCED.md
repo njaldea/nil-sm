@@ -5,7 +5,7 @@ this document to build a normal state machine. Start with the [Guide](01_GUIDE.m
 and [Extensibility](02_EXTENSIBILITY.md) first.
 
 For a practical walkthrough of custom APIs with examples, see [Extensibility](02_EXTENSIBILITY.md).
-`SM<API, Regions...>` takes an optional first template parameter: a `template <typename State> struct` that controls how states are constructed and how lifecycle hooks are dispatched.
+`SM<API, Root>` takes an optional first template parameter: a `template <typename State> struct` that controls how states are constructed and how lifecycle hooks are dispatched.
 
 ## What the API must provide
 
@@ -66,13 +66,13 @@ struct MyAPI
 
 ## Context types and the SM constructor
 
-The SM reads `state_context_t` and `api_context_t` from `API<root<Regions...>>`. The SM constructor takes **pointers** to both context types — the caller owns their lifetime:
+The SM reads `state_context_t` and `api_context_t` from `API<Root>`. The SM constructor takes **pointers** to both context types — the caller owns their lifetime:
 
 ```cpp
 SM(state_contexts_t* state_contexts, api_contexts_t* api_contexts)
 ```
 
-where `state_contexts_t = API<root<...>>::state_context_t` and `api_contexts_t = API<root<...>>::api_context_t`.
+where `state_contexts_t = API<Root>::state_context_t` and `api_contexts_t = API<Root>::api_context_t`.
 
 With the default API both collapse to `void`, so the constructor takes `void*` for both:
 
@@ -163,7 +163,7 @@ nil::sm::SM<InstrumentedAPI, Root> sm(nullptr, &api_ctx);
 The resulting API type is `nil::sm::coalesce_api<PartialAPI>::type`. There is also a convenience alias:
 
 ```cpp
-// CoalescedSM<PartialAPI, Regions...> expands to SM<coalesce_api<PartialAPI>::type, Regions...>
+// CoalescedSM<PartialAPI, Root> expands to SM<coalesce_api<PartialAPI>::type, Root>
 nil::sm::CoalescedSM<PartialAPI, MyRegion> sm{state_contexts, api_contexts};
 ```
 

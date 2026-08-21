@@ -1,4 +1,3 @@
-#include "nil/sm/formatter/xstate.hpp"
 #include <nil/sm/uml.hpp>
 
 #include <iostream>

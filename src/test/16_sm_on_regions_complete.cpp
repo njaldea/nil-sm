@@ -270,7 +270,12 @@ TEST(sm_feature_on_regions_finalized, on_regions_finalized_can_emit_follow_up_ev
     testing::StrictMock<RegionsCompleteObserver> obs;
     testing::InSequence sequence;
 
-    RegionsTestSM<emitting_parent, emit_sink> sm(&obs, {});
+    struct Root
+    {
+        using regions = nil::xalt::tlist<emitting_parent, emit_sink>;
+    };
+
+    RegionsTestSM<Root> sm(&obs, {});
 
     {
         EXPECT_CALL(obs, on_emit_received(77)).Times(1);

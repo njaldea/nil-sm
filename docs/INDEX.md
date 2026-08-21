@@ -10,6 +10,7 @@ in order. Each document has one job.
 3. [Patterns](03_PATTERNS.md) shows short solutions to common problems.
 4. [Use Cases](04_USE_CASES.md) shows how the library fits different domains.
 5. [Advanced](05_ADVANCED.md) documents the complete custom API contract.
+6. [Formatters](06_FORMATTERS.md) documents diagram generation (PlantUML, Mermaid, Graphviz, SCXML, XState).
 
 Most users only need the README, the core guide, and a few patterns.
 
@@ -30,7 +31,7 @@ Most users only need the README, the core guide, and a few patterns.
 - Event capture
 - Event deferral and emission
 - Lifecycle hooks
-- Mermaid, PlantUML, SCXML, XState, and Graphviz output
+- Mermaid, PlantUML, SCXML, XState, and Graphviz output (see [Formatters](06_FORMATTERS.md))
 
 ## Application-Provided Features
 
