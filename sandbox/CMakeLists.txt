@@ -6,9 +6,9 @@ if(NOT ENABLE_SANDBOX)
 endif()
 
 add_executable(${PROJECT_NAME} main.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE sml)
+target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 
 project(sandbox_uml)
 
 add_executable(${PROJECT_NAME} uml.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE sml)
+target_link_libraries(${PROJECT_NAME} PRIVATE sm)

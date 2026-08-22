@@ -1,4 +1,4 @@
-project(sml)
+project(sm)
 
 find_package(nil-xalt CONFIG REQUIRED)
 set(

@@ -23,7 +23,7 @@ add_test_executable(
     20_sm_coalesce_api.cpp
     22_sm_capture_handling.cpp
 )
-target_link_libraries(sm_test PRIVATE sml)
+target_link_libraries(sm_test PRIVATE sm)
 target_link_libraries(sm_test PRIVATE GTest::gmock)
 target_link_libraries(sm_test PRIVATE GTest::gtest)
 target_link_libraries(sm_test PRIVATE GTest::gtest_main)
@@ -33,7 +33,7 @@ add_test_executable(
     sm_transit_dispatch_state_test
     21_transit_dispatch_state_type_checks.cpp
 )
-target_link_libraries(sm_transit_dispatch_state_test PRIVATE sml)
+target_link_libraries(sm_transit_dispatch_state_test PRIVATE sm)
 target_link_libraries(sm_transit_dispatch_state_test PRIVATE GTest::gmock)
 target_link_libraries(sm_transit_dispatch_state_test PRIVATE GTest::gtest)
 target_link_libraries(sm_transit_dispatch_state_test PRIVATE GTest::gtest_main)

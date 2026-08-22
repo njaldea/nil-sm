@@ -1,4 +1,4 @@
-# nil/sml — Advanced: Customising the API Template Parameter
+# nil/sm — Advanced: Customising the API Template Parameter
 
 This is a reference for library authors and advanced users. You do not need
 this document to build a normal state machine. Start with the [Guide](01_GUIDE.md)
