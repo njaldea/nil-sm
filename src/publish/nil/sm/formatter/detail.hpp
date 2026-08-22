@@ -6,7 +6,6 @@
 #include "ir.hpp"
 
 #include <format>
-#include <ranges>
 #include <string>
 #include <type_traits>
 #include <utility>
