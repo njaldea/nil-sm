@@ -12,6 +12,19 @@
 
 namespace nil::sm::formatter::dot
 {
+    struct RegionContext
+    {
+        std::string init_id;
+        std::string term_id;
+        std::string final_id;
+        bool needs_term = false;
+    };
+
+    inline bool is_final_node(const ir::Node& node)
+    {
+        return node.display_name == "[**]";
+    }
+
     inline std::string format_action(const ir::action::Info& action)
     {
         std::string result;
@@ -59,8 +72,62 @@ namespace nil::sm::formatter::dot
         return "";
     }
 
+    inline std::string final_id_of(const std::vector<ir::Node>& region)
+    {
+        for (const auto& node : region)
+        {
+            if (is_final_node(node))
+            {
+                return node.id;
+            }
+        }
+        return "";
+    }
+
+    inline bool is_termination_target(std::string_view target_id_value, std::string_view final_id)
+    {
+        return target_id_value == "[*]" || (!final_id.empty() && target_id_value == final_id);
+    }
+
+    inline RegionContext make_region_context(
+        std::string_view prefix,
+        const std::vector<ir::Node>& region
+    )
+    {
+        auto context = RegionContext{
+            .init_id = std::string(prefix) + "_init",
+            .term_id = std::string(prefix) + "_term",
+            .final_id = final_id_of(region),
+            .needs_term = false,
+        };
+
+        for (const auto& node : region)
+        {
+            if (is_final_node(node))
+            {
+                continue;
+            }
+
+            for (const auto& transition : node.transitions)
+            {
+                if (is_termination_target(target_id(transition), context.final_id))
+                {
+                    context.needs_term = true;
+                    return context;
+                }
+            }
+        }
+
+        return context;
+    }
+
     inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
+        if (is_final_node(node))
+        {
+            return;
+        }
+
         if (!node.regions.empty())
         {
             // Composite state represented as a Graphviz cluster subgraph
@@ -97,23 +164,29 @@ namespace nil::sm::formatter::dot
                 const auto& region = node.regions[r_idx];
                 if (!region.empty())
                 {
-                    std::string init_id = node.id + "_reg_" + std::to_string(r_idx) + "_init";
-                    std::string term_id = node.id + "_reg_" + std::to_string(r_idx) + "_term";
+                    const auto context
+                        = make_region_context(node.id + "_reg_" + std::to_string(r_idx), region);
+                    const auto initial_id = initial_id_of(region);
 
-                    // Region initial pseudo-state
-                    indent(os, depth + 2) << init_id << " [shape=point, label=\"\"];\n";
-                    // Local region termination node
-                    indent(os, depth + 2)
-                        << term_id << " [shape=doublecircle, label=\"\", width=0.2, height=0.2];\n";
+                    if (!initial_id.empty())
+                    {
+                        // Region initial pseudo-state
+                        indent(os, depth + 2) << context.init_id << " [shape=point, label=\"\"];\n";
+                        indent(os, depth + 2) << context.init_id << " -> " << initial_id
+                                              << "[lhead=\"cluster_" << initial_id << "\"];\n";
+                    }
+                    if (context.needs_term)
+                    {
+                        // Local region termination node
+                        indent(os, depth + 2)
+                            << context.term_id
+                            << " [shape=doublecircle, label=\"\", width=0.2, height=0.2];\n";
+                    }
 
                     for (const auto& sub_node : region)
                     {
                         render_node(os, depth + 2, sub_node);
                     }
-
-                    const auto initial_id = initial_id_of(region);
-                    indent(os, depth + 2) << init_id << " -> " << initial_id << "[lhead=\"cluster_"
-                                          << initial_id << "\"];\n";
                 }
                 indent(os, depth + 1) << "}\n";
             }
@@ -136,40 +209,56 @@ namespace nil::sm::formatter::dot
         std::ostream& os,
         std::size_t depth,
         const ir::Node& node,
-        std::string_view current_term_node
+        const RegionContext& context
     )
     {
+        if (is_final_node(node))
+        {
+            return;
+        }
+
         for (const auto& transition : node.transitions)
         {
-            indent(os, depth) << source_id(transition) << " -> ";
+            indent(os, depth) << node.id << " -> ";
 
-            if (target_id(transition) == "[*]")
+            if (is_termination_target(target_id(transition), context.final_id)
+                && context.needs_term)
             {
-                os << current_term_node;
+                os << context.term_id;
             }
             else
             {
                 os << target_id(transition);
             }
 
-            os << " [label=\"" << event_name(transition) << (is_capture(transition) ? " [c]" : "")
-               << "\"";
-
-            // Use ltail with compound graphs when transitioning from composite state
-            if (!node.regions.empty())
+            if (event_name(transition).empty())
             {
-                os << ", ltail=cluster_" << node.id;
+                os << ";\n";
             }
-            os << "];\n";
+            else
+            {
+                os << " [label=\"" << event_name(transition)
+                   << (is_capture(transition) ? " [c]" : "") << "\"";
+
+                // Use ltail with compound graphs when transitioning from composite state
+                if (!node.regions.empty())
+                {
+                    os << ", ltail=cluster_" << node.id;
+                }
+                os << "];\n";
+            }
         }
 
         // Recurse into nested regions, passing down each region's unique local termination node ID
         for (std::size_t r_idx = 0; r_idx < node.regions.size(); ++r_idx)
         {
-            std::string reg_term_id = node.id + "_reg_" + std::to_string(r_idx) + "_term";
+            const auto child_context = make_region_context(
+                node.id + "_reg_" + std::to_string(r_idx),
+                node.regions[r_idx]
+            );
             for (const auto& sub_node : node.regions[r_idx])
             {
-                render_transitions(os, depth, sub_node, reg_term_id);
+                render_transitions(os, depth, sub_node, child_context);
             }
         }
     }
@@ -187,16 +276,24 @@ namespace nil::sm::formatter::dot
             render_node(os, 1, node);
         }
 
-        if (const auto initial_id = initial_id_of(model.roots); !initial_id.empty())
+        const auto root_context = make_region_context("root", model.roots);
+        const auto root_initial_id = initial_id_of(model.roots);
+
+        if (!root_initial_id.empty())
         {
             indent(os, 1) << "root_init [shape=point, label=\"\"];\n";
-            indent(os, 1) << "root_init -> " << initial_id << ";\n";
+            indent(os, 1) << "root_init -> " << root_initial_id << ";\n";
+        }
+
+        if (root_context.needs_term)
+        {
+            indent(os, 1) << "root_term [shape=doublecircle, label=\"\", width=0.2, height=0.2];\n";
         }
 
         os << "\n    // Transitions\n";
         for (const auto& node : model.roots)
         {
-            render_transitions(os, 1, node, "root_term");
+            render_transitions(os, 1, node, root_context);
         }
 
         os << "}\n";

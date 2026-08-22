@@ -115,13 +115,15 @@ namespace nil::sm::detail
 
     struct Region
     {
-        Queues* qs = nullptr;
+        std::size_t index;
+        Queues* queues = nullptr;
         std::unique_ptr<IState> active_state;
         std::vector<Emit> deferred;
         bool terminated = false;
 
-        Region(Queues* init_qs, std::unique_ptr<IState> init_active_state)
-            : qs(init_qs)
+        Region(std::size_t init_index, Queues* init_qs, std::unique_ptr<IState> init_active_state)
+            : index(init_index)
+            , queues(init_qs)
             , active_state(std::move(init_active_state))
         {
         }
@@ -136,7 +138,7 @@ namespace nil::sm::detail
             active_state.reset();
             for (auto& event : deferred)
             {
-                qs->push_defer(event);
+                queues->push_defer(event);
             }
             deferred.clear();
         }
@@ -160,16 +162,22 @@ namespace nil::sm::detail
     };
 
     template <typename U>
-    struct transit_targets_from_action<::nil::sm::Transit<U>>
+    struct transit_targets_from_action<sm::Transit<U>>
     {
         using type = nil::xalt::tlist<U>;
+    };
+
+    template <>
+    struct transit_targets_from_action<Terminate>
+    {
+        using type = nil::xalt::tlist<Fin>;
     };
 
     template <typename... R>
     struct transit_targets_from_action<std::variant<R...>>
     {
         using type = typename nil::xalt::tlist<>::template join<
-            typename transit_targets_from_action<std::remove_cvref_t<R>>::type...>;
+            typename transit_targets_from_action<R>::type...>;
     };
 
     template <typename APIState>
@@ -203,9 +211,8 @@ namespace nil::sm::detail
         template <typename... E>
         struct collect_targets<nil::xalt::tlist<E...>>
         {
-            using type =
-                typename nil::xalt::tlist<>::template join<typename transit_targets_from_action<
-                    std::remove_cvref_t<event_result_t<E>>>::type...>;
+            using type = typename nil::xalt::tlist<>::template join<
+                typename transit_targets_from_action<event_result_t<E>>::type...>;
         };
 
         template <typename CaptureList>
@@ -214,20 +221,18 @@ namespace nil::sm::detail
         template <typename... E>
         struct collect_capture_targets<nil::xalt::tlist<E...>>
         {
-            using type =
-                typename nil::xalt::tlist<>::template join<typename transit_targets_from_action<
-                    std::remove_cvref_t<capture_result_t<E>>>::type...>;
+            using type = typename nil::xalt::tlist<>::template join<
+                typename transit_targets_from_action<capture_result_t<E>>::type...>;
         };
 
     public:
         using type = typename nil::xalt::tlist<>::template join<
             typename collect_targets<typename api_t::events_t>::type,
             typename collect_capture_targets<typename api_t::captures_t>::type,
-            typename transit_targets_from_action<
-                std::remove_cvref_t<decltype(api_t::on_regions_finalized(
-                    std::declval<state_t&>(),
-                    static_cast<api_context_t*>(nullptr)
-                ))>>::type>::dedupe;
+            typename transit_targets_from_action<decltype(api_t::on_regions_finalized(
+                std::declval<state_t&>(),
+                static_cast<api_context_t*>(nullptr)
+            ))>::type>::dedupe;
     };
 
     template <template <typename...> typename API, typename Pending, typename Seen>
@@ -277,6 +282,24 @@ namespace nil::sm::detail
     struct region_reachability_graph
     {
         using states = typename reachable_state_set<API, nil::xalt::tlist<InitialState>>::type;
+
+        static constexpr auto state_ids = []<typename... States>(nil::xalt::tlist<States...>)
+        { return std::array{nil::xalt::type_id<States>...}; }(states{});
+
+        template <typename Target>
+        static consteval std::size_t index_of()
+        {
+            constexpr auto target_id = nil::xalt::type_id<Target>;
+            for (std::size_t i = 0; i < state_ids.size(); ++i)
+            {
+                if (state_ids[i] == target_id)
+                {
+                    return i;
+                }
+            }
+
+            return states::size; // not found
+        }
     };
 
     template <typename APIState, typename TargetStates>
@@ -369,12 +392,12 @@ namespace nil::sm::detail
     public:
         template <typename Parent>
         static std::unique_ptr<IState> make(
-            std::size_t region,
-            const void* target,
             Parent* parent,
             Queues* qs,
             Contexts* contexts,
-            const Metadata* parent_metadata
+            std::size_t region,
+            const Metadata* parent_metadata,
+            const void* target
         )
         {
             if constexpr (sizeof...(Region) > 0)
@@ -446,43 +469,47 @@ namespace nil::sm::detail
         }
     };
 
-    template <typename Action, typename MakeTransitState, typename MakeTerminatedState>
+    template <typename MakeTransitState>
     void apply_region_runtime_action(
-        std::size_t i,
-        Action& r,
         const Emit& e,
+        on_event_t action,
         Region& region,
-        const MakeTransitState& make_transit_state,
-        const MakeTerminatedState& make_terminated_state
+        const MakeTransitState& make_transit_state
     )
     {
-        if constexpr (std::is_same_v<Action, Transit>)
-        {
-            region.transit_out();
-            region.active_state = make_transit_state(i, r.target);
-        }
-        else if constexpr (std::is_same_v<Action, Emit>)
-        {
-            region.qs->push_emit(r);
-        }
-        else if constexpr (std::is_same_v<Action, Terminate>)
-        {
-            region.transit_out();
-            region.active_state = make_terminated_state(i);
-            region.terminated = true;
-        }
-        else if constexpr (std::is_same_v<Action, Defer>)
-        {
-            region.deferred.push_back(e.clone());
-        }
+        std::visit(
+            [&]<typename Action>(Action& r)
+            {
+                if constexpr (std::is_same_v<Action, Transit>)
+                {
+                    region.transit_out();
+                    region.active_state = make_transit_state(region.index, r.target);
+                }
+                else if constexpr (std::is_same_v<Action, Emit>)
+                {
+                    region.queues->push_emit(r);
+                }
+                else if constexpr (std::is_same_v<Action, Terminate>)
+                {
+                    region.transit_out();
+                    region.active_state = make_transit_state(region.index, nil::xalt::type_id<Fin>);
+                    region.terminated = true;
+                }
+                else if constexpr (std::is_same_v<Action, Defer>)
+                {
+                    region.deferred.push_back(e.clone());
+                }
+            },
+            action
+        );
     }
 
     template <typename O, typename R>
-    static O to_runtime_action_as(R& r)
+    static O to_runtime_action_as(R r)
     {
-        if constexpr (nil::xalt::is_of_template_v<std::remove_cvref_t<R>, std::variant>)
+        if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
         {
-            return std::visit([]<typename V>(V& v) { return to_runtime_action_as<O>(v); }, r);
+            return std::visit([](auto& v) { return to_runtime_action_as<O>(std::move(v)); }, r);
         }
         else if constexpr (nil::xalt::is_of_template_v<R, ::nil::sm::Transit>)
         {
@@ -532,12 +559,11 @@ namespace nil::sm::detail
                 "allowed "
                 "return type"
             );
-            auto result = api_t::template on_event<EV>(
+            return detail::to_runtime_action_as<on_event_t>(api_t::template on_event<EV>(
                 state_value,
                 *static_cast<const EV*>(event),
                 static_cast<api_context_t*>(api_contexts)
-            );
-            return detail::to_runtime_action_as<on_event_t>(result);
+            ));
         }
 
         static constexpr auto handlers = std::array<event_handler, sizeof...(E)>{
@@ -592,12 +618,11 @@ namespace nil::sm::detail
                 "API must expose on_capture<Event>(state_value, event, contexts...) with an "
                 "allowed return type"
             );
-            auto result = api_t::template on_capture<EV>(
+            return detail::to_runtime_action_as<on_event_t>(api_t::template on_capture<EV>(
                 state_value,
                 *static_cast<const EV*>(event),
                 static_cast<api_context_t*>(api_contexts)
-            );
-            return detail::to_runtime_action_as<on_event_t>(result);
+            ));
         }
 
         static constexpr auto handlers = std::array<capture_handler, sizeof...(E)>{

@@ -26,11 +26,9 @@ namespace nil::sm::concepts
     };
 
     template <typename T>
-    concept is_allowed_to_use_for_on_event_result
-        = is_allowed_to_use_for_on_event<std::remove_cvref_t<T>>
-        || (nil::xalt::is_of_template_v<std::remove_cvref_t<T>, std::variant>
-            && nil::xalt::to_tlist_t<std::remove_cvref_t<T>>::template all_of<
-                is_allowed_to_use_for_react_as_predicate>);
+    concept is_allowed_to_use_for_on_event_result = is_allowed_to_use_for_on_event<T>
+        || (nil::xalt::is_of_template_v<T, std::variant>
+            && nil::xalt::to_tlist_t<T>::template all_of<is_allowed_to_use_for_react_as_predicate>);
 
     template <typename T, typename E>
     concept has_on_event = requires(T t, E event) {

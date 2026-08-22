@@ -12,51 +12,123 @@
 
 namespace nil::sm::formatter::xstate
 {
-    inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node);
-
-    inline std::string format_target(std::string_view target_id)
+    struct RegionContext
     {
-        if (target_id == "[*]")
-        {
-            return "done"; // Match the final state key name below
-        }
-        return "#" + std::string(target_id);
+        std::string initial_key;
+        std::string final_id;
+    };
+
+    inline void render_node(
+        std::ostream& os,
+        std::size_t depth,
+        const ir::Node& node,
+        const RegionContext& context
+    );
+
+    inline bool is_initial_node(const ir::Node& node)
+    {
+        return node.is_initial;
     }
 
-    // Check only this node's own transitions (not descendants) for Terminate ([*])
-    inline bool own_has_terminate(const ir::Node& node)
+    // A [**] pseudostate node marks where [*] transitions in its region terminate into
+    inline bool is_final_node(const ir::Node& node)
     {
-        for (const auto& tx : node.transitions)
+        return node.display_name == "[**]";
+    }
+
+    inline const ir::Node* find_node_by_id(const std::vector<ir::Node>& region, std::string_view id)
+    {
+        for (const auto& node : region)
         {
-            if (target_id(tx) == "[*]")
+            if (node.id == id)
             {
-                return true;
+                return &node;
             }
         }
-        return false;
+        return nullptr;
+    }
+
+    inline RegionContext make_region_context(const std::vector<ir::Node>& region)
+    {
+        auto context = RegionContext{};
+
+        for (const auto& node : region)
+        {
+            if (is_final_node(node))
+            {
+                context.final_id = node.id;
+                break;
+            }
+        }
+
+        for (const auto& node : region)
+        {
+            if (is_initial_node(node))
+            {
+                context.initial_key = is_final_node(node) ? "done" : node.display_name;
+                return context;
+            }
+        }
+
+        return context;
+    }
+
+    inline std::string transition_target_key(
+        std::string_view raw_target,
+        const RegionContext& context
+    )
+    {
+        if (raw_target == "[*]" || (!context.final_id.empty() && raw_target == context.final_id))
+        {
+            return "done";
+        }
+        return "#" + std::string(raw_target);
     }
 
     inline void render_region_states(
         std::ostream& os,
         std::size_t depth,
-        const std::vector<ir::Node>& region
+        const std::vector<ir::Node>& region,
+        const RegionContext& context
     )
     {
-        for (const auto& r : region)
+        auto first = true;
+        auto rendered_final = false;
+        for (const auto& node : region)
         {
-            render_node(os, depth, r);
-            os << ",\n";
-        }
+            if (is_final_node(node) && rendered_final)
+            {
+                continue;
+            }
 
-        // Inject XState final state for region termination matching [*]
-        indent(os, depth) << "\"done\": {\n";
-        indent(os, depth + 1) << "\"type\": \"final\"\n";
-        indent(os, depth) << "}\n";
+            if (!first)
+            {
+                os << ",\n";
+            }
+            render_node(os, depth, node, context);
+            rendered_final = rendered_final || is_final_node(node);
+            first = false;
+        }
+        os << "\n";
     }
 
     // NOLINTNEXTLINE
-    inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
+    inline void render_node(
+        std::ostream& os,
+        std::size_t depth,
+        const ir::Node& node,
+        const RegionContext& context
+    )
     {
+        if (is_final_node(node))
+        {
+            // The [**] pseudostate renders as XState's own final-state marker
+            indent(os, depth) << "\"done\": {\n";
+            indent(os, depth + 1) << "\"type\": \"final\"\n";
+            indent(os, depth) << "}";
+            return;
+        }
+
         indent(os, depth) << "\"" << node.display_name << "\": {\n";
 
         // Collect entry and exit actions
@@ -154,17 +226,23 @@ namespace nil::sm::formatter::xstate
         if (!node.transitions.empty())
         {
             indent(os, depth + 1) << "\"on\": {\n";
-            for (std::size_t i = 0; i < node.transitions.size(); ++i)
+            auto rendered = std::size_t{0};
+            for (const auto& tx : node.transitions)
             {
-                const auto& tx = node.transitions[i];
-                indent(os, depth + 2)
-                    << "\"" << event_name(tx) << "\": \"" << format_target(target_id(tx)) << "\"";
-                if (i + 1 < node.transitions.size())
+                if (event_name(tx).empty())
                 {
-                    os << ",";
+                    continue;
                 }
-                os << "\n";
+
+                if (rendered > 0)
+                {
+                    os << ",\n";
+                }
+                indent(os, depth + 2) << "\"" << event_name(tx) << "\": \""
+                                      << transition_target_key(target_id(tx), context) << "\"";
+                ++rendered;
             }
+            os << "\n";
             indent(os, depth + 1) << "}";
             if (!node.regions.empty())
             {
@@ -178,10 +256,14 @@ namespace nil::sm::formatter::xstate
         {
             if (node.regions.size() == 1)
             {
-                indent(os, depth + 1)
-                    << R"("initial": ")" << node.regions[0].front().display_name << "\",\n";
+                const auto child_context = make_region_context(node.regions[0]);
+                if (!child_context.initial_key.empty())
+                {
+                    indent(os, depth + 1)
+                        << R"("initial": ")" << child_context.initial_key << "\",\n";
+                }
                 indent(os, depth + 1) << "\"states\": {\n";
-                render_region_states(os, depth + 2, node.regions[0]);
+                render_region_states(os, depth + 2, node.regions[0], child_context);
                 indent(os, depth + 1) << "}\n";
             }
             else
@@ -193,10 +275,14 @@ namespace nil::sm::formatter::xstate
                     indent(os, depth + 2) << "\"region_" << r << "\": {\n";
                     if (!node.regions[r].empty())
                     {
-                        indent(os, depth + 3)
-                            << R"("initial": ")" << node.regions[r].front().display_name << "\",\n";
+                        const auto reg_context = make_region_context(node.regions[r]);
+                        if (!reg_context.initial_key.empty())
+                        {
+                            indent(os, depth + 3)
+                                << R"("initial": ")" << reg_context.initial_key << "\",\n";
+                        }
                         indent(os, depth + 3) << "\"states\": {\n";
-                        render_region_states(os, depth + 4, node.regions[r]);
+                        render_region_states(os, depth + 4, node.regions[r], reg_context);
                         indent(os, depth + 3) << "}\n";
                     }
                     indent(os, depth + 2) << "}";
@@ -220,23 +306,14 @@ namespace nil::sm::formatter::xstate
         indent(os, 1) << "\"id\": \"SM\",\n";
         if (!model.roots.empty())
         {
-            const auto& root = model.roots[0];
-            indent(os, 1) << R"("initial": ")" << root.display_name << "\",\n";
+            const auto root_context = make_region_context(model.roots);
+            if (!root_context.initial_key.empty())
+            {
+                indent(os, 1) << R"("initial": ")" << root_context.initial_key << "\",\n";
+            }
+
             indent(os, 1) << "\"states\": {\n";
-            render_node(os, 2, root);
-            // XState resolves a relative target like "done" against the transitioning node's
-            // *parent*, so root's own terminate transition needs "done" as root's sibling here.
-            if (own_has_terminate(root))
-            {
-                os << ",\n";
-                indent(os, 2) << "\"done\": {\n";
-                indent(os, 3) << "\"type\": \"final\"\n";
-                indent(os, 2) << "}\n";
-            }
-            else
-            {
-                os << "\n";
-            }
+            render_region_states(os, 2, model.roots, root_context);
             indent(os, 1) << "}\n";
         }
         os << "}\n";

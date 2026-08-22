@@ -70,15 +70,18 @@ namespace nil::sm::ir::transit
 {
     struct Event
     {
-        std::string source_id;
-        std::string target_id; // [*] as sentinel for termination
+        // target_id uses "[*]" as a synthetic termination sentinel (Terminate action).
+        // Otherwise it stores a concrete node id.
+        std::string target_id;
+        // event_name is the transition label.
+        // For on_regions_finalized hooks, formatter/detail emits the pseudo-event label "[**]".
         std::string event_name;
     };
 
+    // Same target_id semantics as Event
     struct Capture
     {
-        std::string source_id;
-        std::string target_id; // [*] as sentinel for termination
+        std::string target_id;
         std::string event_name;
     };
 
@@ -89,11 +92,18 @@ namespace nil::sm::ir
 {
     struct Node
     {
-        std::string id;
+        std::string id; // stable state id (unique across the entire model)
+
+        // display_name is the rendered state label (normally type_name<T>).
+        // - "[**]": region final pseudo-state (Fin), sourced from nil::sm::Fin::name.
         std::string display_name;
-        bool is_initial = false; // first state of its region/root list
-        std::vector<action::Info> actions;
+
+        // True when this is the first concrete state in its region (state index 0).
+        // Formatters use this to render initial markers/attributes.
+        bool is_initial = false;
+        std::vector<action::Info> actions; // entry, exit, regions-finalized, event, capture
         std::vector<transit::Info> transitions;
+        // event/capture transitions (no entry/exit/regions-finalized transitions)
         std::vector<std::vector<Node>> regions; // empty regions => leaf state
     };
 
@@ -165,14 +175,6 @@ namespace nil::sm::formatter
                 return "Emit";
         }
         return "";
-    }
-
-    inline const std::string& source_id(const ir::transit::Info& transition)
-    {
-        return std::visit(
-            [](const auto& info) -> const std::string& { return info.source_id; },
-            transition
-        );
     }
 
     inline const std::string& target_id(const ir::transit::Info& transition)

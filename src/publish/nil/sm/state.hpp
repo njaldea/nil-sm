@@ -57,6 +57,7 @@ namespace nil::sm
             self->on_enter();
 
             return std::array<detail::Region, regions_t::size>{detail::Region{
+                I,
                 qs,
                 std::make_unique<State<API, R>>(
                     std::addressof(self->current_state),
@@ -73,7 +74,7 @@ namespace nil::sm
         template <typename Parent>
         explicit State(
             Parent* init_parent,
-            detail::Queues* init_qs,
+            detail::Queues* init_queues,
             detail::Contexts* init_contexts,
             std::size_t init_region,
             std::size_t init_state,
@@ -83,10 +84,11 @@ namespace nil::sm
                   .state = init_state,
                   .region = init_region,
                   .subregions = regions_t::size,
+                  .depth = init_parent_metadata == nullptr ? 0 : init_parent_metadata->depth + 1,
                   .name = detail::type_name<T>(),
                   .parent = init_parent_metadata
               })
-            , qs(init_qs)
+            , queues(init_queues)
             , contexts(init_contexts)
             , current_state(api_t::make(
                   init_parent,
@@ -96,7 +98,7 @@ namespace nil::sm
               ))
             , regions(init_regions(
                   this,
-                  qs,
+                  queues,
                   contexts,
                   regions_t(),
                   std::make_index_sequence<regions_t::size>()
@@ -188,7 +190,7 @@ namespace nil::sm
 
                 if (std::holds_alternative<detail::Emit>(this_result))
                 {
-                    qs->push_emit(std::get<detail::Emit>(this_result));
+                    queues->push_emit(std::get<detail::Emit>(this_result));
                     return Discard();
                 }
 
@@ -201,7 +203,7 @@ namespace nil::sm
         }
 
     private:
-        detail::Queues* qs;
+        detail::Queues* queues;
         detail::Contexts* contexts;
         state_t current_state;
         std::array<detail::Region, regions_t::size> regions;
@@ -209,33 +211,36 @@ namespace nil::sm
 
         void on_enter()
         {
-            auto r = api_t::on_enter(current_state, static_cast<api_context_t*>(contexts->api));
-            const auto on_enter_result = detail::to_runtime_action_as<detail::on_enter_t>(r);
+            const auto on_enter_result = detail::to_runtime_action_as<detail::on_enter_t>(
+                api_t::on_enter(current_state, static_cast<api_context_t*>(contexts->api))
+            );
 
             if (std::holds_alternative<detail::Emit>(on_enter_result))
             {
-                qs->push_emit(std::get<detail::Emit>(on_enter_result));
+                queues->push_emit(std::get<detail::Emit>(on_enter_result));
             }
         }
 
         void on_exit()
         {
-            auto r = api_t::on_exit(current_state, static_cast<api_context_t*>(contexts->api));
-            const auto on_exit_result = detail::to_runtime_action_as<detail::on_exit_t>(r);
+            const auto on_exit_result = detail::to_runtime_action_as<detail::on_exit_t>(
+                api_t::on_exit(current_state, static_cast<api_context_t*>(contexts->api))
+            );
 
             if (std::holds_alternative<detail::Emit>(on_exit_result))
             {
-                qs->push_emit(std::get<detail::Emit>(on_exit_result));
+                queues->push_emit(std::get<detail::Emit>(on_exit_result));
             }
         }
 
         detail::on_regions_finalized_t on_regions_finalized()
         {
-            auto result = api_t::on_regions_finalized(
-                current_state,
-                static_cast<api_context_t*>(contexts->api)
+            return detail::to_runtime_action_as<detail::on_regions_finalized_t>(
+                api_t::on_regions_finalized(
+                    current_state,
+                    static_cast<api_context_t*>(contexts->api)
+                )
             );
-            return detail::to_runtime_action_as<detail::on_regions_finalized_t>(result);
         }
 
         sub_state_scan_t dispatch_to_regions(const detail::Emit& e)
@@ -278,7 +283,7 @@ namespace nil::sm
                 ))
             {
                 auto r = Emit<detail::EvRegionsFinalized>(std::addressof(current_state));
-                qs->push_emit(detail::Emit(std::move(r)));
+                queues->push_emit(detail::Emit(std::move(r)));
             }
         }
 
@@ -287,33 +292,18 @@ namespace nil::sm
             const auto dispatch = [this](std::size_t idx, const void* target)
             {
                 return region_dispatcher_t::make(
-                    idx,
-                    target,
                     std::addressof(current_state),
-                    qs,
-                    contexts,
-                    nullptr
-                );
-            };
-
-            const auto make = [this](std::size_t idx) {
-                return std::make_unique<State<API, Fin>>(
-                    &current_state,
-                    qs,
+                    queues,
                     contexts,
                     idx,
-                    0,
-                    nullptr
+                    nullptr,
+                    target
                 );
             };
 
             for (auto i = 0U; i < regions_t::size; ++i)
             {
-                std::visit(
-                    [&]<typename R>(R& r)
-                    { detail::apply_region_runtime_action(i, r, e, regions[i], dispatch, make); },
-                    sub_state_result[i]
-                );
+                detail::apply_region_runtime_action(e, sub_state_result[i], regions[i], dispatch);
             }
         }
     };
@@ -358,6 +348,7 @@ namespace nil::sm
         explicit SM(state_context_t* state_contexts, api_context_t* api_contexts)
             : contexts({.state = state_contexts, .api = api_contexts})
             , region(
+                  0,
                   &queues,
                   std::make_unique<State<API, T>>(&root, &queues, &contexts, 0, 0, nullptr)
               )
@@ -381,26 +372,23 @@ namespace nil::sm
 
         void post_impl(detail::Emit event) override
         {
-            auto result = region.active_state->on_event(event);
-
             const auto dispatch = [this](std::size_t idx, const void* target)
-            { return region_dispatcher_t::make(idx, target, &root, &queues, &contexts, nullptr); };
-
-            const auto make = [this](std::size_t idx) {
-                return std::make_unique<State<API, Fin>>(
-                    &root,
+            {
+                return region_dispatcher_t::make(
+                    std::addressof(root),
                     &queues,
                     &contexts,
                     idx,
-                    0,
-                    nullptr
+                    nullptr,
+                    target
                 );
             };
 
-            std::visit(
-                [&]<typename R>(R& r)
-                { detail::apply_region_runtime_action(0, r, event, region, dispatch, make); },
-                result
+            detail::apply_region_runtime_action(
+                event,
+                region.active_state->on_event(event),
+                region,
+                dispatch
             );
 
             queues.flush(*region.active_state);

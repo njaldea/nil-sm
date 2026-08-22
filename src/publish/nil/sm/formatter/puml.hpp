@@ -61,9 +61,12 @@ namespace nil::sm::formatter::puml
 
         for (const auto& transition : node.transitions)
         {
-            indent(os, depth) << source_id(transition) << " --> " << target_id(transition) << " : "
-                              << event_name(transition) << (is_capture(transition) ? " [c]" : "")
-                              << "\n";
+            indent(os, depth) << node.id << " --> " << target_id(transition);
+            if (!event_name(transition).empty())
+            {
+                os << " : " << event_name(transition) << (is_capture(transition) ? " [c]" : "");
+            }
+            os << "\n";
         }
     }
 
@@ -83,6 +86,11 @@ namespace nil::sm::formatter::puml
 
     inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
+        if (node.display_name == "[**]")
+        {
+            return;
+        }
+
         if (!node.regions.empty())
         {
             indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\" {\n";

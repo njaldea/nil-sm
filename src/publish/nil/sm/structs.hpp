@@ -13,7 +13,8 @@ namespace nil::sm
     {
         std::size_t state = 0;
         std::size_t region = 0;
-        std::size_t subregions = 1;
+        std::size_t subregions = 0;
+        std::size_t depth = 0;
         std::string_view name;
         const Metadata* parent = nullptr;
     };

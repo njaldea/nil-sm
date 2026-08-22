@@ -64,9 +64,12 @@ namespace nil::sm::formatter::mermaid
 
         for (const auto& transition : node.transitions)
         {
-            indent(os, depth) << source_id(transition) << " --> " << target_id(transition) << " : "
-                              << event_name(transition) << (is_capture(transition) ? " [c]" : "")
-                              << "\n";
+            indent(os, depth) << node.id << " --> " << target_id(transition);
+            if (!event_name(transition).empty())
+            {
+                os << " : " << event_name(transition) << (is_capture(transition) ? " [c]" : "");
+            }
+            os << "\n";
         }
     }
 
@@ -86,6 +89,11 @@ namespace nil::sm::formatter::mermaid
 
     inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
+        if (node.display_name == "[**]")
+        {
+            return;
+        }
+
         if (!node.regions.empty())
         {
             // Composite states cannot carry separate `stateId : on ...` description lines,
@@ -100,13 +108,13 @@ namespace nil::sm::formatter::mermaid
                 }
             }
             indent(os, depth) << "}\n";
-            render_annotations(os, depth, node);
         }
         else
         {
             indent(os, depth) << "state \"" << title_label(node) << "\" as " << node.id << "\n";
-            render_annotations(os, depth, node);
         }
+
+        render_annotations(os, depth, node);
     }
 
     inline std::ostream& render(std::ostream& os, const ir::Model& model)

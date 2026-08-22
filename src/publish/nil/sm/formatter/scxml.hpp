@@ -4,8 +4,8 @@
 #include "detail.hpp"
 #include "ir.hpp"
 
-#include <algorithm>
 #include <ostream>
+
 #include <string>
 #include <unordered_map>
 #include <variant>
@@ -17,14 +17,11 @@
 
 namespace nil::sm::formatter::scxml
 {
-    inline std::string sanitize_event(const std::string& ev)
+    struct RegionContext
     {
-        if (ev == "[*]" || ev == "[**]" || ev.empty())
-        {
-            return "*";
-        }
-        return ev;
-    }
+        std::string initial_id;
+        std::string final_id;
+    };
 
     // Recursively collect display-name-to-ID mappings
     inline void collect_id_mappings(
@@ -56,21 +53,35 @@ namespace nil::sm::formatter::scxml
         return raw_id;
     }
 
-    // Check only this node's own transitions (not descendants) for Terminate ([*])
-    inline bool own_has_terminate(const ir::Node& node)
+    inline bool is_final_node(const ir::Node& node)
     {
-        return std::ranges::any_of(
-            node.transitions,
-            [](const auto& t) { return target_id(t) == "[*]"; }
-        );
+        return node.display_name == "[**]";
     }
 
-    // Find the region's initial state (flagged by the IR), if any
+    inline bool is_initial_node(const ir::Node& node)
+    {
+        return node.is_initial;
+    }
+
+    // Final target is the sibling [**] pseudostate in the same region.
+    inline std::string find_final_id(const std::vector<ir::Node>& siblings)
+    {
+        for (const auto& node : siblings)
+        {
+            if (is_final_node(node))
+            {
+                return node.id;
+            }
+        }
+        return {};
+    }
+
+    // Find the region's initial state from the explicit is_initial flag.
     inline std::string initial_id_of(const std::vector<ir::Node>& region)
     {
         for (const auto& node : region)
         {
-            if (node.is_initial)
+            if (is_initial_node(node))
             {
                 return node.id;
             }
@@ -78,32 +89,30 @@ namespace nil::sm::formatter::scxml
         return "";
     }
 
-    // Check if a leaf anywhere in this subtree terminates into current_final_id. A composite's
-    // own transitions are excluded (they resolve to their own dedicated own-final id instead),
-    // and a parallel node breaks the chain entirely since each of its regions mints its own
-    // fresh final id rather than forwarding current_final_id to its descendants.
-    inline bool leaf_descendant_has_terminate(const ir::Node& node)
+    inline RegionContext make_region_context(const std::vector<ir::Node>& region)
     {
-        if (node.regions.empty())
-        {
-            return own_has_terminate(node);
-        }
-        if (node.regions.size() > 1)
-        {
-            return false;
-        }
-        return std::ranges::any_of(
-            node.regions.front(),
-            [](const auto& child) { return leaf_descendant_has_terminate(child); }
-        );
+        return RegionContext{
+            .initial_id = initial_id_of(region),
+            .final_id = find_final_id(region)
+        };
     }
 
-    inline bool region_has_terminate(const std::vector<ir::Node>& region)
+    inline bool is_final_target(std::string_view raw_target_id, std::string_view final_id)
     {
-        return std::ranges::any_of(
-            region,
-            [](const auto& node) { return leaf_descendant_has_terminate(node); }
-        );
+        return raw_target_id == "[*]" || (!final_id.empty() && raw_target_id == final_id);
+    }
+
+    inline std::string resolve_transition_target(
+        const ir::transit::Info& transition,
+        const RegionContext& context,
+        const std::unordered_map<std::string, std::string>& id_map
+    )
+    {
+        if (is_final_target(target_id(transition), context.final_id))
+        {
+            return context.final_id;
+        }
+        return resolve_id(target_id(transition), id_map);
     }
 
     // Render entry/exit and event action executable content (raise-based, no <script> needed)
@@ -141,8 +150,7 @@ namespace nil::sm::formatter::scxml
                     }
                     else if constexpr (std::is_same_v<T, ir::action::Event>)
                     {
-                        indent(os, depth)
-                            << "<transition event=\"" << sanitize_event(info.event_name) << "\">\n";
+                        indent(os, depth) << "<transition event=\"" << info.event_name << "\">\n";
                         if (info.response == ir::response::EEvent::emit)
                         {
                             indent(os, depth + 1) << "<raise event=\"" << state_id << ".emit\"/>\n";
@@ -156,8 +164,7 @@ namespace nil::sm::formatter::scxml
                     }
                     else if constexpr (std::is_same_v<T, ir::action::Capture>)
                     {
-                        indent(os, depth)
-                            << "<transition event=\"" << sanitize_event(info.event_name) << "\">\n";
+                        indent(os, depth) << "<transition event=\"" << info.event_name << "\">\n";
                         indent(os, depth + 1) << "<!-- captured before regions -->\n";
                         if (info.response == ir::response::EEvent::emit)
                         {
@@ -196,28 +203,53 @@ namespace nil::sm::formatter::scxml
         std::ostream& os,
         std::size_t depth,
         const ir::Node& node,
-        const std::string& current_final_id,
-        const std::string& own_final_id,
+        const RegionContext& context,
         const std::unordered_map<std::string, std::string>& id_map
     );
 
-    // Render a child within its parent's region: only composite children need a dedicated
-    // own-final id (leaves always resolve their own transitions to current_final_id directly).
-    inline void render_child(
+    inline void render_transitions(
         std::ostream& os,
         std::size_t depth,
-        const ir::Node& child,
-        const std::string& parent_current_final_id,
+        const std::vector<ir::transit::Info>& transitions,
+        const RegionContext& context,
         const std::unordered_map<std::string, std::string>& id_map
     )
     {
-        const bool child_is_composite = !child.regions.empty();
-        const std::string child_own_final_id
-            = child_is_composite ? (child.id + "_final") : std::string{};
-        render_node(os, depth, child, parent_current_final_id, child_own_final_id, id_map);
-        if (child_is_composite && own_has_terminate(child))
+        for (const auto& transition : transitions)
         {
-            indent(os, depth) << "<final id=\"" << child_own_final_id << "\"/>\n";
+            const auto target = resolve_transition_target(transition, context, id_map);
+            const auto ev = event_name(transition);
+
+            if (is_capture(transition))
+            {
+                indent(os, depth) << "<!-- captured before regions -->\n";
+            }
+            indent(os, depth) << "<transition event=\"" << ev << "\" target=\"" << target
+                              << "\"/>\n";
+        }
+    }
+
+    // Render every child of a region, substituting a <final> element for the [**] pseudostate
+    // instead of rendering it as an ordinary state.
+    inline void render_children(
+        std::ostream& os,
+        std::size_t depth,
+        const std::vector<ir::Node>& region,
+        const RegionContext& context,
+        const std::unordered_map<std::string, std::string>& id_map
+    )
+    {
+        for (const auto& child : region)
+        {
+            if (is_final_node(child))
+            {
+                if (!context.final_id.empty())
+                {
+                    indent(os, depth) << "<final id=\"" << context.final_id << "\"/>\n";
+                }
+                continue;
+            }
+            render_node(os, depth, child, context, id_map);
         }
     }
 
@@ -225,8 +257,7 @@ namespace nil::sm::formatter::scxml
         std::ostream& os,
         std::size_t depth,
         const ir::Node& node,
-        const std::string& current_final_id,
-        const std::string& self_target,
+        const RegionContext& context,
         const std::string& state_id,
         const std::unordered_map<std::string, std::string>& id_map
     )
@@ -234,47 +265,24 @@ namespace nil::sm::formatter::scxml
         const bool is_composite = !node.regions.empty();
 
         std::string initial_attr;
+        RegionContext child_context;
         if (is_composite)
         {
-            const auto initial_id = initial_id_of(node.regions.front());
-            if (!initial_id.empty())
+            child_context = make_region_context(node.regions.front());
+            if (!child_context.initial_id.empty())
             {
-                initial_attr = " initial=\"" + resolve_id(initial_id, id_map) + "\"";
+                initial_attr = " initial=\"" + resolve_id(child_context.initial_id, id_map) + "\"";
             }
         }
 
         indent(os, depth) << "<state id=\"" << state_id << "\"" << initial_attr << ">\n";
 
         render_actions(os, depth + 1, node.actions, state_id);
-
-        // Outgoing transitions defined on this state target self_target
-        for (const auto& transition : node.transitions)
-        {
-            const bool is_target_final = (target_id(transition) == "[*]");
-            const std::string target
-                = is_target_final ? self_target : resolve_id(target_id(transition), id_map);
-            const std::string ev = sanitize_event(event_name(transition));
-
-            if (is_capture(transition))
-            {
-                indent(os, depth + 1) << "<!-- captured before regions -->\n";
-            }
-            indent(os, depth + 1) << "<transition event=\"" << ev << "\" target=\"" << target
-                                  << "\"/>\n";
-        }
+        render_transitions(os, depth + 1, node.transitions, context, id_map);
 
         if (is_composite)
         {
-            for (const auto& child : node.regions.front())
-            {
-                render_child(os, depth + 1, child, current_final_id, id_map);
-            }
-        }
-
-        // Render final tag inside this compound state if a leaf descendant terminates into it
-        if (is_composite && leaf_descendant_has_terminate(node))
-        {
-            indent(os, depth + 1) << "<final id=\"" << current_final_id << "\"/>\n";
+            render_children(os, depth + 1, node.regions.front(), child_context, id_map);
         }
 
         indent(os, depth) << "</state>\n";
@@ -299,26 +307,15 @@ namespace nil::sm::formatter::scxml
         indent(os, depth) << "<!-- Region " << index << " -->\n";
 
         const std::string reg_state_id = std::to_string(index) + "_" + parent_state_id;
-        // Keyed off reg_state_id (not reg.front().id) so it never collides with a sole
-        // composite child's own_final_id, which is keyed off the child's own id instead.
-        const std::string reg_final_id = reg_state_id + "_final";
-        const bool reg_has_term = region_has_terminate(reg);
-
-        indent(os, depth) << "<state id=\"" << reg_state_id << "\">\n";
-
-        for (const auto& child : reg)
+        const auto context = make_region_context(reg);
+        std::string initial_attr;
+        if (!context.initial_id.empty())
         {
-            render_child(os, depth + 1, child, reg_final_id, id_map);
+            initial_attr = " initial=\"" + resolve_id(context.initial_id, id_map) + "\"";
         }
 
-        // A sole composite child already declares reg_final_id itself (as its own
-        // current_final_id); only declare it here when nothing else will.
-        const bool sole_child_owns_final = (reg.size() == 1) && !reg.front().regions.empty();
-        if (reg_has_term && !sole_child_owns_final)
-        {
-            indent(os, depth + 1) << "<final id=\"" << reg_final_id << "\"/>\n";
-        }
-
+        indent(os, depth) << "<state id=\"" << reg_state_id << "\"" << initial_attr << ">\n";
+        render_children(os, depth + 1, reg, context, id_map);
         indent(os, depth) << "</state>\n";
     }
 
@@ -326,7 +323,7 @@ namespace nil::sm::formatter::scxml
         std::ostream& os,
         std::size_t depth,
         const ir::Node& node,
-        const std::string& self_target,
+        const RegionContext& context,
         const std::string& state_id,
         const std::unordered_map<std::string, std::string>& id_map
     )
@@ -334,22 +331,7 @@ namespace nil::sm::formatter::scxml
         indent(os, depth) << "<parallel id=\"" << state_id << "\">\n";
 
         render_actions(os, depth + 1, node.actions, state_id);
-
-        // Outgoing transitions on the parallel state target self_target
-        for (const auto& transition : node.transitions)
-        {
-            const bool is_target_final = (target_id(transition) == "[*]");
-            const std::string target
-                = is_target_final ? self_target : resolve_id(target_id(transition), id_map);
-            const std::string ev = sanitize_event(event_name(transition));
-
-            if (is_capture(transition))
-            {
-                indent(os, depth + 1) << "<!-- captured before regions -->\n";
-            }
-            indent(os, depth + 1) << "<transition event=\"" << ev << "\" target=\"" << target
-                                  << "\"/>\n";
-        }
+        render_transitions(os, depth + 1, node.transitions, context, id_map);
 
         for (std::size_t r = 0; r < node.regions.size(); ++r)
         {
@@ -363,25 +345,20 @@ namespace nil::sm::formatter::scxml
         std::ostream& os,
         std::size_t depth,
         const ir::Node& node,
-        const std::string& current_final_id,
-        const std::string& own_final_id,
+        const RegionContext& context,
         const std::unordered_map<std::string, std::string>& id_map
     )
     {
         const bool is_parallel = node.regions.size() > 1;
-        const bool is_composite = !node.regions.empty();
         const std::string state_id = resolve_id(node.id, id_map);
-        // A composite's own transitions target its dedicated own-final id (declared by its
-        // parent as a sibling); a leaf has no descendants, so it keeps using current_final_id.
-        const std::string& self_target = is_composite ? own_final_id : current_final_id;
 
         if (is_parallel)
         {
-            render_parallel_state(os, depth, node, self_target, state_id, id_map);
+            render_parallel_state(os, depth, node, context, state_id, id_map);
         }
         else
         {
-            render_compound_state(os, depth, node, current_final_id, self_target, state_id, id_map);
+            render_compound_state(os, depth, node, context, state_id, id_map);
         }
     }
 
@@ -393,16 +370,28 @@ namespace nil::sm::formatter::scxml
         os << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
            << R"(<scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0")";
 
-        // model.roots holds the single actual top-level state directly.
-        const auto& top = model.roots.front();
-        const std::string root_final_id = top.id + "_final";
-        const std::string root_own_final_id = top.id + "_own_final";
-
-        os << " initial=\"" << resolve_id(top.id, id_map) << "\">\n";
-        render_node(os, 1, top, root_final_id, root_own_final_id, id_map);
-        if (own_has_terminate(top))
+        const auto root_context = make_region_context(model.roots);
+        if (!root_context.initial_id.empty())
         {
-            indent(os, 1) << "<final id=\"" << root_own_final_id << "\"/>\n";
+            os << " initial=\"" << resolve_id(root_context.initial_id, id_map) << "\">\n";
+        }
+        else
+        {
+            os << ">\n";
+        }
+
+        for (const auto& root : model.roots)
+        {
+            if (is_final_node(root))
+            {
+                continue;
+            }
+            render_node(os, 1, root, root_context, id_map);
+        }
+
+        if (!root_context.final_id.empty())
+        {
+            indent(os, 1) << "<final id=\"" << root_context.final_id << "\"/>\n";
         }
 
         os << "</scxml>\n";
