@@ -130,6 +130,37 @@ namespace
     static_assert(dispatch_contains_target_id<dispatch_cycle_c, cycle_a>());
     static_assert(dispatch_contains_target_id<dispatch_cycle_c, cycle_b>());
     static_assert(dispatch_contains_target_id<dispatch_cycle_c, cycle_c>());
+
+    // Case 4: Explicit siblings bypass transition discovery.
+    struct explicit_sibling_c
+    {
+    };
+
+    struct explicit_sibling_b
+    {
+    };
+
+    struct explicit_sibling_a
+    {
+    };
+}
+
+template <>
+struct nil::sm::siblings<explicit_sibling_a>
+{
+    using type = nil::xalt::tlist<explicit_sibling_c, explicit_sibling_b>;
+};
+
+namespace transit_dispatch_state_test
+{
+    using dispatch_explicit_siblings = dispatch_for<explicit_sibling_a>;
+
+    static_assert(std::is_same_v<
+                  dispatch_explicit_siblings::states,
+                  nil::xalt::tlist<explicit_sibling_a, explicit_sibling_c, explicit_sibling_b>>);
+    static_assert(dispatch_explicit_siblings::index_of<explicit_sibling_a>() == 0);
+    static_assert(dispatch_explicit_siblings::index_of<explicit_sibling_c>() == 1);
+    static_assert(dispatch_explicit_siblings::index_of<explicit_sibling_b>() == 2);
 }
 
 TEST(sm_feature_transit_dispatch_state, type_checks_compile)

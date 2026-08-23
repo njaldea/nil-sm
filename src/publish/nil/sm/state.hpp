@@ -287,8 +287,20 @@ namespace nil::sm
 
         void commit_region_results(const detail::Event& e, on_event_results_t& sub_state_result)
         {
-            const auto dispatch = [this](std::size_t idx, const void* target)
+            const auto dispatch
+                = [this](std::size_t idx, const void* target) -> std::unique_ptr<detail::IState>
             {
+                if (nil::xalt::type_id<Fin> == target)
+                {
+                    return std::make_unique<State<API, Fin>>(
+                        std::addressof(current_state),
+                        queues,
+                        contexts,
+                        idx,
+                        0,
+                        std::addressof(this->metadata)
+                    );
+                }
                 return region_dispatcher_t::make(
                     std::addressof(current_state),
                     queues,
@@ -370,8 +382,20 @@ namespace nil::sm
 
         void post_impl(detail::Event event) override
         {
-            const auto dispatch = [this](std::size_t idx, const void* target)
+            const auto dispatch
+                = [this](std::size_t idx, const void* target) -> std::unique_ptr<detail::IState>
             {
+                if (nil::xalt::type_id<Fin> == target)
+                {
+                    return std::make_unique<State<API, Fin>>(
+                        std::addressof(root),
+                        &queues,
+                        &contexts,
+                        idx,
+                        0,
+                        nullptr
+                    );
+                }
                 return region_dispatcher_t::make(
                     std::addressof(root),
                     &queues,

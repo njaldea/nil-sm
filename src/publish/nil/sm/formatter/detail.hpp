@@ -5,6 +5,7 @@
 #include "../structs.hpp"
 #include "ir.hpp"
 
+#include <algorithm>
 #include <format>
 #include <string>
 #include <type_traits>
@@ -87,27 +88,6 @@ namespace nil::sm::formatter::detail
         {
             using type = ir::action::RegionsFinalized;
             node.actions.emplace_back(type{ir::response::ERegionsFinalized::emit});
-        }
-        else if constexpr (nil::xalt::is_of_template_v<R, Transit>)
-        {
-            using reachable_states_t
-                = nil::sm::detail::region_reachability_graph<API, RegionInitial>;
-            const auto target_state = reachable_states_t::template index_of<typename R::type>();
-            const auto target_metadata = make_metadata<API, typename R::type>(
-                node_metadata.parent,
-                node_metadata.region,
-                target_state
-            );
-
-            using type = ir::transit::Event;
-            node.transitions.emplace_back(
-                type{format_stable_id(nil::sm::id::stable_id(target_metadata)), "[**]"}
-            );
-        }
-        else if constexpr (std::is_same_v<R, Terminate>)
-        {
-            using type = ir::transit::Event;
-            node.transitions.emplace_back(type{"[*]", "[**]"});
         }
         else if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
         {
@@ -289,11 +269,36 @@ namespace nil::sm::formatter::detail
     {
         using reachable_t = typename nil::sm::detail::region_reachability_graph<API, T>::states;
 
-        return
+        auto nodes =
             [&]<typename... C, std::size_t... I>(nil::xalt::tlist<C...>, std::index_sequence<I...>)
         {
             return std::vector<ir::Node>{build_node<API, C, T>(parent, index, I)...};
         }(reachable_t{}, std::make_index_sequence<reachable_t::size>{});
+
+        const auto has_termination = std::any_of(
+            nodes.begin(),
+            nodes.end(),
+            [](const auto& node)
+            {
+                return std::any_of(
+                    node.transitions.begin(),
+                    node.transitions.end(),
+                    [](const auto& transition) { return target_id(transition) == "[*]"; }
+                );
+            }
+        );
+
+        if (has_termination
+            && !std::any_of(
+                nodes.begin(),
+                nodes.end(),
+                [](const auto& node) { return node.is_final; }
+            ))
+        {
+            nodes.push_back(build_node<API, Fin, T>(parent, index, nodes.size()));
+        }
+
+        return nodes;
     }
 
     template <template <typename...> typename API, typename... R>

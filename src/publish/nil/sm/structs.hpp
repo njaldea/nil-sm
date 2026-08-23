@@ -9,6 +9,12 @@
 
 namespace nil::sm
 {
+    template <typename T>
+    struct siblings
+    {
+        using type = void;
+    };
+
     struct Metadata final
     {
         std::size_t state = 0;
@@ -87,7 +93,6 @@ namespace nil::sm
 {
     struct Fin final
     {
-        static constexpr bool is_final = true;
     };
 
     struct Root final
