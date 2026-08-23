@@ -55,7 +55,7 @@ namespace nil::sm::formatter::scxml
 
     inline bool is_final_node(const ir::Node& node)
     {
-        return node.display_name == "[**]";
+        return node.is_final;
     }
 
     inline bool is_initial_node(const ir::Node& node)

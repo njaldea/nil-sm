@@ -95,12 +95,12 @@ namespace nil::sm::ir
         std::string id; // stable state id (unique across the entire model)
 
         // display_name is the rendered state label (normally type_name<T>).
-        // - "[**]": region final pseudo-state (Fin), sourced from nil::sm::Fin::name.
         std::string display_name;
 
         // True when this is the first concrete state in its region (state index 0).
         // Formatters use this to render initial markers/attributes.
         bool is_initial = false;
+        bool is_final = false;
         std::vector<action::Info> actions; // entry, exit, regions-finalized, event, capture
         std::vector<transit::Info> transitions;
         // event/capture transitions (no entry/exit/regions-finalized transitions)

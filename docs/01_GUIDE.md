@@ -125,6 +125,9 @@ them in a `std::variant`.
 - Use `Defer` only when a later state should receive the event.
 - Use `Terminate` when the region is finished.
 
+`Defer` applies to normal event and capture handlers. It is not valid from
+`on_enter()`, `on_exit()`, or `on_regions_finalized()`.
+
 ## 4. Hierarchy and Regions
 
 A state can contain child regions:
@@ -212,6 +215,11 @@ struct connected
 - `on_exit()` runs when the state is destroyed.
 - `on_regions_finalized()` runs when all direct child regions terminate.
 
+The regions-finalized notification is an internal framework event. It is
+targeted at the state that owns the completed child regions and is dispatched
+to `on_regions_finalized()`, not to a user `on_event()` handler. It is not part
+of the state's `events` list.
+
 Hooks may return `NOOP` or `Emit<E>`. `on_regions_finalized()` may also return
 `Transit<T>` or `Terminate`. If a hook can return more than one of these,
 declare a `std::variant` trailing return type, for example:
@@ -278,7 +286,7 @@ struct AppContext
 };
 
 template <typename State>
-using AppAPI = nil::sm::default_api<State, AppContext>;
+using AppAPI = nil::sm::api::Default<State, AppContext>;
 
 struct logged_in
 {

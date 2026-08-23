@@ -85,6 +85,7 @@ namespace nil::sm
                   .region = init_region,
                   .subregions = regions_t::size,
                   .depth = init_parent_metadata == nullptr ? 0 : init_parent_metadata->depth + 1,
+                  .is_final = std::is_same_v<T, Fin>,
                   .name = detail::type_name<T>(),
                   .parent = init_parent_metadata
               })
@@ -120,7 +121,7 @@ namespace nil::sm
             on_exit();
         }
 
-        detail::on_event_t on_event(const detail::Emit& e) override
+        detail::on_event_t on_event(const detail::Event& e) override
         {
             const auto is_regions_finalized_event
                 = e.id == nil::xalt::type_id<detail::EvRegionsFinalized>;
@@ -147,23 +148,20 @@ namespace nil::sm
                 }
             }
 
-            if (!is_regions_finalized_event)
+            auto capture_result = capture_dispatch_t::dispatch(
+                e,
+                current_state,
+                static_cast<api_context_t*>(contexts->api)
+            );
+            if (!std::holds_alternative<Unhandled>(capture_result)
+                && !std::holds_alternative<Forward>(capture_result))
             {
-                auto capture_result = capture_dispatch_t::dispatch(
-                    e,
-                    current_state,
-                    static_cast<api_context_t*>(contexts->api)
-                );
-                if (!std::holds_alternative<Unhandled>(capture_result)
-                    && !std::holds_alternative<Forward>(capture_result))
-                {
-                    return capture_result;
-                }
+                return capture_result;
             }
 
             auto sub_state = dispatch_to_regions(e);
 
-            if (!is_regions_finalized_event && sub_state.handle)
+            if (sub_state.handle)
             {
                 auto this_result = event_dispatch_t::dispatch(
                     e,
@@ -188,9 +186,9 @@ namespace nil::sm
                     check_finalize();
                 }
 
-                if (std::holds_alternative<detail::Emit>(this_result))
+                if (std::holds_alternative<detail::Event>(this_result))
                 {
-                    queues->push_emit(std::get<detail::Emit>(this_result));
+                    queues->push_emit(std::get<detail::Event>(this_result));
                     return Discard();
                 }
 
@@ -215,9 +213,9 @@ namespace nil::sm
                 api_t::on_enter(current_state, static_cast<api_context_t*>(contexts->api))
             );
 
-            if (std::holds_alternative<detail::Emit>(on_enter_result))
+            if (std::holds_alternative<detail::Event>(on_enter_result))
             {
-                queues->push_emit(std::get<detail::Emit>(on_enter_result));
+                queues->push_emit(std::get<detail::Event>(on_enter_result));
             }
         }
 
@@ -227,9 +225,9 @@ namespace nil::sm
                 api_t::on_exit(current_state, static_cast<api_context_t*>(contexts->api))
             );
 
-            if (std::holds_alternative<detail::Emit>(on_exit_result))
+            if (std::holds_alternative<detail::Event>(on_exit_result))
             {
-                queues->push_emit(std::get<detail::Emit>(on_exit_result));
+                queues->push_emit(std::get<detail::Event>(on_exit_result));
             }
         }
 
@@ -243,7 +241,7 @@ namespace nil::sm
             );
         }
 
-        sub_state_scan_t dispatch_to_regions(const detail::Emit& e)
+        sub_state_scan_t dispatch_to_regions(const detail::Event& e)
         {
             sub_state_scan_t scan = {};
             auto no_region_handled = true;
@@ -283,11 +281,11 @@ namespace nil::sm
                 ))
             {
                 auto r = Emit<detail::EvRegionsFinalized>(std::addressof(current_state));
-                queues->push_emit(detail::Emit(std::move(r)));
+                queues->push_emit(detail::Event(std::move(r)));
             }
         }
 
-        void commit_region_results(const detail::Emit& e, on_event_results_t& sub_state_result)
+        void commit_region_results(const detail::Event& e, on_event_results_t& sub_state_result)
         {
             const auto dispatch = [this](std::size_t idx, const void* target)
             {
@@ -324,7 +322,7 @@ namespace nil::sm
         template <typename T>
         void post(T event = {})
         {
-            post_impl(detail::Emit{
+            post_impl(detail::Event{
                 .id = nil::xalt::type_id<T>,
                 .deleter = &detail::deleter<T>,
                 .cloner = &detail::cloner<T>,
@@ -333,7 +331,7 @@ namespace nil::sm
         }
 
     private:
-        virtual void post_impl(detail::Emit event) = 0;
+        virtual void post_impl(detail::Event event) = 0;
     };
 
     template <template <typename...> typename API, typename T>
@@ -370,7 +368,7 @@ namespace nil::sm
         Root root;
         detail::Region region;
 
-        void post_impl(detail::Emit event) override
+        void post_impl(detail::Event event) override
         {
             const auto dispatch = [this](std::size_t idx, const void* target)
             {

@@ -32,7 +32,7 @@ struct AppContext
 };
 
 template <typename State>
-using AppAPI = nil::sm::default_api<State, AppContext>;
+using AppAPI = nil::sm::api::Default<State, AppContext>;
 
 struct logged_in
 {
@@ -61,9 +61,9 @@ struct Logger
 };
 
 template <typename State>
-struct LoggingAPI : nil::sm::default_api<State, void, Logger>
+struct LoggingAPI : nil::sm::api::Default<State, void, Logger>
 {
-    using base = nil::sm::default_api<State, void, Logger>;
+    using base = nil::sm::api::Default<State, void, Logger>;
     using api_context_t = Logger;
 
     static auto on_enter(State& state, Logger* logger)
@@ -138,7 +138,7 @@ to use multiple threads.
 ## Practical Rules
 
 - Start with `DefaultSM` and add a custom API only when needed.
-- Delegate to `default_api` instead of rewriting normal behavior.
+- Delegate to `nil::sm::api::Default` instead of rewriting normal behavior.
 - Document who owns every context pointer.
 - Keep timer callbacks from outliving their states.
 - Keep logging and profiling hooks lightweight.

@@ -1,5 +1,14 @@
 #pragma once
 
+// Internal state-machine building blocks:
+// - runtime state, region, queue, and action handling
+// - compile-time reachability analysis and state construction tables
+// - runtime region and event/capture dispatch
+//
+// Reachable states are kept in a stable type-list order. The state ID and
+// state-maker tables use that same order, so a state ID can select its maker
+// by index without storing the ID twice.
+
 #include "concepts.hpp"
 #include "structs.hpp"
 
@@ -29,11 +38,11 @@ namespace nil::sm::detail
         Unhandled,
         Defer,
         Transit,
-        Emit //
+        Event //
         >;
-    using on_enter_t = std::variant<Unhandled, NOOP, Emit>;
-    using on_exit_t = std::variant<Unhandled, NOOP, Emit>;
-    using on_regions_finalized_t = std::variant<Unhandled, NOOP, Terminate, Transit, Emit>;
+    using on_enter_t = std::variant<Unhandled, NOOP, Event>;
+    using on_exit_t = std::variant<Unhandled, NOOP, Event>;
+    using on_regions_finalized_t = std::variant<Unhandled, NOOP, Terminate, Transit, Event>;
 
     struct IState
     {
@@ -48,7 +57,7 @@ namespace nil::sm::detail
         IState& operator=(const IState&) = delete;
         virtual ~IState() = default;
 
-        virtual on_event_t on_event(const Emit& e) = 0;
+        virtual on_event_t on_event(const Event& e) = 0;
 
         const Metadata metadata;
     };
@@ -62,12 +71,12 @@ namespace nil::sm::detail
         Queues& operator=(Queues&&) = delete;
         Queues& operator=(const Queues&) = delete;
 
-        void push_emit(Emit e)
+        void push_emit(Event e)
         {
             emit.push(e);
         }
 
-        void push_defer(Emit e)
+        void push_defer(Event e)
         {
             defer.push(e);
         }
@@ -109,16 +118,18 @@ namespace nil::sm::detail
         }
 
     private:
-        std::queue<Emit> emit;
-        std::queue<Emit> defer;
+        std::queue<Event> emit;
+        std::queue<Event> defer;
     };
 
+    // A Region owns its active state and deferred events. Leaving a state moves
+    // deferred events back to the shared queue so they can be handled later.
     struct Region
     {
         std::size_t index;
         Queues* queues = nullptr;
         std::unique_ptr<IState> active_state;
-        std::vector<Emit> deferred;
+        std::vector<Event> deferred;
         bool terminated = false;
 
         Region(std::size_t init_index, Queues* init_qs, std::unique_ptr<IState> init_active_state)
@@ -252,8 +263,7 @@ namespace nil::sm::detail
         typename... Seen>
     struct reachable_state_set_impl<API, nil::xalt::tlist<Head, Tail...>, nil::xalt::tlist<Seen...>>
     {
-        static constexpr auto already_seen
-            = nil::xalt::tlist<Seen...>::template any_of<std::is_same, Head>;
+        static constexpr auto already_seen = nil::xalt::tlist<Seen...>::template contains<Head>;
 
         using next_pending_raw = std::conditional_t<
             already_seen,
@@ -278,9 +288,45 @@ namespace nil::sm::detail
             nil::xalt::tlist<>>::type;
     };
 
+    template <template <typename...> typename API, typename Parent, typename States>
+    struct state_maker;
+
+    // This table is one static instance for each API, Parent, and reachable
+    // state-list combination. Graphs with the same list reuse the table.
+    template <template <typename...> typename API, typename Parent, typename... State>
+    struct state_maker<API, Parent, nil::xalt::tlist<State...>>
+    {
+        using maker_t = std::unique_ptr<
+            IState> (*)(Parent*, Queues*, Contexts*, std::size_t, std::size_t, const Metadata*);
+
+        template <typename Candidate>
+        static std::unique_ptr<IState> make(
+            Parent* parent,
+            Queues* qs,
+            Contexts* contexts,
+            std::size_t region,
+            std::size_t state,
+            const Metadata* parent_metadata
+        )
+        {
+            return std::make_unique<::nil::sm::State<API, Candidate>>(
+                parent,
+                qs,
+                contexts,
+                region,
+                state,
+                parent_metadata
+            );
+        }
+
+        static constexpr auto table = std::array<maker_t, sizeof...(State)>{&make<State>...};
+    };
+
     template <template <typename...> typename API, typename InitialState>
     struct region_reachability_graph
     {
+        // This graph describes one region. Composite states have one graph per
+        // region because each region can have a different reachable state set.
         using states = typename reachable_state_set<API, nil::xalt::tlist<InitialState>>::type;
 
         static constexpr auto state_ids = []<typename... States>(nil::xalt::tlist<States...>)
@@ -289,32 +335,21 @@ namespace nil::sm::detail
         template <typename Target>
         static consteval std::size_t index_of()
         {
-            constexpr auto target_id = nil::xalt::type_id<Target>;
-            for (std::size_t i = 0; i < state_ids.size(); ++i)
+            return index_of(nil::xalt::type_id<Target>);
+        }
+
+        static constexpr std::size_t index_of(const void* target)
+        {
+            for (std::size_t state = 0; state < state_ids.size(); ++state)
             {
-                if (state_ids[i] == target_id)
+                if (state_ids[state] == target)
                 {
-                    return i;
+                    return state;
                 }
             }
 
-            return states::size; // not found
+            return state_ids.size();
         }
-    };
-
-    template <typename APIState, typename TargetStates>
-    struct region_state_factory;
-
-    template <
-        template <typename...>
-        typename API,
-        typename StateT,
-        typename... Rest,
-        typename TargetStates>
-    struct region_state_factory<API<StateT, Rest...>, TargetStates>
-    {
-    public:
-        using targets = TargetStates;
 
         template <typename Parent>
         static std::unique_ptr<IState> make(
@@ -326,44 +361,13 @@ namespace nil::sm::detail
             const Metadata* parent_metadata
         )
         {
-            static constexpr auto table = make_table<Parent>(targets{});
-
-            for (auto state = std::size_t{0}; state < table.size(); ++state)
+            const auto state = index_of(target);
+            if (state == state_ids.size())
             {
-                const auto& it = table[state];
-                if (it.id == target)
-                {
-                    return it.ctor(parent, qs, contexts, region, state, parent_metadata);
-                }
+                return {};
             }
 
-            return {};
-        }
-
-    private:
-        template <typename U>
-        using state_api_t = API<U, Rest...>;
-
-        template <typename Parent>
-        struct entry
-        {
-            const void* id = nullptr;
-            std::unique_ptr<
-                IState> (*ctor)(Parent*, Queues*, Contexts*, std::size_t, std::size_t, const Metadata*)
-                = nullptr;
-        };
-
-        template <typename Parent, typename Candidate>
-        static std::unique_ptr<IState> create(
-            Parent* parent,
-            Queues* qs,
-            Contexts* contexts,
-            std::size_t region,
-            std::size_t state,
-            const Metadata* parent_metadata
-        )
-        {
-            return std::make_unique<State<state_api_t, Candidate>>(
+            return state_maker<API, Parent, states>::table[state](
                 parent,
                 qs,
                 contexts,
@@ -372,15 +376,50 @@ namespace nil::sm::detail
                 parent_metadata
             );
         }
+    };
 
-        template <typename Parent, typename... Target>
-        static consteval auto make_table(nil::xalt::tlist<Target...> /* targets */)
+    template <template <typename...> typename API, typename Parent, typename Regions>
+    struct region_maker;
+
+    // Regions are heterogeneous at compile time, so this table erases their
+    // individual graph types behind one runtime function-pointer signature.
+    template <template <typename...> typename API, typename Parent, typename... Region>
+    struct region_maker<API, Parent, nil::xalt::tlist<Region...>>
+    {
+        using maker_t = std::unique_ptr<
+            IState> (*)(std::size_t, const void*, Parent*, Queues*, Contexts*, const Metadata*);
+
+        template <std::size_t I>
+        static std::unique_ptr<IState> make(
+            std::size_t region,
+            const void* target,
+            Parent* parent,
+            Queues* qs,
+            Contexts* contexts,
+            const Metadata* parent_metadata
+        )
         {
-            using E = entry<Parent>;
-            return std::array<E, sizeof...(Target)>{
-                E{nil::xalt::type_id<Target>, &create<Parent, Target>}...
-            };
+            using region_t = typename nil::xalt::tlist<Region...>::template at<I>;
+            using graph_t = region_reachability_graph<API, region_t>;
+            return graph_t::template make<Parent>(
+                region,
+                target,
+                parent,
+                qs,
+                contexts,
+                parent_metadata
+            );
         }
+
+    private:
+        template <std::size_t... I>
+        static consteval auto make_table(std::index_sequence<I...> /* indices */)
+        {
+            return std::array<maker_t, sizeof...(I)>{&make<I>...};
+        }
+
+    public:
+        static constexpr auto table = make_table(std::make_index_sequence<sizeof...(Region)>{});
     };
 
     template <template <typename...> typename API, typename Regions>
@@ -400,78 +439,19 @@ namespace nil::sm::detail
             const void* target
         )
         {
-            if constexpr (sizeof...(Region) > 0)
-            {
-                return make_impl(
-                    region,
-                    target,
-                    parent,
-                    qs,
-                    contexts,
-                    parent_metadata,
-                    std::make_index_sequence<sizeof...(Region)>{}
-                );
-            }
-
-            return {};
-        }
-
-    private:
-        using regions_t = nil::xalt::tlist<Region...>;
-
-        template <std::size_t I, typename Parent>
-        static std::unique_ptr<IState> make_for_region(
-            std::size_t region,
-            const void* target,
-            Parent* parent,
-            Queues* qs,
-            Contexts* contexts,
-            const Metadata* parent_metadata
-        )
-        {
-            using region_t = typename regions_t::template at<I>;
-            using dispatch_t = region_state_factory<
-                API<region_t>,
-                typename region_reachability_graph<API, region_t>::states>;
-            return dispatch_t::template make<Parent>(
-                region,
-                target,
-                parent,
-                qs,
-                contexts,
-                parent_metadata
-            );
-        }
-
-        template <typename Parent, std::size_t... I>
-        static std::unique_ptr<IState> make_impl(
-            std::size_t region,
-            const void* target,
-            Parent* parent,
-            Queues* qs,
-            Contexts* contexts,
-            const Metadata* parent_metadata,
-            std::index_sequence<I...> /* indices */
-        )
-        {
-            using maker_t = std::unique_ptr<
-                IState> (*)(std::size_t, const void*, Parent*, Queues*, Contexts*, const Metadata*);
-
-            static constexpr auto table
-                = std::array<maker_t, sizeof...(I)>{&make_for_region<I, Parent>...};
-
-            if (region >= table.size())
+            using maker_t = region_maker<API, Parent, nil::xalt::tlist<Region...>>;
+            if (region >= maker_t::table.size())
             {
                 return {};
             }
 
-            return table[region](region, target, parent, qs, contexts, parent_metadata);
+            return maker_t::table[region](region, target, parent, qs, contexts, parent_metadata);
         }
     };
 
     template <typename MakeTransitState>
     void apply_region_runtime_action(
-        const Emit& e,
+        const Event& e,
         on_event_t action,
         Region& region,
         const MakeTransitState& make_transit_state
@@ -480,24 +460,24 @@ namespace nil::sm::detail
         std::visit(
             [&]<typename Action>(Action& r)
             {
-                if constexpr (std::is_same_v<Action, Transit>)
+                if constexpr (std::is_same_v<Action, Event>)
+                {
+                    region.queues->push_emit(r);
+                }
+                else if constexpr (std::is_same_v<Action, Defer>)
+                {
+                    region.deferred.push_back(e.clone());
+                }
+                else if constexpr (std::is_same_v<Action, Transit>)
                 {
                     region.transit_out();
                     region.active_state = make_transit_state(region.index, r.target);
-                }
-                else if constexpr (std::is_same_v<Action, Emit>)
-                {
-                    region.queues->push_emit(r);
                 }
                 else if constexpr (std::is_same_v<Action, Terminate>)
                 {
                     region.transit_out();
                     region.active_state = make_transit_state(region.index, nil::xalt::type_id<Fin>);
                     region.terminated = true;
-                }
-                else if constexpr (std::is_same_v<Action, Defer>)
-                {
-                    region.deferred.push_back(e.clone());
                 }
             },
             action
@@ -513,11 +493,11 @@ namespace nil::sm::detail
         }
         else if constexpr (nil::xalt::is_of_template_v<R, ::nil::sm::Transit>)
         {
-            return O{detail::Transit{.target = nil::xalt::type_id<typename R::type>}};
+            return O{Transit{.target = nil::xalt::type_id<typename R::type>}};
         }
         else if constexpr (nil::xalt::is_of_template_v<R, ::nil::sm::Emit>)
         {
-            return O{detail::Emit(std::move(r))};
+            return O{Event(std::move(r))};
         }
         else
         {
@@ -525,11 +505,57 @@ namespace nil::sm::detail
         }
     }
 
-    template <typename S, typename E>
-    struct event_dispatcher;
+    struct event_dispatch_policy
+    {
+        template <typename API, typename Event>
+        static on_event_t invoke(
+            typename API::state_t& state,
+            const Event& event,
+            typename API::api_context_t* context
+        )
+        {
+            static_assert(
+                requires { API::template on_event<Event>(state, event, context); }
+                    && concepts::is_allowed_to_use_for_on_event_result<
+                        decltype(API::template on_event<Event>(state, event, context))>,
+                "API must expose on_event<Event>(state, event, contexts...) with an allowed "
+                "return type"
+            );
+            return to_runtime_action_as<on_event_t>(
+                API::template on_event<Event>(state, event, context)
+            );
+        }
+    };
 
-    template <typename S, typename... E>
-    struct event_dispatcher<S, nil::xalt::tlist<E...>>
+    // Event and capture dispatch share the same table and lookup machinery;
+    // only the API hook selected by the policy differs.
+    struct capture_dispatch_policy
+    {
+        template <typename API, typename Event>
+        static on_event_t invoke(
+            typename API::state_t& state,
+            const Event& event,
+            typename API::api_context_t* context
+        )
+        {
+            static_assert(
+                requires { API::template on_capture<Event>(state, event, context); }
+                    && concepts::is_allowed_to_use_for_on_event_result<
+                        decltype(API::template on_capture<Event>(state, event, context))>,
+                "API must expose on_capture<Event>(state, event, contexts...) with an allowed "
+                "return type"
+            );
+            return to_runtime_action_as<on_event_t>(
+                API::template on_capture<Event>(state, event, context)
+            );
+        }
+    };
+
+    template <typename S, typename Events, typename Policy>
+    struct action_dispatcher;
+
+    template <typename S, typename... E, typename Policy>
+    struct action_dispatcher<S, nil::xalt::tlist<E...>, Policy>
     {
     private:
         using api_t = typename S::api_t;
@@ -543,27 +569,19 @@ namespace nil::sm::detail
         };
 
         template <typename EV>
+        static on_event_t invoke(state_t& state_value, const EV& event, api_context_t* api_contexts)
+        {
+            return Policy::template invoke<api_t>(state_value, event, api_contexts);
+        }
+
+        template <typename EV>
         static on_event_t call(state_t& state_value, const void* event, void* api_contexts)
         {
-            static_assert(
-                requires() {
-                    {
-                        api_t::template on_event<EV>(
-                            state_value,
-                            *static_cast<const EV*>(event),
-                            static_cast<api_context_t*>(api_contexts)
-                        )
-                    } -> concepts::is_allowed_to_use_for_on_event_result;
-                },
-                "API must expose on_event<Event>(state_value, event, contexts...) with an "
-                "allowed "
-                "return type"
-            );
-            return detail::to_runtime_action_as<on_event_t>(api_t::template on_event<EV>(
+            return invoke<EV>(
                 state_value,
                 *static_cast<const EV*>(event),
                 static_cast<api_context_t*>(api_contexts)
-            ));
+            );
         }
 
         static constexpr auto handlers = std::array<event_handler, sizeof...(E)>{
@@ -571,7 +589,7 @@ namespace nil::sm::detail
         };
 
     public:
-        static on_event_t dispatch(const Emit& event, state_t& state, api_context_t* api_contexts)
+        static on_event_t dispatch(const Event& event, state_t& state, api_context_t* api_contexts)
         {
             for (const auto& handler : handlers)
             {
@@ -585,62 +603,9 @@ namespace nil::sm::detail
         }
     };
 
-    template <typename S, typename E>
-    struct capture_dispatcher;
+    template <typename S, typename Events>
+    using event_dispatcher = action_dispatcher<S, Events, event_dispatch_policy>;
 
-    template <typename S, typename... E>
-    struct capture_dispatcher<S, nil::xalt::tlist<E...>>
-    {
-    private:
-        using api_t = typename S::api_t;
-        using state_t = typename api_t::state_t;
-        using api_context_t = typename api_t::api_context_t;
-
-        struct capture_handler
-        {
-            const void* id = nullptr;
-            on_event_t (*invoke)(state_t&, const void*, void*) = nullptr;
-        };
-
-        template <typename EV>
-        static on_event_t call(state_t& state_value, const void* event, void* api_contexts)
-        {
-            static_assert(
-                requires() {
-                    {
-                        api_t::template on_capture<EV>(
-                            state_value,
-                            *static_cast<const EV*>(event),
-                            static_cast<api_context_t*>(api_contexts)
-                        )
-                    } -> concepts::is_allowed_to_use_for_on_event_result;
-                },
-                "API must expose on_capture<Event>(state_value, event, contexts...) with an "
-                "allowed return type"
-            );
-            return detail::to_runtime_action_as<on_event_t>(api_t::template on_capture<EV>(
-                state_value,
-                *static_cast<const EV*>(event),
-                static_cast<api_context_t*>(api_contexts)
-            ));
-        }
-
-        static constexpr auto handlers = std::array<capture_handler, sizeof...(E)>{
-            capture_handler{.id = nil::xalt::type_id<E>, .invoke = &call<E>}...
-        };
-
-    public:
-        static on_event_t dispatch(const Emit& event, state_t& state, api_context_t* api_contexts)
-        {
-            for (const auto& handler : handlers)
-            {
-                if (handler.id == event.id)
-                {
-                    return handler.invoke(state, event.data, api_contexts);
-                }
-            }
-
-            return Unhandled();
-        }
-    };
+    template <typename S, typename Captures>
+    using capture_dispatcher = action_dispatcher<S, Captures, capture_dispatch_policy>;
 }

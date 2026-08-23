@@ -29,6 +29,7 @@ namespace nil::sm::formatter::detail
             .state = state,
             .region = region,
             .subregions = API<T>::regions_t::size,
+            .is_final = std::is_same_v<T, Fin>,
             .name = nil::sm::detail::type_name<T>(),
             .parent = parent,
         };
@@ -61,10 +62,31 @@ namespace nil::sm::formatter::detail
             using type = ir::action::RegionsFinalized;
             node.actions.emplace_back(type{ir::response::ERegionsFinalized::noop});
         }
+        else if constexpr (nil::xalt::is_of_template_v<R, Transit>)
+        {
+            using reachable_states_t
+                = nil::sm::detail::region_reachability_graph<API, RegionInitial>;
+            const auto target_state = reachable_states_t::template index_of<typename R::type>();
+            const auto target_metadata = make_metadata<API, typename R::type>(
+                node_metadata.parent,
+                node_metadata.region,
+                target_state
+            );
+
+            using type = ir::transit::Event;
+            node.transitions.emplace_back(
+                type{format_stable_id(nil::sm::id::stable_id(target_metadata)), "[**]"}
+            );
+        }
         else if constexpr (std::is_same_v<R, Terminate>)
         {
             using type = ir::transit::Event;
             node.transitions.emplace_back(type{"[*]", "[**]"});
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
+        {
+            using type = ir::action::RegionsFinalized;
+            node.actions.emplace_back(type{ir::response::ERegionsFinalized::emit});
         }
         else if constexpr (nil::xalt::is_of_template_v<R, Transit>)
         {
@@ -82,10 +104,10 @@ namespace nil::sm::formatter::detail
                 type{format_stable_id(nil::sm::id::stable_id(target_metadata)), "[**]"}
             );
         }
-        else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
+        else if constexpr (std::is_same_v<R, Terminate>)
         {
-            using type = ir::action::RegionsFinalized;
-            node.actions.emplace_back(type{ir::response::ERegionsFinalized::emit});
+            using type = ir::transit::Event;
+            node.transitions.emplace_back(type{"[*]", "[**]"});
         }
         else if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
         {
@@ -107,14 +129,16 @@ namespace nil::sm::formatter::detail
     {
         const auto event_name = nil::sm::detail::type_name<E>();
 
-        if constexpr (std::is_same_v<R, Terminate>)
-        {
-            node.transitions.push_back(TransitionInfoT{"[*]", std::string(event_name)});
-        }
-        else if constexpr (std::is_same_v<R, Discard>)
+        if constexpr (std::is_same_v<R, Discard>)
         {
             node.actions.emplace_back(
                 ActionInfoT{std::string(event_name), ir::response::EEvent::discard}
+            );
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
+        {
+            node.actions.emplace_back(
+                ActionInfoT{std::string(event_name), ir::response::EEvent::emit}
             );
         }
         else if constexpr (std::is_same_v<R, Forward>)
@@ -148,11 +172,9 @@ namespace nil::sm::formatter::detail
                 std::string(event_name)
             });
         }
-        else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
+        if constexpr (std::is_same_v<R, Terminate>)
         {
-            node.actions.emplace_back(
-                ActionInfoT{std::string(event_name), ir::response::EEvent::emit}
-            );
+            node.transitions.push_back(TransitionInfoT{"[*]", std::string(event_name)});
         }
         else if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
         {
@@ -289,8 +311,9 @@ namespace nil::sm::formatter::detail
 
         auto node = ir::Node{
             .id = format_stable_id(nil::sm::id::stable_id(metadata)),
-            .display_name = std::string(metadata.name),
+            .display_name = metadata.is_final ? "[**]" : std::string(metadata.name),
             .is_initial = state == 0,
+            .is_final = metadata.is_final,
             .actions = {},
             .transitions = {},
             .regions = {},

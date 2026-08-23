@@ -91,13 +91,16 @@ nil::sm::SM<MyAPI, Root> sm(&state_ctx, &obs);
 
 ## Three customisation strategies
 
-### 1. Use `default_api` directly with custom context types
+### 1. Use `nil::sm::api::Default` directly with custom context types
 
-The simplest approach. Selects the default `make`, `on_event`, `on_enter`, `on_exit`, and `on_regions_finalized` behaviour, with your chosen context types:
+The simplest approach. Selects the default `make`, `on_event`, `on_enter`,
+`on_exit`, and `on_regions_finalized` behaviour, with your chosen context
+types. Final-state metadata is set only for the library's `nil::sm::Fin`
+state; it is not controlled by the API:
 
 ```cpp
 template <typename State>
-using MyAPI = nil::sm::default_api<
+using MyAPI = nil::sm::api::Default<
     State,
     MyContext,  // state_context_t (SM will hold MyContext* and pass it to make)
     void        // api_context_t
@@ -107,7 +110,10 @@ MyContext ctx;
 nil::sm::SM<MyAPI, Root> sm(&ctx, nullptr);
 ```
 
-`default_api::make` will try to construct the state as `State(parent, static_cast<state_context_t*>(state_contexts))`. States can therefore accept `(Parent*, MyContext*)` in their constructor. If that signature doesn't match, it falls back to `(Parent*)` and then default construction.
+`api::Default::make` will try to construct the state as `State(parent,
+static_cast<state_context_t*>(state_contexts))`. States can therefore accept
+`(Parent*, MyContext*)` in their constructor. If that signature doesn't
+match, it falls back to `(Parent*)` and then default construction.
 
 ### 2. Write a full custom API struct
 
@@ -123,7 +129,7 @@ struct InstrumentedAPI
     using regions_t = nil::xalt::coalesce_t<State, nil::sm::detail::regions_tag>;
     using events_t  = nil::xalt::coalesce_t<State, nil::sm::detail::events_tag>;
 
-    using base_t = nil::sm::default_api<State, state_context_t, api_context_t>;
+    using base_t = nil::sm::api::Default<State, state_context_t, api_context_t>;
 
     template <typename Parent>
     static state_t make(
@@ -156,18 +162,26 @@ auto api_ctx = std::make_tuple(&obs);
 nil::sm::SM<InstrumentedAPI, Root> sm(nullptr, &api_ctx);
 ```
 
-### 3. Use `coalesce_api` with selective overrides
+### 3. Use `nil::sm::api::Coalesce` with selective overrides
 
-`nil::sm::coalesce_api<PartialAPI>` takes a **template** (`template <typename T> struct`) and produces a complete API type by filling in any missing methods with `default_api` defaults. Useful when you only need to override one or two hooks.
+`nil::sm::api::Coalesce<PartialAPI>` takes a **template** (`template <typename T> struct`)
+and produces a complete API type by filling in any missing methods with
+`api::Default` defaults. Useful when you only need to override one or two
+hooks.
 
-The resulting API type is `nil::sm::coalesce_api<PartialAPI>::type`. There is also a convenience alias:
+The resulting API type is `nil::sm::api::Coalesce<PartialAPI>::type`. There is
+also a convenience alias:
 
 ```cpp
-// CoalescedSM<PartialAPI, Root> expands to SM<coalesce_api<PartialAPI>::type, Root>
+// CoalescedSM<PartialAPI, Root> expands to
+// SM<nil::sm::api::Coalesce<PartialAPI>::type, Root>
 nil::sm::CoalescedSM<PartialAPI, MyRegion> sm{state_contexts, api_contexts};
 ```
 
-Each method you define in `PartialAPI<T>` replaces the corresponding default. Any method you omit falls back to `default_api<T>`.
+Each method you define in `PartialAPI<T>` replaces the corresponding default.
+Any method you omit falls back to `api::Default<T>`. The `events_t` alias
+contains user events only; the internal regions-finalized notification is
+handled separately by the state machine.
 
 ```cpp
 template <typename T>
@@ -180,7 +194,7 @@ struct MyPartialAPI
     static auto on_enter(T& state, MyObserver* api_contexts)
     {
         api_contexts->entered();
-        return nil::sm::default_api<T>::on_enter(state, nullptr);
+        return nil::sm::api::Default<T>::on_enter(state, nullptr);
     }
 };
 
@@ -227,7 +241,7 @@ struct MakeOnlyAPI
         {
             api_contexts->on_constructed();
         }
-        return nil::sm::default_api<T>::make(parent, state_contexts, nullptr, metadata);
+        return nil::sm::api::Default<T>::make(parent, state_contexts, nullptr, metadata);
     }
     // on_event, on_enter, on_exit, on_regions_finalized — not defined; fall through to defaults
 };
@@ -258,7 +272,7 @@ struct EnterOnlyAPI
         {
             api_contexts->on_entered();
         }
-        return nil::sm::default_api<T>::on_enter(state, nullptr);
+        return nil::sm::api::Default<T>::on_enter(state, nullptr);
     }
     // make, on_event, on_exit, on_regions_finalized — not defined; fall through to defaults
 };
@@ -289,7 +303,7 @@ struct EventOnlyAPI
         {
             api_contexts->on_event_dispatched();
         }
-        return nil::sm::default_api<T>::template on_event<E>(state, event, nullptr);
+        return nil::sm::api::Default<T>::template on_event<E>(state, event, nullptr);
     }
     // make, on_enter, on_exit, on_regions_finalized — not defined; fall through to defaults
 };

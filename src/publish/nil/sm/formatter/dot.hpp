@@ -22,7 +22,7 @@ namespace nil::sm::formatter::dot
 
     inline bool is_final_node(const ir::Node& node)
     {
-        return node.display_name == "[**]";
+        return node.is_final;
     }
 
     inline std::string format_action(const ir::action::Info& action)

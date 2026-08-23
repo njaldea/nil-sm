@@ -15,6 +15,7 @@ namespace nil::sm
         std::size_t region = 0;
         std::size_t subregions = 0;
         std::size_t depth = 0;
+        bool is_final = false;
         std::string_view name;
         const Metadata* parent = nullptr;
     };
@@ -59,19 +60,20 @@ namespace nil::sm::detail
 
     struct Transit final
     {
+        // type id of the target state to transit into
         const void* target = nullptr;
     };
 
-    struct Emit final
+    struct Event final
     {
-        const void* id = nullptr;
+        const void* id = nullptr; // type id of the event to emit
         void (*deleter)(void*) = nullptr;
         void* (*cloner)(void*) = nullptr;
         void* data = nullptr;
 
-        Emit clone() const
+        Event clone() const
         {
-            return Emit{
+            return Event{
                 .id = id,
                 .deleter = deleter,
                 .cloner = cloner,
@@ -85,7 +87,7 @@ namespace nil::sm
 {
     struct Fin final
     {
-        static constexpr auto name = "[**]";
+        static constexpr bool is_final = true;
     };
 
     struct Root final
@@ -176,9 +178,9 @@ namespace nil::sm
         }
 
         // NOLINTNEXTLINE
-        operator detail::Emit() &&
+        operator detail::Event() &&
         {
-            return detail::Emit{
+            return detail::Event{
                 .id = id,
                 .deleter = deleter,
                 .cloner = cloner,

@@ -31,7 +31,9 @@ std::cout << nil::sm::xstate<MySM>();
 
 No instance of the state machine is needed — the diagram is derived purely
 from the types (`API`, the root state, and everything reachable from it via
-`regions`, `Transit<...>`, and `on_regions_finalized`).
+`regions`, `Transit<...>`, and `on_regions_finalized`). The internal
+`EvRegionsFinalized` notification is not a user event in `events_t`; the
+formatter represents it through the regions-finalized hook.
 
 See [sandbox/uml.cpp](../sandbox/uml.cpp) for a runnable example covering
 hierarchical states, orthogonal regions, transitions, parent bubbling, defer,
@@ -69,6 +71,9 @@ and event capture; run it with:
   region's implicit final pseudostate (`[*]`).
 - **Actions**: `on_enter`, `on_exit`, and `on_regions_finalized` are annotated
   on the state if they can produce an `Emit`.
+- **Regions completion**: `on_regions_finalized()` is rendered as the
+  `[**]` completion trigger. `EvRegionsFinalized` is an internal targeted
+  notification and is not rendered as a normal event or capture.
 - **Captures**: rendered the same as events, tagged so they're
   distinguishable from normal `on_event` transitions (`[c]` in PlantUML/
   Mermaid/Graphviz).

@@ -33,7 +33,7 @@ namespace nil::sm::formatter::xstate
     // A [**] pseudostate node marks where [*] transitions in its region terminate into
     inline bool is_final_node(const ir::Node& node)
     {
-        return node.display_name == "[**]";
+        return node.is_final;
     }
 
     inline const ir::Node* find_node_by_id(const std::vector<ir::Node>& region, std::string_view id)

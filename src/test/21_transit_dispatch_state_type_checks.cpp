@@ -7,15 +7,12 @@
 namespace
 {
     template <typename Initial>
-    using dispatch_for = nil::sm::detail::region_state_factory<
-        nil::sm::api::Default<Initial>,
-        typename nil::sm::detail::region_reachability_graph<nil::sm::api::Default, Initial>::
-            states>;
+    using dispatch_for = nil::sm::detail::region_reachability_graph<nil::sm::api::Default, Initial>;
 
     template <typename Dispatch, typename Target>
     consteval bool dispatch_contains_target_id()
     {
-        return Dispatch::targets::template any_of<std::is_same, Target>;
+        return Dispatch::states::template any_of<std::is_same, Target>;
     }
 
     struct event
@@ -35,8 +32,10 @@ namespace
 
     using dispatch_only_a = dispatch_for<only_a>;
 
-    static_assert(std::is_same_v<dispatch_only_a::targets, nil::xalt::tlist<only_a>>);
-    static_assert(dispatch_only_a::targets::size == 1);
+    static_assert(std::is_same_v<dispatch_only_a::states, nil::xalt::tlist<only_a>>);
+    static_assert(dispatch_only_a::states::size == 1);
+    static_assert(dispatch_only_a::index_of<only_a>() == 0);
+    static_assert(dispatch_only_a::index_of(nullptr) == dispatch_only_a::states::size);
     static_assert(dispatch_contains_target_id<dispatch_only_a, only_a>());
 
     // Case 2: A -> B
@@ -65,11 +64,13 @@ namespace
     using dispatch_ab_a = dispatch_for<ab_a>;
     using dispatch_ab_b = dispatch_for<ab_b>;
 
-    static_assert(std::is_same_v<dispatch_ab_a::targets, nil::xalt::tlist<ab_a, ab_b>>);
-    static_assert(dispatch_ab_a::targets::size == 2);
+    static_assert(std::is_same_v<dispatch_ab_a::states, nil::xalt::tlist<ab_a, ab_b>>);
+    static_assert(dispatch_ab_a::states::size == 2);
+    static_assert(dispatch_ab_a::index_of<ab_b>() == 1);
+    static_assert(dispatch_ab_a::index_of(nil::xalt::type_id<ab_b>) == 1);
     static_assert(dispatch_contains_target_id<dispatch_ab_a, ab_a>());
     static_assert(dispatch_contains_target_id<dispatch_ab_a, ab_b>());
-    static_assert(std::is_same_v<dispatch_ab_b::targets, nil::xalt::tlist<ab_b>>);
+    static_assert(std::is_same_v<dispatch_ab_b::states, nil::xalt::tlist<ab_b>>);
     static_assert(dispatch_contains_target_id<dispatch_ab_b, ab_b>());
 
     // Case 3: A -> B -> C -> A
@@ -111,13 +112,13 @@ namespace
     using dispatch_cycle_c = dispatch_for<cycle_c>;
 
     static_assert(std::is_same_v<
-                  dispatch_cycle_a::targets,
+                  dispatch_cycle_a::states,
                   nil::xalt::tlist<cycle_a, cycle_b, cycle_c>>);
     static_assert(std::is_same_v<
-                  dispatch_cycle_b::targets,
+                  dispatch_cycle_b::states,
                   nil::xalt::tlist<cycle_b, cycle_c, cycle_a>>);
     static_assert(std::is_same_v<
-                  dispatch_cycle_c::targets,
+                  dispatch_cycle_c::states,
                   nil::xalt::tlist<cycle_c, cycle_a, cycle_b>>);
 
     static_assert(dispatch_contains_target_id<dispatch_cycle_a, cycle_a>());
