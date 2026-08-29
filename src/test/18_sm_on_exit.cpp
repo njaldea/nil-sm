@@ -122,7 +122,7 @@ namespace
     };
 
     template <typename T>
-    using ExitTestAPI = nil::sm::api::Default<T, ExitObserver, void>;
+    using ExitTestAPI = nil::sm::api::Default<ExitObserver, void>::template type<T>;
 
     template <typename... Regions>
     using ExitTestSM = nil::sm::SM<ExitTestAPI, Regions...>;

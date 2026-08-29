@@ -32,7 +32,7 @@ struct AppContext
 };
 
 template <typename State>
-using AppAPI = nil::sm::api::Default<State, AppContext>;
+using AppAPI = nil::sm::api::Default<AppContext>::type<State>;
 
 struct logged_in
 {
@@ -61,9 +61,9 @@ struct Logger
 };
 
 template <typename State>
-struct LoggingAPI : nil::sm::api::Default<State, void, Logger>
+struct LoggingAPI : nil::sm::api::Default<void, Logger>::type<State>
 {
-    using base = nil::sm::api::Default<State, void, Logger>;
+    using base = nil::sm::api::Default<void, Logger>::type<State>;
     using api_context_t = Logger;
 
     static auto on_enter(State& state, Logger* logger)

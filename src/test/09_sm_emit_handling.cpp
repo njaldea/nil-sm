@@ -124,7 +124,7 @@ namespace
     };
 
     template <typename T>
-    using EmitTestAPI = nil::sm::api::Default<T, EmitObserver, void>;
+    using EmitTestAPI = nil::sm::api::Default<EmitObserver, void>::template type<T>;
 
     template <typename... Regions>
     using EmitTestSM = nil::sm::SM<EmitTestAPI, Regions...>;

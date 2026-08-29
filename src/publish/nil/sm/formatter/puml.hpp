@@ -130,7 +130,7 @@ namespace nil::sm
     template <typename SM>
     struct puml;
 
-    template <template <typename...> typename API, typename T>
+    template <template <typename> typename API, typename T>
     struct puml<SM<API, T>>
     {
         friend std::ostream& operator<<(std::ostream& os, const puml<SM<API, T>>& /* uml */)

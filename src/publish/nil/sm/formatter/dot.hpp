@@ -306,7 +306,7 @@ namespace nil::sm
     template <typename SM>
     struct dot;
 
-    template <template <typename...> typename API, typename T>
+    template <template <typename> typename API, typename T>
     struct dot<SM<API, T>>
     {
         friend std::ostream& operator<<(std::ostream& os, const dot<SM<API, T>>& /* d */)

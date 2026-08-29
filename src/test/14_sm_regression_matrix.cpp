@@ -146,7 +146,7 @@ namespace
     }
 
     template <typename T>
-    using MatrixTestAPI = nil::sm::api::Default<T, RegressionMatrixObserver, void>;
+    using MatrixTestAPI = nil::sm::api::Default<RegressionMatrixObserver, void>::template type<T>;
 
     template <typename... Regions>
     using MatrixTestSM = nil::sm::SM<MatrixTestAPI, Regions...>;

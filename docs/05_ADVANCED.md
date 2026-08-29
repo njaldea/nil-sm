@@ -101,10 +101,9 @@ state; it is not controlled by the API:
 ```cpp
 template <typename State>
 using MyAPI = nil::sm::api::Default<
-    State,
     MyContext,  // state_context_t (SM will hold MyContext* and pass it to make)
     void        // api_context_t
->;
+>::type<State>;
 
 MyContext ctx;
 nil::sm::SM<MyAPI, Root> sm(&ctx, nullptr);
@@ -129,7 +128,7 @@ struct InstrumentedAPI
     using regions_t = nil::xalt::coalesce_t<State, nil::sm::detail::regions_tag>;
     using events_t  = nil::xalt::coalesce_t<State, nil::sm::detail::events_tag>;
 
-    using base_t = nil::sm::api::Default<State, state_context_t, api_context_t>;
+    using base_t = nil::sm::api::Default<state_context_t, api_context_t>::type<State>;
 
     template <typename Parent>
     static state_t make(
@@ -179,7 +178,7 @@ nil::sm::CoalescedSM<PartialAPI, MyRegion> sm{state_contexts, api_contexts};
 ```
 
 Each method you define in `PartialAPI<T>` replaces the corresponding default.
-Any method you omit falls back to `api::Default<T>`. The `events_t` alias
+Any method you omit falls back to `api::Default<>::type<T>`. The `events_t` alias
 contains user events only; the internal regions-finalized notification is
 handled separately by the state machine.
 
@@ -194,7 +193,7 @@ struct MyPartialAPI
     static auto on_enter(T& state, MyObserver* api_contexts)
     {
         api_contexts->entered();
-        return nil::sm::api::Default<T>::on_enter(state, nullptr);
+        return nil::sm::api::Default<>::type<T>::on_enter(state, nullptr);
     }
 };
 
@@ -241,7 +240,7 @@ struct MakeOnlyAPI
         {
             api_contexts->on_constructed();
         }
-        return nil::sm::api::Default<T>::make(parent, state_contexts, nullptr, metadata);
+        return nil::sm::api::Default<>::type<T>::make(parent, state_contexts, nullptr, metadata);
     }
     // on_event, on_enter, on_exit, on_regions_finalized — not defined; fall through to defaults
 };
@@ -272,7 +271,7 @@ struct EnterOnlyAPI
         {
             api_contexts->on_entered();
         }
-        return nil::sm::api::Default<T>::on_enter(state, nullptr);
+        return nil::sm::api::Default<>::type<T>::on_enter(state, nullptr);
     }
     // make, on_event, on_exit, on_regions_finalized — not defined; fall through to defaults
 };
@@ -303,7 +302,7 @@ struct EventOnlyAPI
         {
             api_contexts->on_event_dispatched();
         }
-        return nil::sm::api::Default<T>::template on_event<E>(state, event, nullptr);
+        return nil::sm::api::Default<>::type<T>::template on_event<E>(state, event, nullptr);
     }
     // make, on_enter, on_exit, on_regions_finalized — not defined; fall through to defaults
 };

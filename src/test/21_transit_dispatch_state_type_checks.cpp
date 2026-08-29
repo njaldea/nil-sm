@@ -7,7 +7,8 @@
 namespace
 {
     template <typename Initial>
-    using dispatch_for = nil::sm::detail::region_reachability_graph<nil::sm::api::Default, Initial>;
+    using dispatch_for = nil::sm::detail::
+        region_reachability_graph<nil::sm::api::Default<>::template type, Initial>;
 
     template <typename Dispatch, typename Target>
     consteval bool dispatch_contains_target_id()

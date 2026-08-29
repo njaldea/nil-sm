@@ -326,7 +326,7 @@ namespace nil::sm
     template <typename SM>
     struct xstate;
 
-    template <template <typename...> typename API, typename T>
+    template <template <typename> typename API, typename T>
     struct xstate<SM<API, T>>
     {
         friend std::ostream& operator<<(std::ostream& os, const xstate<SM<API, T>>& /* d */)

@@ -71,7 +71,7 @@ namespace
     };
 
     template <typename T>
-    using DeferTestAPI = nil::sm::api::Default<T, DeferObserver, void>;
+    using DeferTestAPI = nil::sm::api::Default<DeferObserver, void>::template type<T>;
 
     template <typename... Regions>
     using DeferTestSM = nil::sm::SM<DeferTestAPI, Regions...>;

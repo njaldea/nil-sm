@@ -4,7 +4,9 @@
 #include <nil/xalt/typed.hpp>
 
 #include <cstddef>
+#include <limits>
 #include <string_view>
+#include <type_traits>
 #include <utility>
 
 namespace nil::sm
@@ -93,6 +95,8 @@ namespace nil::sm
 {
     struct Fin final
     {
+        // Reserved Metadata::state value; never a real reachable-state index.
+        static constexpr std::size_t state_index = std::numeric_limits<std::size_t>::max();
     };
 
     struct Root final
@@ -126,6 +130,10 @@ namespace nil::sm
     template <typename T>
     struct Transit final
     {
+        static_assert(
+            !std::is_same_v<T, Fin>,
+            "Transit<Fin> is not allowed; use Terminate instead."
+        );
         using type = T;
     };
 
@@ -201,6 +209,6 @@ namespace nil::sm
         void* data = nullptr;
     };
 
-    template <template <typename...> typename API, typename T>
+    template <template <typename> typename API, typename T>
     class State;
 }

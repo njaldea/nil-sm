@@ -404,7 +404,7 @@ namespace nil::sm
     template <typename SM>
     struct scxml;
 
-    template <template <typename...> typename API, typename T>
+    template <template <typename> typename API, typename T>
     struct scxml<SM<API, T>>
     {
         friend std::ostream& operator<<(std::ostream& os, const scxml<SM<API, T>>& /* doc */)

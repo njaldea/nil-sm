@@ -77,7 +77,12 @@ namespace
                 api_contexts->on_construct();
             }
             // Delegate construction to api::Default
-            return nil::sm::api::Default<T>::make(parent, state_contexts, api_contexts, metadata);
+            return nil::sm::api::Default<>::type<T>::make(
+                parent,
+                state_contexts,
+                api_contexts,
+                metadata
+            );
         }
 
         // on_event, on_enter, on_exit, on_regions_finalized — not defined here
@@ -105,7 +110,7 @@ namespace
                 api_contexts->on_enter_intercepted();
             }
             // Delegate to api::Default for actual state hook dispatch
-            return nil::sm::api::Default<T>::on_enter(state, api_contexts);
+            return nil::sm::api::Default<>::type<T>::on_enter(state, api_contexts);
         }
 
         // make, on_event, on_exit, on_regions_finalized — not defined here
@@ -133,7 +138,7 @@ namespace
             {
                 api_contexts->on_event_intercepted();
             }
-            return nil::sm::api::Default<T>::template on_event<E>(state, event, nullptr);
+            return nil::sm::api::Default<>::type<T>::template on_event<E>(state, event, nullptr);
         }
 
         // make, on_enter, on_exit, on_regions_finalized — not defined here

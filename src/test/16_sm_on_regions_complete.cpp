@@ -198,7 +198,7 @@ namespace
     };
 
     template <typename T>
-    using RegionsTestAPI = nil::sm::api::Default<T, RegionsCompleteObserver, void>;
+    using RegionsTestAPI = nil::sm::api::Default<RegionsCompleteObserver, void>::template type<T>;
 
     template <typename... Regions>
     using RegionsTestSM = nil::sm::SM<RegionsTestAPI, Regions...>;

@@ -111,13 +111,6 @@ namespace
     };
 }
 
-template <typename S, typename A>
-struct api_t
-{
-    template <typename T>
-    using type = nil::sm::api::Default<T, S, A>;
-};
-
 TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_context_args)
 
 {
@@ -129,7 +122,7 @@ TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_co
 
     EXPECT_CALL(obs, on_construct(true, 42)).Times(1);
     using sm_t = nil::sm::SM<
-        api_t<std::tuple<custom_context*, ConstructionObserver*>, void>::type,
+        nil::sm::api::Default<std::tuple<custom_context*, ConstructionObserver*>, void>::type,
         parent_and_context_state>;
     auto state_contexts = std::tuple<custom_context*, ConstructionObserver*>(&ctx, &obs);
     sm_t sm(&state_contexts, nullptr);
@@ -146,7 +139,8 @@ TEST(
 {
     testing::StrictMock<ConstructionObserver> obs;
 
-    using sm_t = nil::sm::SM<api_t<ConstructionObserver, void>::type, default_only_state>;
+    using sm_t
+        = nil::sm::SM<nil::sm::api::Default<ConstructionObserver, void>::type, default_only_state>;
     sm_t sm{&obs, nullptr};
     {
         EXPECT_CALL(obs, on_react()).Times(1);
@@ -165,7 +159,9 @@ TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_tw
 
     EXPECT_CALL(obs, on_construct_two(true, 7, 99)).Times(1);
     using sm_t = nil::sm::SM<
-        api_t<std::tuple<custom_context*, custom_context2*, ConstructionObserver*>, void>::type,
+        nil::sm::api::Default<
+            std::tuple<custom_context*, custom_context2*, ConstructionObserver*>,
+            void>::type,
         parent_and_two_contexts_state>;
     auto state_contexts = std::tuple<custom_context*, custom_context2*, ConstructionObserver*>(
         &ctx_1,
@@ -187,7 +183,8 @@ TEST(sm_feature_state_construction_contexts, child_constructor_receives_parent_u
 
     EXPECT_CALL(obs, on_correct_parent_type()).Times(1);
 
-    using sm_t = nil::sm::SM<api_t<ConstructionObserver, void>::type, expected_parent_state>;
+    using sm_t = nil::sm::
+        SM<nil::sm::api::Default<ConstructionObserver, void>::type, expected_parent_state>;
 
     sm_t sm{&obs, nullptr};
     (void)sm;

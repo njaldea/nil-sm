@@ -7,7 +7,8 @@
 namespace
 {
     template <typename T>
-    using EdgeCaseTestAPI = nil::sm::api::Default<T, testing::StrictMock<StateMock>, void>;
+    using EdgeCaseTestAPI
+        = nil::sm::api::Default<testing::StrictMock<StateMock>, void>::template type<T>;
 
     // Wrapper to create SM with StateMock context
     template <typename... Regions>

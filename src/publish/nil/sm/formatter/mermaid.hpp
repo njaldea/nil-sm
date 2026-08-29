@@ -130,7 +130,7 @@ namespace nil::sm
     template <typename SM>
     struct mermaid;
 
-    template <template <typename...> typename API, typename T>
+    template <template <typename> typename API, typename T>
     struct mermaid<SM<API, T>>
     {
         friend std::ostream& operator<<(std::ostream& os, const mermaid<SM<API, T>>& /* mmd */)

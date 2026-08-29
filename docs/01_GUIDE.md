@@ -286,7 +286,7 @@ struct AppContext
 };
 
 template <typename State>
-using AppAPI = nil::sm::api::Default<State, AppContext>;
+using AppAPI = nil::sm::api::Default<AppContext>::type<State>;
 
 struct logged_in
 {

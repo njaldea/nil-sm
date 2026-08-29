@@ -42,7 +42,7 @@ namespace
     };
 
     template <typename T>
-    using OnEnterTestAPI = nil::sm::api::Default<T, OnEnterObserver, void*>;
+    using OnEnterTestAPI = nil::sm::api::Default<OnEnterObserver, void*>::template type<T>;
 
     template <typename... Regions>
     using OnEnterTestSM = nil::sm::SM<OnEnterTestAPI, Regions...>;

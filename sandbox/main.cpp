@@ -121,7 +121,7 @@ struct SandboxAPI
         const nil::sm::Metadata& metadata
     )
     {
-        auto r = nil::sm::api::Default<T>::make(parent, state_contexts, nullptr, metadata);
+        auto r = nil::sm::api::Default<>::type<T>::make(parent, state_contexts, nullptr, metadata);
 
         if (metadata.subregions == 0)
         {
@@ -134,7 +134,7 @@ struct SandboxAPI
 
     static auto on_enter(T& state, SandboxAPIContext* /* api_contexts */)
     {
-        return nil::sm::api::Default<T>::on_enter(state, nullptr);
+        return nil::sm::api::Default<>::type<T>::on_enter(state, nullptr);
     }
 };
 

@@ -19,23 +19,6 @@ namespace nil::sm::formatter::detail
         return std::format("ST_{:016x}", value);
     }
 
-    template <template <typename...> typename API, typename T>
-    nil::sm::Metadata make_metadata(
-        const nil::sm::Metadata* parent,
-        std::size_t region,
-        std::size_t state
-    )
-    {
-        return nil::sm::Metadata{
-            .state = state,
-            .region = region,
-            .subregions = API<T>::regions_t::size,
-            .is_final = std::is_same_v<T, Fin>,
-            .name = nil::sm::detail::type_name<T>(),
-            .parent = parent,
-        };
-    }
-
     template <typename R, typename ActionT, typename ResponseT>
     void emit_lifecycle_action(std::vector<ir::action::Info>& actions)
     {
@@ -55,7 +38,7 @@ namespace nil::sm::formatter::detail
         }
     }
 
-    template <template <typename...> typename API, typename RegionInitial, typename R>
+    template <template <typename> typename API, typename RegionInitial, typename R>
     void emit_regions_complete_action(const nil::sm::Metadata& node_metadata, ir::Node& node)
     {
         if constexpr (std::is_same_v<R, NOOP>)
@@ -68,10 +51,11 @@ namespace nil::sm::formatter::detail
             using reachable_states_t
                 = nil::sm::detail::region_reachability_graph<API, RegionInitial>;
             const auto target_state = reachable_states_t::template index_of<typename R::type>();
-            const auto target_metadata = make_metadata<API, typename R::type>(
-                node_metadata.parent,
+            const auto target_metadata = nil::sm::detail::make_metadata<typename R::type>(
                 node_metadata.region,
-                target_state
+                target_state,
+                API<typename R::type>::regions_t::size,
+                node_metadata.parent
             );
 
             using type = ir::transit::Event;
@@ -98,7 +82,7 @@ namespace nil::sm::formatter::detail
     }
 
     template <
-        template <typename...>
+        template <typename>
         typename API,
         typename RegionInitial,
         typename E,
@@ -142,10 +126,11 @@ namespace nil::sm::formatter::detail
             const auto target_state
                 = nil::sm::detail::region_reachability_graph<API, RegionInitial>::template index_of<
                     typename R::type>();
-            const auto target_metadata = make_metadata<API, typename R::type>(
-                node_metadata.parent,
+            const auto target_metadata = nil::sm::detail::make_metadata<typename R::type>(
                 node_metadata.region,
-                target_state
+                target_state,
+                API<typename R::type>::regions_t::size,
+                node_metadata.parent
             );
             node.transitions.push_back(TransitionInfoT{
                 format_stable_id(nil::sm::id::stable_id(target_metadata)),
@@ -229,7 +214,7 @@ namespace nil::sm::formatter::detail
          ...);
     }
 
-    template <template <typename...> typename API, typename T, typename RegionInitial>
+    template <template <typename> typename API, typename T, typename RegionInitial>
     void emit_node_annotations(const nil::sm::Metadata& node_metadata, ir::Node& node)
     {
         using api_t = API<T>;
@@ -261,10 +246,10 @@ namespace nil::sm::formatter::detail
         );
     }
 
-    template <template <typename...> typename API, typename T, typename RegionInitial>
+    template <template <typename> typename API, typename T, typename RegionInitial>
     ir::Node build_node(const nil::sm::Metadata* parent, std::size_t region, std::size_t state);
 
-    template <template <typename...> typename API, typename T>
+    template <template <typename> typename API, typename T>
     std::vector<ir::Node> build_region(const nil::sm::Metadata* parent, std::size_t index)
     {
         using reachable_t = typename nil::sm::detail::region_reachability_graph<API, T>::states;
@@ -295,13 +280,13 @@ namespace nil::sm::formatter::detail
                 [](const auto& node) { return node.is_final; }
             ))
         {
-            nodes.push_back(build_node<API, Fin, T>(parent, index, nodes.size()));
+            nodes.push_back(build_node<API, Fin, T>(parent, index, Fin::state_index));
         }
 
         return nodes;
     }
 
-    template <template <typename...> typename API, typename... R>
+    template <template <typename> typename API, typename... R>
     std::vector<std::vector<ir::Node>> build_regions(const nil::sm::Metadata* parent)
     {
         return [&]<std::size_t... I>(std::index_sequence<I...> /* indices */) {
@@ -309,10 +294,11 @@ namespace nil::sm::formatter::detail
         }(std::index_sequence_for<R...>());
     }
 
-    template <template <typename...> typename API, typename T, typename RegionInitial>
+    template <template <typename> typename API, typename T, typename RegionInitial>
     ir::Node build_node(const nil::sm::Metadata* parent, std::size_t region, std::size_t state)
     {
-        const auto metadata = make_metadata<API, T>(parent, region, state);
+        const auto metadata
+            = nil::sm::detail::make_metadata<T>(region, state, API<T>::regions_t::size, parent);
 
         auto node = ir::Node{
             .id = format_stable_id(nil::sm::id::stable_id(metadata)),
@@ -337,7 +323,7 @@ namespace nil::sm::formatter::detail
         return node;
     }
 
-    template <template <typename...> typename API, typename T>
+    template <template <typename> typename API, typename T>
     ir::Model build_ir()
     {
         return ir::Model{.roots = build_region<API, T>(nullptr, 0)};
