@@ -100,13 +100,16 @@ namespace nil::sm::detail
             defer.push(e);
         }
 
-        void flush(IState& state)
+        // The consumer is re-invoked per event so the caller can re-read the active state,
+        // which a queued event is allowed to replace.
+        template <typename Consume>
+        void flush(Consume consume)
         {
             while (!defer.empty())
             {
                 auto emitted = defer.front();
                 defer.pop();
-                state.on_event(emitted);
+                consume(emitted);
                 emitted.deleter(emitted.data);
             }
 
@@ -114,7 +117,7 @@ namespace nil::sm::detail
             {
                 auto emitted = emit.front();
                 emit.pop();
-                state.on_event(emitted);
+                consume(emitted);
                 emitted.deleter(emitted.data);
             }
         }

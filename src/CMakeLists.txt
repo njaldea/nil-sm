@@ -5,6 +5,7 @@ set(
     HEADERS
         publish/nil/sm.hpp
         publish/nil/sm/api.hpp
+        publish/nil/sm/barrier.hpp
         publish/nil/sm/concepts.hpp
         publish/nil/sm/detail.hpp
         publish/nil/sm/state.hpp

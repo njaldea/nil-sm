@@ -95,6 +95,7 @@ namespace nil::sm
 {
     struct Fin final
     {
+        static constexpr auto name = "[**]";
         // Reserved Metadata::state value; never a real reachable-state index.
         static constexpr std::size_t state_index = std::numeric_limits<std::size_t>::max();
     };

@@ -1,8 +1,8 @@
 #pragma once
 
+#include "../ir.hpp"
 #include "../state.hpp"
 #include "detail.hpp"
-#include "ir.hpp"
 
 namespace nil::sm::formatter::puml
 {
@@ -91,9 +91,12 @@ namespace nil::sm::formatter::puml
             return;
         }
 
+        const auto* stereotype = node.display_name == "[barrier]" ? " <<barrier>>" : "";
+
         if (!node.regions.empty())
         {
-            indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\" {\n";
+            indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\""
+                              << stereotype << " {\n";
             for (auto region_idx = std::size_t{0}; region_idx < node.regions.size(); ++region_idx)
             {
                 render_region(os, depth + 1, node.regions[region_idx]);
@@ -106,7 +109,8 @@ namespace nil::sm::formatter::puml
         }
         else
         {
-            indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\"\n";
+            indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\""
+                              << stereotype << "\n";
         }
 
         render_annotations(os, depth, node);
@@ -116,7 +120,12 @@ namespace nil::sm::formatter::puml
     {
         os << "@startuml\n"
               "skin rose\n"
-              "skinparam linetype ortho\n";
+              "skinparam linetype ortho\n"
+              "skinparam state {\n"
+              "    BackgroundColor<<barrier>> #EEE8FF\n"
+              "    BorderColor<<barrier>> #7F5FBF\n"
+              "    BorderStyle<<barrier>> dashed\n"
+              "}\n";
 
         render_region(os, 0, model.roots);
 
@@ -135,7 +144,7 @@ namespace nil::sm
     {
         friend std::ostream& operator<<(std::ostream& os, const puml<SM<API, T>>& /* uml */)
         {
-            return formatter::puml::render(os, formatter::detail::build_ir<API, T>());
+            return formatter::puml::render(os, nil::sm::ir::build<API, T>());
         }
     };
 }

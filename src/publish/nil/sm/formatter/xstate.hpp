@@ -1,8 +1,8 @@
 #pragma once
 
+#include "../ir.hpp"
 #include "../state.hpp"
 #include "detail.hpp"
-#include "ir.hpp"
 
 #include <ostream>
 #include <string>
@@ -331,7 +331,7 @@ namespace nil::sm
     {
         friend std::ostream& operator<<(std::ostream& os, const xstate<SM<API, T>>& /* d */)
         {
-            return formatter::xstate::render(os, formatter::detail::build_ir<API, T>());
+            return formatter::xstate::render(os, nil::sm::ir::build<API, T>());
         }
     };
 }

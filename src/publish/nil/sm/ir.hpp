@@ -95,7 +95,7 @@ namespace nil::sm::ir
         std::string id; // stable state id (unique across the entire model)
 
         // display_name is the rendered state label (normally type_name<T>).
-        std::string display_name;
+        std::string_view display_name;
 
         // True when this is the first concrete state in its region (state index 0).
         // Formatters use this to render initial markers/attributes.

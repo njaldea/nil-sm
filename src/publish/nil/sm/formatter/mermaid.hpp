@@ -1,8 +1,8 @@
 #pragma once
 
+#include "../ir.hpp"
 #include "../state.hpp"
 #include "detail.hpp"
-#include "ir.hpp"
 
 namespace nil::sm::formatter::mermaid
 {
@@ -41,12 +41,12 @@ namespace nil::sm::formatter::mermaid
 
     inline std::string title_label(const ir::Node& node)
     {
+        auto label = std::string(node.display_name);
         if (node.actions.empty())
         {
-            return node.display_name;
+            return label;
         }
 
-        auto label = std::string(node.display_name);
         for (const auto& action : node.actions)
         {
             label += "<br/>";
@@ -135,7 +135,7 @@ namespace nil::sm
     {
         friend std::ostream& operator<<(std::ostream& os, const mermaid<SM<API, T>>& /* mmd */)
         {
-            return formatter::mermaid::render(os, formatter::detail::build_ir<API, T>());
+            return formatter::mermaid::render(os, nil::sm::ir::build<API, T>());
         }
     };
 }

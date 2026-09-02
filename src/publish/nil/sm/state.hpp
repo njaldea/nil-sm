@@ -289,9 +289,10 @@ namespace nil::sm
         virtual ~ISM() noexcept = default;
 
         template <typename T>
+            requires(!std::is_same_v<T, detail::Event>)
         void post(T event = {})
         {
-            post_impl(detail::Event{
+            (void)post_impl(detail::Event{
                 .id = nil::xalt::type_id<T>,
                 .deleter = &detail::deleter<T>,
                 .cloner = &detail::cloner<T>,
@@ -299,8 +300,17 @@ namespace nil::sm
             });
         }
 
+        // Posts an already type-erased event and returns the root region's
+        // resulting action, for internal use by adapters such as BarrierState.
+        detail::on_event_t post(detail::Event event)
+        {
+            return post_impl(event);
+        }
+
+        virtual bool is_finalized() const = 0;
+
     private:
-        virtual void post_impl(detail::Event event) = 0;
+        virtual detail::on_event_t post_impl(detail::Event event) = 0;
     };
 
     template <template <typename> typename API, typename T>
@@ -312,11 +322,15 @@ namespace nil::sm
         using region_dispatcher_t = detail::region_dispatcher<API, Root, nil::xalt::tlist<T>>;
 
     public:
-        explicit SM(state_context_t* state_contexts, api_context_t* api_contexts)
+        explicit SM(
+            state_context_t* state_contexts,
+            api_context_t* api_contexts,
+            const Metadata* init_parent_metadata = nullptr
+        )
             : runtime{.queues = {}, .contexts = {.state = state_contexts, .api = api_contexts}}
-            , region(detail::Region::tag<API, T>{}, 0, &root, &runtime, nullptr)
+            , region(detail::Region::tag<API, T>{}, 0, &root, &runtime, init_parent_metadata)
         {
-            runtime.queues.flush(*region.active_state);
+            flush();
         }
 
         ~SM() noexcept override = default;
@@ -327,20 +341,33 @@ namespace nil::sm
         SM(SM&&) noexcept = delete;
         SM& operator=(SM&&) noexcept = delete;
 
+        bool is_finalized() const override
+        {
+            return region.terminated;
+        }
+
     private:
         Root root;
         detail::Runtime runtime;
         detail::Region region;
 
-        void post_impl(detail::Event event) override
+        detail::on_event_t dispatch(const detail::Event& event)
         {
-            region.template consume_action<region_dispatcher_t>(
-                event,
-                region.active_state->on_event(event),
-                nullptr
-            );
+            auto action = region.active_state->on_event(event);
+            region.template consume_action<region_dispatcher_t>(event, action, nullptr);
+            return action;
+        }
 
-            runtime.queues.flush(*region.active_state);
+        void flush()
+        {
+            runtime.queues.flush([this](const detail::Event& event) { dispatch(event); });
+        }
+
+        detail::on_event_t post_impl(detail::Event event) override
+        {
+            auto action = dispatch(event);
+            flush();
+            return action;
         }
     };
 

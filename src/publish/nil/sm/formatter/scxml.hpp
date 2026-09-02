@@ -1,8 +1,8 @@
 #pragma once
 
+#include "../ir.hpp"
 #include "../state.hpp"
 #include "detail.hpp"
-#include "ir.hpp"
 
 #include <ostream>
 
@@ -409,7 +409,7 @@ namespace nil::sm
     {
         friend std::ostream& operator<<(std::ostream& os, const scxml<SM<API, T>>& /* doc */)
         {
-            return formatter::scxml::render(os, formatter::detail::build_ir<API, T>());
+            return formatter::scxml::render(os, nil::sm::ir::build<API, T>());
         }
     };
 }

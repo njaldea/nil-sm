@@ -2,18 +2,28 @@
 
 #include "../detail.hpp"
 #include "../id.hpp"
+#include "../ir.hpp"
 #include "../structs.hpp"
-#include "ir.hpp"
 
 #include <algorithm>
 #include <format>
 #include <string>
 #include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace nil::sm::formatter::detail
 {
+    // Customization point for opaque leaf states such as barrier::State: specialized in
+    // formatter/barrier.hpp so this header does not need to depend on barrier.hpp. When
+    // available, build_node splices model().roots in as this node's one nested region.
+    template <typename T>
+    struct barrier_ir
+    {
+        static constexpr bool available = false;
+    };
+
     inline std::string format_stable_id(std::uint64_t value)
     {
         return std::format("ST_{:016x}", value);
@@ -302,7 +312,7 @@ namespace nil::sm::formatter::detail
 
         auto node = ir::Node{
             .id = format_stable_id(nil::sm::id::stable_id(metadata)),
-            .display_name = metadata.is_final ? "[**]" : std::string(metadata.name),
+            .display_name = metadata.name,
             .is_initial = state == 0,
             .is_final = metadata.is_final,
             .actions = {},
@@ -312,7 +322,11 @@ namespace nil::sm::formatter::detail
 
         using regions_t = typename API<T>::regions_t;
 
-        if constexpr (regions_t::size > 0)
+        if constexpr (barrier_ir<T>::available)
+        {
+            node.regions = {barrier_ir<T>::model(&metadata).roots};
+        }
+        else if constexpr (regions_t::size > 0)
         {
             node.regions = [&metadata]<typename... R>(nil::xalt::tlist<R...>)
             { return build_regions<API, R...>(&metadata); }(regions_t{});
@@ -322,10 +336,15 @@ namespace nil::sm::formatter::detail
 
         return node;
     }
+}
 
+namespace nil::sm::ir
+{
+    // Public entry point (unlike the rest of this header): builds the format-neutral IR for
+    // API/T, for use by custom renderers or by code that needs a barrier's Provider::ir().
     template <template <typename> typename API, typename T>
-    ir::Model build_ir()
+    Model build(const nil::sm::Metadata* parent = nullptr)
     {
-        return ir::Model{.roots = build_region<API, T>(nullptr, 0)};
+        return Model{.roots = formatter::detail::build_region<API, T>(parent, 0)};
     }
 }
