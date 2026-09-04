@@ -2,9 +2,9 @@
 
 #include "../ir.hpp"
 #include "../state.hpp"
-#include "detail.hpp"
+#include "utils.hpp"
 
-namespace nil::sm::formatter::puml
+namespace nil::sm::format::puml
 {
     inline void render_action(
         std::ostream& os,
@@ -61,10 +61,11 @@ namespace nil::sm::formatter::puml
 
         for (const auto& transition : node.transitions)
         {
-            indent(os, depth) << node.id << " --> " << target_id(transition);
-            if (!event_name(transition).empty())
+            indent(os, depth) << node.id << " --> " << ir::target_id(transition);
+            if (!ir::event_name(transition).empty())
             {
-                os << " : " << event_name(transition) << (is_capture(transition) ? " [c]" : "");
+                os << " : " << ir::event_name(transition)
+                   << (ir::is_capture(transition) ? " [c]" : "");
             }
             os << "\n";
         }
@@ -144,7 +145,7 @@ namespace nil::sm
     {
         friend std::ostream& operator<<(std::ostream& os, const puml<SM<API, T>>& /* uml */)
         {
-            return formatter::puml::render(os, nil::sm::ir::build<API, T>());
+            return format::puml::render(os, nil::sm::ir::build<API, T>());
         }
     };
 }

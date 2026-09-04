@@ -1,17 +1,8 @@
-#include "job_impl.hpp"
+#include "shift.hpp"
 
-namespace toll::barrier_jobs
+#include "../tollbooth/jobs.hpp"
+
+namespace toll::bslot
 {
-    std::unique_ptr<nil::sm::ISM> make_shift(
-        nil::sm::barrier::Runtime* runtime,
-        const nil::sm::Metadata* parent_metadata
-    )
-    {
-        return make_job<job::shift_job>(runtime, parent_metadata);
-    }
-
-    nil::sm::ir::Model ir_shift(const nil::sm::Metadata* parent_metadata)
-    {
-        return ir_job<job::shift_job>(parent_metadata);
-    }
+    NIL_SM_BARRIER_DEFINE(shift_provider, nil::sm::api::Coalesce<tracing_api>::type, job::shift_job)
 }

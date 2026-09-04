@@ -2,7 +2,7 @@
 
 #include "../ir.hpp"
 #include "../state.hpp"
-#include "detail.hpp"
+#include "utils.hpp"
 
 #include <ostream>
 
@@ -15,7 +15,7 @@
 // need to find a way for states to have separate
 // id and display text
 
-namespace nil::sm::formatter::scxml
+namespace nil::sm::format::scxml
 {
     struct RegionContext
     {
@@ -108,11 +108,11 @@ namespace nil::sm::formatter::scxml
         const std::unordered_map<std::string, std::string>& id_map
     )
     {
-        if (is_final_target(target_id(transition), context.final_id))
+        if (is_final_target(ir::target_id(transition), context.final_id))
         {
             return context.final_id;
         }
-        return resolve_id(target_id(transition), id_map);
+        return resolve_id(ir::target_id(transition), id_map);
     }
 
     // Render entry/exit and event action executable content (raise-based, no <script> needed)
@@ -218,9 +218,9 @@ namespace nil::sm::formatter::scxml
         for (const auto& transition : transitions)
         {
             const auto target = resolve_transition_target(transition, context, id_map);
-            const auto ev = event_name(transition);
+            const auto ev = ir::event_name(transition);
 
-            if (is_capture(transition))
+            if (ir::is_capture(transition))
             {
                 indent(os, depth) << "<!-- captured before regions -->\n";
             }
@@ -409,7 +409,7 @@ namespace nil::sm
     {
         friend std::ostream& operator<<(std::ostream& os, const scxml<SM<API, T>>& /* doc */)
         {
-            return formatter::scxml::render(os, nil::sm::ir::build<API, T>());
+            return format::scxml::render(os, nil::sm::ir::build<API, T>());
         }
     };
 }

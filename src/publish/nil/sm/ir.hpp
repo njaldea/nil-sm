@@ -1,7 +1,13 @@
 #pragma once
 
-#include <ostream>
+#include "detail.hpp"
+#include "id.hpp"
+
+#include <algorithm>
+#include <format>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -113,71 +119,9 @@ namespace nil::sm::ir
     };
 }
 
-namespace nil::sm::formatter
+namespace nil::sm::ir
 {
-    inline std::ostream& indent(std::ostream& os, std::size_t depth)
-    {
-        for (std::size_t i = 0; i < depth; ++i)
-        {
-            os << "    ";
-        }
-
-        return os;
-    }
-
-    inline std::string_view action_name(ir::response::EEntry response)
-    {
-        switch (response)
-        {
-            case ir::response::EEntry::noop:
-                return "NOOP";
-            case ir::response::EEntry::emit:
-                return "Emit";
-        }
-        return "";
-    }
-
-    inline std::string_view action_name(ir::response::EExit response)
-    {
-        switch (response)
-        {
-            case ir::response::EExit::noop:
-                return "NOOP";
-            case ir::response::EExit::emit:
-                return "Emit";
-        }
-        return "";
-    }
-
-    inline std::string_view action_name(ir::response::ERegionsFinalized response)
-    {
-        switch (response)
-        {
-            case ir::response::ERegionsFinalized::noop:
-                return "NOOP";
-            case ir::response::ERegionsFinalized::emit:
-                return "Emit";
-        }
-        return "";
-    }
-
-    inline std::string_view action_name(ir::response::EEvent response)
-    {
-        switch (response)
-        {
-            case ir::response::EEvent::discard:
-                return "Discard";
-            case ir::response::EEvent::forward:
-                return "Forward";
-            case ir::response::EEvent::defer:
-                return "Defer";
-            case ir::response::EEvent::emit:
-                return "Emit";
-        }
-        return "";
-    }
-
-    inline const std::string& target_id(const ir::transit::Info& transition)
+    inline const std::string& target_id(const transit::Info& transition)
     {
         return std::visit(
             [](const auto& info) -> const std::string& { return info.target_id; },
@@ -185,7 +129,7 @@ namespace nil::sm::formatter
         );
     }
 
-    inline const std::string& event_name(const ir::transit::Info& transition)
+    inline const std::string& event_name(const transit::Info& transition)
     {
         return std::visit(
             [](const auto& info) -> const std::string& { return info.event_name; },
@@ -193,8 +137,338 @@ namespace nil::sm::formatter
         );
     }
 
-    inline bool is_capture(const ir::transit::Info& transition)
+    inline bool is_capture(const transit::Info& transition)
     {
-        return std::holds_alternative<ir::transit::Capture>(transition);
+        return std::holds_alternative<transit::Capture>(transition);
+    }
+}
+
+namespace nil::sm::ir::detail
+{
+    inline std::string format_stable_id(std::uint64_t value)
+    {
+        return std::format("ST_{:016x}", value);
+    }
+
+    template <typename R, typename ActionT, typename ResponseT>
+    void emit_lifecycle_action(std::vector<ir::action::Info>& actions)
+    {
+        if constexpr (std::is_same_v<R, NOOP>)
+        {
+            actions.push_back(ActionT{ResponseT::noop});
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
+        {
+            actions.push_back(ActionT{ResponseT::emit});
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
+        {
+            [&]<typename... V>(nil::xalt::tlist<V...>) {
+                (emit_lifecycle_action<V, ActionT, ResponseT>(actions), ...);
+            }(nil::xalt::to_tlist_t<R>{});
+        }
+    }
+
+    template <template <typename> typename API, typename RegionInitial, typename R>
+    void emit_regions_complete_action(const nil::sm::Metadata& metadata, ir::Node& node)
+    {
+        if constexpr (std::is_same_v<R, NOOP>)
+        {
+            node.actions.emplace_back(
+                ir::action::RegionsFinalized{ir::response::ERegionsFinalized::noop}
+            );
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, Transit>)
+        {
+            using reachable_states_t
+                = nil::sm::detail::region_reachability_graph<API, RegionInitial>;
+            const auto target_state = reachable_states_t::template index_of<typename R::type>();
+            const auto target_metadata = nil::sm::detail::make_metadata<typename R::type>(
+                metadata.region,
+                target_state,
+                API<typename R::type>::regions_t::size,
+                metadata.parent
+            );
+            node.transitions.emplace_back(ir::transit::Event{
+                format_stable_id(nil::sm::id::stable_id(target_metadata)),
+                "[**]"
+            });
+        }
+        else if constexpr (std::is_same_v<R, Terminate>)
+        {
+            node.transitions.emplace_back(ir::transit::Event{"[*]", "[**]"});
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
+        {
+            node.actions.emplace_back(
+                ir::action::RegionsFinalized{ir::response::ERegionsFinalized::emit}
+            );
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
+        {
+            [&]<typename... V>(nil::xalt::tlist<V...>) {
+                (emit_regions_complete_action<API, RegionInitial, V>(metadata, node), ...);
+            }(nil::xalt::to_tlist_t<R>{});
+        }
+    }
+
+    template <
+        template <typename>
+        typename API,
+        typename RegionInitial,
+        typename E,
+        typename R,
+        typename ActionInfoT,
+        typename TransitionInfoT>
+    void emit_reaction_action(const nil::sm::Metadata& metadata, ir::Node& node)
+    {
+        const auto event_name = nil::sm::detail::type_name<E>();
+
+        if constexpr (std::is_same_v<R, Discard>)
+        {
+            node.actions.emplace_back(
+                ActionInfoT{std::string(event_name), ir::response::EEvent::discard}
+            );
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
+        {
+            node.actions.emplace_back(
+                ActionInfoT{std::string(event_name), ir::response::EEvent::emit}
+            );
+        }
+        else if constexpr (std::is_same_v<R, Forward>)
+        {
+            node.actions.emplace_back(
+                ActionInfoT{std::string(event_name), ir::response::EEvent::forward}
+            );
+        }
+        else if constexpr (std::is_same_v<R, Defer>)
+        {
+            node.actions.emplace_back(
+                ActionInfoT{std::string(event_name), ir::response::EEvent::defer}
+            );
+        }
+        else if constexpr (std::is_same_v<R, Unhandled>)
+        {
+            return;
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, Transit>)
+        {
+            const auto target_state
+                = nil::sm::detail::region_reachability_graph<API, RegionInitial>::template index_of<
+                    typename R::type>();
+            const auto target_metadata = nil::sm::detail::make_metadata<typename R::type>(
+                metadata.region,
+                target_state,
+                API<typename R::type>::regions_t::size,
+                metadata.parent
+            );
+            node.transitions.push_back(TransitionInfoT{
+                format_stable_id(nil::sm::id::stable_id(target_metadata)),
+                std::string(event_name)
+            });
+        }
+        if constexpr (std::is_same_v<R, Terminate>)
+        {
+            node.transitions.push_back(TransitionInfoT{"[*]", std::string(event_name)});
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
+        {
+            [&]<typename... V>(nil::xalt::tlist<V...>)
+            {
+                (emit_reaction_action<API, RegionInitial, E, V, ActionInfoT, TransitionInfoT>(
+                     metadata,
+                     node
+                 ),
+                 ...);
+            }(nil::xalt::to_tlist_t<R>{});
+        }
+    }
+
+    template <
+        template <typename...>
+        typename API,
+        typename T,
+        typename RegionInitial,
+        typename... E>
+    void emit_events(
+        const nil::sm::Metadata& metadata,
+        ir::Node& node,
+        nil::xalt::tlist<E...> /* events */
+    )
+    {
+        using api_t = API<T>;
+        using state_t = typename api_t::state_t;
+        using api_context_t = typename api_t::api_context_t;
+
+        (emit_reaction_action<
+             API,
+             RegionInitial,
+             E,
+             decltype(api_t::template on_event<E>(
+                 std::declval<state_t&>(),
+                 std::declval<const E&>(),
+                 static_cast<api_context_t*>(nullptr)
+             )),
+             ir::action::Event,
+             ir::transit::Event>(metadata, node),
+         ...);
+    }
+
+    template <
+        template <typename...>
+        typename API,
+        typename T,
+        typename RegionInitial,
+        typename... E>
+    void emit_captures(
+        const nil::sm::Metadata& metadata,
+        ir::Node& node,
+        nil::xalt::tlist<E...> /* captures */
+    )
+    {
+        using api_t = API<T>;
+        using state_t = typename api_t::state_t;
+        using api_context_t = typename api_t::api_context_t;
+
+        (emit_reaction_action<
+             API,
+             RegionInitial,
+             E,
+             decltype(api_t::template on_capture<E>(
+                 std::declval<state_t&>(),
+                 std::declval<const E&>(),
+                 static_cast<api_context_t*>(nullptr)
+             )),
+             ir::action::Capture,
+             ir::transit::Capture>(metadata, node),
+         ...);
+    }
+
+    template <template <typename> typename API, typename T, typename RegionInitial>
+    void emit_node_annotations(const nil::sm::Metadata& metadata, ir::Node& node)
+    {
+        using api_t = API<T>;
+        using state_t = typename api_t::state_t;
+        using api_context_t = typename api_t::api_context_t;
+        using on_enter_result_t = decltype(api_t::on_enter(
+            std::declval<state_t&>(),
+            static_cast<api_context_t*>(nullptr)
+        ));
+        using on_exit_result_t = decltype(api_t::on_exit(
+            std::declval<state_t&>(),
+            static_cast<api_context_t*>(nullptr)
+        ));
+        using on_regions_finalized_result_t = decltype(api_t::on_regions_finalized(
+            std::declval<state_t&>(),
+            static_cast<api_context_t*>(nullptr)
+        ));
+
+        emit_lifecycle_action<on_enter_result_t, ir::action::Entry, ir::response::EEntry>(
+            node.actions
+        );
+        emit_lifecycle_action<on_exit_result_t, ir::action::Exit, ir::response::EExit>(node.actions
+        );
+        emit_captures<API, T, RegionInitial>(metadata, node, typename api_t::captures_t{});
+        emit_events<API, T, RegionInitial>(metadata, node, typename api_t::events_t{});
+        emit_regions_complete_action<API, RegionInitial, on_regions_finalized_result_t>(
+            metadata,
+            node
+        );
+    }
+
+    template <template <typename> typename API, typename T, typename RegionInitial>
+    ir::Node build_node(const nil::sm::Metadata* parent, std::size_t region, std::size_t state);
+
+    template <template <typename> typename API, typename T>
+    std::vector<ir::Node> build_region(const nil::sm::Metadata* parent, std::size_t index)
+    {
+        using reachable_t = typename nil::sm::detail::region_reachability_graph<API, T>::states;
+        auto nodes =
+            [&]<typename... C, std::size_t... I>(nil::xalt::tlist<C...>, std::index_sequence<I...>)
+        {
+            return std::vector<ir::Node>{build_node<API, C, T>(parent, index, I)...};
+        }(reachable_t{}, std::make_index_sequence<reachable_t::size>{});
+
+        const auto has_termination = std::any_of(
+            nodes.begin(),
+            nodes.end(),
+            [](const auto& node)
+            {
+                return std::any_of(
+                    node.transitions.begin(),
+                    node.transitions.end(),
+                    [](const auto& transition) { return target_id(transition) == "[*]"; }
+                );
+            }
+        );
+
+        if (has_termination
+            && !std::any_of(
+                nodes.begin(),
+                nodes.end(),
+                [](const auto& node) { return node.is_final; }
+            ))
+        {
+            nodes.push_back(build_node<API, Fin, T>(parent, index, Fin::state_index));
+        }
+
+        return nodes;
+    }
+
+    template <template <typename> typename API, typename... R>
+    std::vector<std::vector<ir::Node>> build_regions(const nil::sm::Metadata* parent)
+    {
+        return [&]<std::size_t... I>(std::index_sequence<I...> /* indices */) {
+            return std::vector<std::vector<ir::Node>>{build_region<API, R>(parent, I)...};
+        }(std::index_sequence_for<R...>());
+    }
+
+    // Primary template builds a node's regions from API<T>::regions_t; barrier.hpp specializes
+    // this for barrier::State<FinalizeAction, Provider> to delegate to Provider::ir instead.
+    template <template <typename> typename API, typename T>
+    struct regions_builder
+    {
+        static std::vector<std::vector<ir::Node>> regions(const nil::sm::Metadata* metadata)
+        {
+            using regions_t = typename API<T>::regions_t;
+            if constexpr (regions_t::size > 0)
+            {
+                return [metadata]<typename... R>(nil::xalt::tlist<R...>)
+                { return build_regions<API, R...>(metadata); }(regions_t{});
+            }
+            else
+            {
+                return {};
+            }
+        }
+    };
+
+    template <template <typename> typename API, typename T, typename RegionInitial>
+    ir::Node build_node(const nil::sm::Metadata* parent, std::size_t region, std::size_t state)
+    {
+        const auto metadata
+            = nil::sm::detail::make_metadata<T>(region, state, API<T>::regions_t::size, parent);
+        auto node = ir::Node{
+            .id = format_stable_id(nil::sm::id::stable_id(metadata)),
+            .display_name = metadata.name,
+            .is_initial = state == 0,
+            .is_final = metadata.is_final,
+            .actions = {},
+            .transitions = {},
+            .regions = regions_builder<API, T>::regions(&metadata),
+        };
+
+        emit_node_annotations<API, T, RegionInitial>(metadata, node);
+        return node;
+    }
+}
+
+namespace nil::sm::ir
+{
+    template <template <typename> typename API, typename T>
+    Model build(const nil::sm::Metadata* parent = nullptr)
+    {
+        return Model{.roots = detail::build_region<API, T>(parent, 0)};
     }
 }

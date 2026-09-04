@@ -63,7 +63,12 @@ target_link_libraries(
 foreach(JOB startup collection shift maintenance)
     project(toll_barrier_job_${JOB})
 
-    add_library(${PROJECT_NAME} STATIC tollbooth_barrier/${JOB}.cpp)
+    add_library(
+        ${PROJECT_NAME}
+        STATIC
+        tollbooth_barrier/${JOB}.cpp
+        tollbooth_barrier/${JOB}.hpp
+    )
     target_link_libraries(${PROJECT_NAME} PUBLIC sm)
 endforeach()
 

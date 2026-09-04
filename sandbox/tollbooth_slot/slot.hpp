@@ -6,7 +6,6 @@
 
 #include <memory>
 #include <string_view>
-#include <utility>
 #include <variant>
 
 namespace toll::slot
@@ -131,28 +130,28 @@ namespace toll::slot
         {
         }
 
-        auto on_enter() -> nil::sm::NOOP
+        auto on_enter() const -> nil::sm::NOOP
         {
             ctx->log(name, "idle - pick a job");
             return {};
         }
 
-        auto on_event(const ev::select_startup& /* event */)
+        static auto on_event(const ev::select_startup& /* event */)
         {
             return nil::sm::Transit<startup>();
         }
 
-        auto on_event(const ev::select_collection& /* event */)
+        static auto on_event(const ev::select_collection& /* event */)
         {
             return nil::sm::Transit<collection>();
         }
 
-        auto on_event(const ev::select_shift& /* event */)
+        static auto on_event(const ev::select_shift& /* event */)
         {
             return nil::sm::Transit<shift>();
         }
 
-        auto on_event(const ev::select_maintenance& /* event */)
+        static auto on_event(const ev::select_maintenance& /* event */)
         {
             return nil::sm::Transit<maintenance>();
         }

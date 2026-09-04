@@ -1,5 +1,7 @@
 #pragma once
 
+#include "events.hpp"
+
 #include <nil/sm.hpp>
 
 #include <algorithm>
@@ -10,83 +12,6 @@
 #include <string>
 #include <string_view>
 #include <variant>
-
-namespace toll::ev
-{
-    struct ok
-    {
-    };
-
-    struct fail
-    {
-    };
-
-    struct tick
-    {
-    };
-
-    struct arrive
-    {
-        int vehicle_class = 1;
-    };
-
-    struct pay
-    {
-        int amount = 0;
-    };
-
-    struct receipt
-    {
-    };
-
-    struct cancel
-    {
-    };
-
-    struct depart
-    {
-    };
-
-    struct gate_open
-    {
-    };
-
-    struct gate_close
-    {
-    };
-
-    struct alarm
-    {
-    };
-
-    struct reset
-    {
-    };
-
-    struct abort
-    {
-    };
-
-    struct shutdown
-    {
-    };
-
-    struct select_startup
-    {
-    };
-
-    struct select_collection
-    {
-    };
-
-    struct select_shift
-    {
-    };
-
-    struct select_maintenance
-    {
-    };
-}
 
 namespace toll
 {
@@ -111,12 +36,14 @@ namespace toll
             return base_fare * std::max(1, klass);
         }
 
-        void log(std::string_view who, std::string_view what) const
+        // NOLINTNEXTLINE
+        void log(std::string_view who, std::string_view what)
         {
             std::cout << "    " << who << " | " << what << '\n';
         }
 
-        void log(std::string_view who, std::string_view what, int value) const
+        // NOLINTNEXTLINE
+        void log(std::string_view who, std::string_view what, int value)
         {
             std::cout << "    " << who << " | " << what << ' ' << value << '\n';
         }
@@ -240,19 +167,19 @@ namespace toll::generic
         {
         }
 
-        auto on_enter() -> nil::sm::NOOP
+        auto on_enter() const -> nil::sm::NOOP
         {
             ctx->log(name, "enter");
             return {};
         }
 
-        auto on_event(const ev::ok& /* event */)
+        auto on_event(const ev::ok& /* event */) const
         {
             ctx->log(name, "ok");
             return Ok();
         }
 
-        auto on_event(const ev::fail& /* event */)
+        auto on_event(const ev::fail& /* event */) const
         {
             ctx->log(name, "fail");
             return Fail();
@@ -274,13 +201,13 @@ namespace toll::generic
         {
         }
 
-        auto on_enter() -> nil::sm::NOOP
+        auto on_enter() const -> nil::sm::NOOP
         {
             ctx->log(name, "enter");
             return {};
         }
 
-        auto on_event(const E& event)
+        auto on_event(const E& event) const
         {
             Sink::accept(event, ctx);
             return Then();
@@ -308,20 +235,20 @@ namespace toll::generic
         {
         }
 
-        auto on_enter() -> nil::sm::NOOP
+        auto on_enter() const -> nil::sm::NOOP
         {
             ctx->log(name, "enter");
             Action::apply(ctx);
             return {};
         }
 
-        auto on_event(const E1& /* event */)
+        auto on_event(const E1& /* event */) const
         {
             ctx->log(name, "primary");
             return Then1();
         }
 
-        auto on_event(const E2& /* event */)
+        auto on_event(const E2& /* event */) const
         {
             ctx->log(name, "secondary");
             return Then2();
@@ -344,7 +271,7 @@ namespace toll::generic
         {
         }
 
-        auto on_enter() -> nil::sm::NOOP
+        auto on_enter() const -> nil::sm::NOOP
         {
             ctx->log(name, "needs", Needed);
             return {};
@@ -381,19 +308,19 @@ namespace toll::generic
         {
         }
 
-        auto on_enter() -> nil::sm::NOOP
+        auto on_enter() const -> nil::sm::NOOP
         {
             ctx->log(name, "enter");
             return {};
         }
 
-        auto on_event(const Deferred& /* event */)
+        auto on_event(const Deferred& /* event */) const
         {
             ctx->log(name, "deferred");
             return nil::sm::Defer();
         }
 
-        auto on_event(const E& event)
+        auto on_event(const E& event) const
         {
             Sink::accept(event, ctx);
             return Then();
@@ -422,19 +349,19 @@ namespace toll::generic
         {
         }
 
-        auto on_enter() -> nil::sm::NOOP
+        auto on_enter() const -> nil::sm::NOOP
         {
             ctx->log(name, "enter");
             return {};
         }
 
-        auto on_event(const Deferred& /* event */)
+        auto on_event(const Deferred& /* event */) const
         {
             ctx->log(name, "deferred");
             return nil::sm::Defer();
         }
 
-        auto on_event(const E& event) -> std::variant<Yes, No>
+        auto on_event(const E& event) const -> std::variant<Yes, No>
         {
             Sink::accept(event, ctx);
             if (Check::check(event, ctx))
@@ -460,13 +387,13 @@ namespace toll::generic
         {
         }
 
-        auto on_enter()
+        auto on_enter() const
         {
             ctx->log(name, "enter, emitting");
             return nil::sm::Emit<Emitted>();
         }
 
-        auto on_event(const E& /* event */)
+        static auto on_event(const E& /* event */)
         {
             return Then();
         }
@@ -487,18 +414,18 @@ namespace toll::generic
         {
         }
 
-        auto on_enter() -> nil::sm::NOOP
+        auto on_enter() const -> nil::sm::NOOP
         {
             ctx->log(name, "enter");
             return {};
         }
 
-        auto on_event(const E& /* event */)
+        static auto on_event(const E& /* event */)
         {
             return Then();
         }
 
-        auto on_event(const Escape& /* event */)
+        auto on_event(const Escape& /* event */) const
         {
             ctx->log(name, "forwarding to parent");
             return nil::sm::Forward();
@@ -522,31 +449,31 @@ namespace toll::generic
         {
         }
 
-        auto on_enter() -> nil::sm::NOOP
+        auto on_enter() const -> nil::sm::NOOP
         {
             std::cout << ">> " << name << " started\n";
             return {};
         }
 
-        auto on_exit() -> nil::sm::NOOP
+        auto on_exit() const -> nil::sm::NOOP
         {
             std::cout << "<< " << name << " left\n";
             return {};
         }
 
-        auto on_event(const ev::abort& /* event */)
+        auto on_event(const ev::abort& /* event */) const
         {
             ctx->log(name, "aborted");
             return Next();
         }
 
-        auto on_event(const ev::cancel& /* event */)
+        auto on_event(const ev::cancel& /* event */) const
         {
             ctx->log(name, "absorbed cancel");
             return nil::sm::Discard();
         }
 
-        auto on_regions_finalized()
+        auto on_regions_finalized() const
         {
             ctx->log(name, "all regions finalized");
             return Next();
@@ -570,7 +497,7 @@ namespace toll::generic
         {
         }
 
-        auto on_regions_finalized()
+        auto on_regions_finalized() const
         {
             ctx->job_done = true;
             return nil::sm::Terminate();
@@ -594,14 +521,14 @@ namespace toll::generic
         {
         }
 
-        auto on_capture(const ev::shutdown& /* event */)
+        auto on_capture(const ev::shutdown& /* event */) const
         {
             ctx->log(name, "shutdown captured");
             ctx->finished = true;
             return nil::sm::Terminate();
         }
 
-        auto on_regions_finalized()
+        auto on_regions_finalized() const
         {
             ctx->log(name, "job done, back to idle");
             return nil::sm::Transit<session<Inner>>();
@@ -714,6 +641,7 @@ namespace toll::repl
 
     // Poster is anything with a `post<E>()` / `post(E)` pair: a concrete SM or nil::sm::ISM.
     template <typename Poster>
+    // NOLINTNEXTLINE
     bool feed(Poster& machine, std::string_view command, std::string_view argument)
     {
         if (command == "ok")

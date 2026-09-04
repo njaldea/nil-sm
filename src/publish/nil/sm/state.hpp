@@ -300,11 +300,21 @@ namespace nil::sm
             });
         }
 
-        // Posts an already type-erased event and returns the root region's
-        // resulting action, for internal use by adapters such as BarrierState.
-        detail::on_event_t post(detail::Event event)
+        // Posts an already type-erased event and returns its normalized action.
+        action_t post(detail::Event event)
         {
-            return post_impl(event);
+            const auto result = post_impl(event);
+            if (std::holds_alternative<Forward>(result))
+            {
+                return Forward();
+            }
+
+            if (std::holds_alternative<Unhandled>(result))
+            {
+                return Unhandled();
+            }
+
+            return Discard();
         }
 
         virtual bool is_finalized() const = 0;
@@ -327,7 +337,7 @@ namespace nil::sm
             api_context_t* api_contexts,
             const Metadata* init_parent_metadata = nullptr
         )
-            : runtime{.queues = {}, .contexts = {.state = state_contexts, .api = api_contexts}}
+            : runtime{.api_id = nil::xalt::type_id<API<Root>>, .queues = {}, .contexts = {.state = state_contexts, .api = api_contexts}}
             , region(detail::Region::tag<API, T>{}, 0, &root, &runtime, init_parent_metadata)
         {
             flush();

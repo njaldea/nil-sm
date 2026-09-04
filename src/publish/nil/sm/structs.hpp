@@ -8,6 +8,7 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace nil::sm
 {
@@ -123,6 +124,8 @@ namespace nil::sm
     struct Discard final
     {
     };
+
+    using action_t = std::variant<Forward, Unhandled, Discard>;
 
     struct NOOP final
     {

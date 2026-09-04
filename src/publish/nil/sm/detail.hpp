@@ -154,6 +154,7 @@ namespace nil::sm::detail
     // each hold a single pointer to it instead of separate pointers.
     struct Runtime
     {
+        const void* api_id = nullptr;
         Queues queues;
         Contexts contexts;
     };

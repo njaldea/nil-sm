@@ -2,7 +2,7 @@
 
 #include "../ir.hpp"
 #include "../state.hpp"
-#include "detail.hpp"
+#include "utils.hpp"
 
 #include <ostream>
 #include <string>
@@ -10,7 +10,7 @@
 #include <variant>
 #include <vector>
 
-namespace nil::sm::formatter::xstate
+namespace nil::sm::format::xstate
 {
     struct RegionContext
     {
@@ -229,7 +229,7 @@ namespace nil::sm::formatter::xstate
             auto rendered = std::size_t{0};
             for (const auto& tx : node.transitions)
             {
-                if (event_name(tx).empty())
+                if (ir::event_name(tx).empty())
                 {
                     continue;
                 }
@@ -238,8 +238,8 @@ namespace nil::sm::formatter::xstate
                 {
                     os << ",\n";
                 }
-                indent(os, depth + 2) << "\"" << event_name(tx) << "\": \""
-                                      << transition_target_key(target_id(tx), context) << "\"";
+                indent(os, depth + 2) << "\"" << ir::event_name(tx) << "\": \""
+                                      << transition_target_key(ir::target_id(tx), context) << "\"";
                 ++rendered;
             }
             os << "\n";
@@ -331,7 +331,7 @@ namespace nil::sm
     {
         friend std::ostream& operator<<(std::ostream& os, const xstate<SM<API, T>>& /* d */)
         {
-            return formatter::xstate::render(os, nil::sm::ir::build<API, T>());
+            return format::xstate::render(os, nil::sm::ir::build<API, T>());
         }
     };
 }

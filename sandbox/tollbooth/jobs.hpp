@@ -322,28 +322,28 @@ namespace toll::job
         {
         }
 
-        auto on_enter() -> nil::sm::NOOP
+        auto on_enter() const -> nil::sm::NOOP
         {
             ctx->log(name, "idle - pick a job");
             return {};
         }
 
-        auto on_event(const ev::select_startup& /* event */)
+        static auto on_event(const ev::select_startup& /* event */)
         {
             return nil::sm::Transit<startup_job>();
         }
 
-        auto on_event(const ev::select_collection& /* event */)
+        static auto on_event(const ev::select_collection& /* event */)
         {
             return nil::sm::Transit<collection_job>();
         }
 
-        auto on_event(const ev::select_shift& /* event */)
+        static auto on_event(const ev::select_shift& /* event */)
         {
             return nil::sm::Transit<shift_job>();
         }
 
-        auto on_event(const ev::select_maintenance& /* event */)
+        static auto on_event(const ev::select_maintenance& /* event */)
         {
             return nil::sm::Transit<maintenance_job>();
         }

@@ -9,7 +9,6 @@ int main()
 {
     toll::booth_context state_context;
     toll::trace_context api_context;
-    state_context.trace = &api_context;
 
     nil::sm::SM<nil::sm::api::Coalesce<toll::tracing_api>::type, toll::bslot::booth> machine{
         &state_context,

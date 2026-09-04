@@ -1,17 +1,12 @@
-#include "job_impl.hpp"
+#include "startup.hpp"
 
-namespace toll::barrier_jobs
+#include "../tollbooth/jobs.hpp"
+
+namespace toll::bslot
 {
-    std::unique_ptr<nil::sm::ISM> make_startup(
-        nil::sm::barrier::Runtime* runtime,
-        const nil::sm::Metadata* parent_metadata
+    NIL_SM_BARRIER_DEFINE(
+        startup_provider,
+        nil::sm::api::Coalesce<tracing_api>::type,
+        job::startup_job
     )
-    {
-        return make_job<job::startup_job>(runtime, parent_metadata);
-    }
-
-    nil::sm::ir::Model ir_startup(const nil::sm::Metadata* parent_metadata)
-    {
-        return ir_job<job::startup_job>(parent_metadata);
-    }
 }

@@ -2,7 +2,7 @@
 
 #include "../ir.hpp"
 #include "../state.hpp"
-#include "detail.hpp"
+#include "utils.hpp"
 
 #include <ostream>
 #include <string>
@@ -10,7 +10,7 @@
 #include <variant>
 #include <vector>
 
-namespace nil::sm::formatter::dot
+namespace nil::sm::format::dot
 {
     struct RegionContext
     {
@@ -110,7 +110,7 @@ namespace nil::sm::formatter::dot
 
             for (const auto& transition : node.transitions)
             {
-                if (is_termination_target(target_id(transition), context.final_id))
+                if (is_termination_target(ir::target_id(transition), context.final_id))
                 {
                     context.needs_term = true;
                     return context;
@@ -221,24 +221,24 @@ namespace nil::sm::formatter::dot
         {
             indent(os, depth) << node.id << " -> ";
 
-            if (is_termination_target(target_id(transition), context.final_id)
+            if (is_termination_target(ir::target_id(transition), context.final_id)
                 && context.needs_term)
             {
                 os << context.term_id;
             }
             else
             {
-                os << target_id(transition);
+                os << ir::target_id(transition);
             }
 
-            if (event_name(transition).empty())
+            if (ir::event_name(transition).empty())
             {
                 os << ";\n";
             }
             else
             {
-                os << " [label=\"" << event_name(transition)
-                   << (is_capture(transition) ? " [c]" : "") << "\"";
+                os << " [label=\"" << ir::event_name(transition)
+                   << (ir::is_capture(transition) ? " [c]" : "") << "\"";
 
                 // Use ltail with compound graphs when transitioning from composite state
                 if (!node.regions.empty())
@@ -311,7 +311,7 @@ namespace nil::sm
     {
         friend std::ostream& operator<<(std::ostream& os, const dot<SM<API, T>>& /* d */)
         {
-            return formatter::dot::render(os, nil::sm::ir::build<API, T>());
+            return format::dot::render(os, nil::sm::ir::build<API, T>());
         }
     };
 }

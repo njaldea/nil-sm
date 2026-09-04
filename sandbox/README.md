@@ -82,7 +82,7 @@ differs.
   directly as the `barrier::SM`'s root, exactly as it's used directly inside `session`'s region in
   `tollbooth` - no run-once wrapper needed, since the job already reports its own termination via
   `on_regions_finalized`. Combined with `Provider::ir()` and `build_node`'s flattening
-  (`formatter/barrier.hpp`), `sandbox_toll_barrier_uml`'s diagram is structurally identical to
+  (`barrier.hpp`), `sandbox_toll_barrier_uml`'s diagram is structurally identical to
   `sandbox_toll_uml`'s; only the underlying `barrier::State` type differs, invisibly.
 
 `repl::loop` and `repl::feed` are shared. `repl::feed` is written against anything exposing

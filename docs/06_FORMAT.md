@@ -83,8 +83,7 @@ and event capture; run it with:
 All five formatters share one format-neutral intermediate representation
 (`nil::sm::ir::Model` / `nil::sm::ir::Node`, in
 [ir.hpp](../src/publish/nil/sm/ir.hpp)), built once by
-`nil::sm::ir::build<API, Root>()`
-([formatter/detail.hpp](../src/publish/nil/sm/formatter/detail.hpp)) by
+`nil::sm::ir::build<API, Root>()` ([ir.hpp](../src/publish/nil/sm/ir.hpp)) by
 walking the same compile-time reachability graph the runtime dispatcher uses.
 Each formatter (`dot.hpp`, `mermaid.hpp`, `puml.hpp`, `scxml.hpp`,
 `xstate.hpp`) only implements `render(std::ostream&, const ir::Model&)` — to
@@ -99,7 +98,7 @@ name, not its address — safe to diff across runs and builds.
 
 `nil::sm::barrier::State` (see [Barrier](07_BARRIER.md)) is opaque by default:
 its child's concrete types live in a separate translation unit, so `ir::build`
-can't traverse them. Including `<nil/sm/formatter/barrier.hpp>` alongside
-`<nil/sm/uml.hpp>` lets a barrier's `Provider` expose a static `ir()`, which
-`build_node` splices in as that node's own graph instead of an opaque leaf.
+can't traverse them. `barrier.hpp` specializes the IR builder for
+`barrier::State<FinalizeAction, Provider>` to delegate to the provider's
+static `ir()` instead. Include `<nil/sm/uml.hpp>` for the renderers.
 
