@@ -7,7 +7,7 @@
 | [leaf_event_unhandled](01_sm_basic_dispatch.cpp#L115) | Leaf has no events list; incoming event is silently ignored |
 | [leaf_event_terminate](01_sm_basic_dispatch.cpp#L130) | Leaf returns `Terminate`; region is nulled immediately, SM destructor has nothing to clean up |
 | [leaf_event_emit](01_sm_basic_dispatch.cpp#L146) | Leaf returns `Emit<e2>`; emitted event enqueued and drained; state stays alive |
-| [leaf_event_transit](01_sm_basic_dispatch.cpp#L163) | Leaf returns `Transit<T>`; source exits and target is created in place |
+| [leaf_event_transit](01_sm_basic_dispatch.cpp#L163) | Leaf returns `TransitTo<T>`; source exits and target is created in place |
 | [state_ignores_unregistered_event](01_sm_basic_dispatch.cpp#L183) | State has an events list that doesn't include `e2`; `e2` is silently dropped |
 | [parent_handles_forwarded_event](02_sm_parent_bubbling.cpp#L8) | Child forwards → parent handles and discards (stops bubbling) |
 | [parent_forwards_forwarded_event](02_sm_parent_bubbling.cpp#L52) | Child forwards → parent forwards → grandparent handles (3-level bubble chain) |
@@ -19,7 +19,7 @@
 | [parent_terminates_after_child_forward](02_sm_parent_bubbling.cpp#L324) | Child forwards → parent terminates itself; both destroyed during event processing |
 | [parent_emits_after_child_forward](02_sm_parent_bubbling.cpp#L369) | Child forwards → parent emits `e2`; emitted event dispatched in next SM cycle |
 | [parent_handles_event_unregistered_in_child](02_sm_parent_bubbling.cpp#L420) | Child has events for `e2` only; `e1` treated as unhandled → parent handles directly |
-| [child_transit_does_not_bubble_to_parent](02_sm_parent_bubbling.cpp#L465) | Child transits (`Transit ≠ Forward`); parent `on_event` never called |
+| [child_transit_does_not_bubble_to_parent](02_sm_parent_bubbling.cpp#L465) | Child transits (`TransitTo ≠ Forward`); parent `on_event` never called |
 | [child_transition_applies_when_parent_no_transition](03_sm_composite_single_region.cpp#L8) | Child transits on first event; after transition, child forwards on second event and parent handles |
 | [composite_receives_child_forward](03_sm_composite_single_region.cpp#L71) | Three-level chain: leaf → mid → root, all via `Forward` |
 | [parent_transition_after_child_forward](03_sm_composite_single_region.cpp#L129) | Child forwards → parent transits to `ParentTarget`; child destroyed along with parent |
@@ -36,7 +36,7 @@
 | [self_transition_reconstructs_state](06_sm_transition_semantics.cpp#L33) | State transits to itself; old instance exits and new instance enters |
 | [transition_to_sibling_state](06_sm_transition_semantics.cpp#L62) | State transits to a sibling; source exits, target created, responds to next event |
 | [transition_to_parents_child](06_sm_transition_semantics.cpp#L118) | Child of mid transits to another child of mid; mid stays alive |
-| [transition_destroys_previous_state](06_sm_transition_semantics.cpp#L183) | Transit destroys source and creates target; target exits on SM destroy |
+| [transition_destroys_previous_state](06_sm_transition_semantics.cpp#L183) | TransitTo destroys source and creates target; target exits on SM destroy |
 | [multiple_consecutive_transitions](06_sm_transition_semantics.cpp#L220) | Three sequential transitions; each state exits before the next is created |
 | [transition_after_forwarded_event](06_sm_transition_semantics.cpp#L287) | Child forwards → parent transits; transit applied after bubbling completes |
 | [transition_after_discarded_event](06_sm_transition_semantics.cpp#L366) | Child discards → parent still transits (parent handles its own event independently) |
@@ -73,7 +73,7 @@
 | [terminate_stops_region](12_sm_edge_cases.cpp#L369) | State terminates; region is nulled and subsequent events are not dispatched to it |
 | [terminate_in_child_stops_only_child](12_sm_edge_cases.cpp#L393) | Child terminates in a multi-region parent; only the child's region is nulled, others continue |
 | [static_checks_compile](13_sm_compile_time_diagnostics.cpp#L112) | `static_assert` checks for missing handler, bad return types, and overload legality |
-| [orthogonal_two_region_reaction_matrix](14_sm_regression_matrix.cpp#L191) | Matrix of all Forward/Discard/Unhandled/Transit combinations across two orthogonal regions |
+| [orthogonal_two_region_reaction_matrix](14_sm_regression_matrix.cpp#L191) | Matrix of all Forward/Discard/Unhandled/TransitTo combinations across two orthogonal regions |
 | [state_constructs_with_parent_and_context_args](15_sm_state_construction_contexts.cpp#L124) | State constructor receives parent pointer and one state context |
 | [state_can_still_default_construct_when_it_expects_nothing](15_sm_state_construction_contexts.cpp#L144) | State with default constructor works even when contexts are present in the SM |
 | [state_constructs_with_parent_and_two_contexts](15_sm_state_construction_contexts.cpp#L161) | State constructor receives parent pointer and two state contexts |
@@ -81,7 +81,7 @@
 | [triggers_only_when_all_regions_terminated](16_sm_on_regions_complete.cpp#L217) | `on_regions_finalized` fires only after every region has terminated |
 | [explicit_target_reaches_nested_state_only](16_sm_on_regions_complete.cpp#L250) | `EvRegionsFinalized` targets the direct owner state; nested ancestors are not notified |
 | [on_regions_finalized_can_emit_follow_up_event](16_sm_on_regions_complete.cpp#L268) | `on_regions_finalized` returns `Emit`; follow-up event dispatched in next SM cycle |
-| [on_regions_finalized_can_transit_targeted_state](16_sm_on_regions_complete.cpp#L280) | `on_regions_finalized` returns `Transit`; state transitions when all regions are done |
+| [on_regions_finalized_can_transit_targeted_state](16_sm_on_regions_complete.cpp#L280) | `on_regions_finalized` returns `TransitTo`; state transitions when all regions are done |
 | [on_enter_can_publish_event](17_sm_on_enter.cpp#L52) | `on_enter` returns `Emit`; emitted event flushed at end of construction, before first `post()` |
 | [on_enter_noop_does_not_emit](17_sm_on_enter.cpp#L69) | `on_enter` returns `NOOP`; no event enqueued, state lifecycle is normal |
 | [parent_enters_before_child](17_sm_on_enter.cpp#L94) | Parent `on_enter` fires before child `on_enter` (construction order guarantee) |
@@ -97,7 +97,7 @@
 | [capture_discards_without_dispatching_to_region](22_sm_capture_handling.cpp#L8) | `on_capture` returns `Discard`; region's `on_event` never runs |
 | [undeclared_capture_falls_through_to_region](22_sm_capture_handling.cpp#L52) | Event not in `captures` list skips `on_capture`; region handles it normally |
 | [capture_forward_dispatches_to_region_instead_of_bubbling](22_sm_capture_handling.cpp#L96) | `on_capture` returns `Forward`; propagates down to region instead of bubbling up (opposite of `on_event` `Forward`) |
-| [capture_transit_replaces_state_without_region_reacting](22_sm_capture_handling.cpp#L140) | `on_capture` returns `Transit`; whole state replaced directly, region's `on_event` never runs |
+| [capture_transit_replaces_state_without_region_reacting](22_sm_capture_handling.cpp#L140) | `on_capture` returns `TransitTo`; whole state replaced directly, region's `on_event` never runs |
 | [parent_capture_preempts_nested_child_capture](22_sm_capture_handling.cpp#L190) | Parent's `on_capture` handles the event before the nested child's own `on_capture` is ever checked |
 | [on_enter_intercepted_enter_observer_called](20_sm_coalesce_api.cpp#L170) | Partial API defines only `on_enter`; entry observer fires, make and on_event fall through to defaults |
 | [on_event_intercepted_event_observer_called](20_sm_coalesce_api.cpp#L183) | Partial API defines only `on_event`; event observer fires per dispatch, all other hooks use defaults |

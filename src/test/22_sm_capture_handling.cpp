@@ -160,7 +160,7 @@ TEST(sm_feature_capture_handling, capture_transit_replaces_state_without_region_
 
         static auto on_capture(const e1& /* event */)
         {
-            return Transit<Target>{};
+            return TransitTo<Target>{};
         }
     };
 

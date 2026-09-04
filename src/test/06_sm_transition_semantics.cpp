@@ -18,11 +18,11 @@ namespace
     {
         using events = nil::xalt::tlist<e_self>;
 
-        static auto on_event(const e_self& ev) -> std::variant<Discard, Transit<SelfTransitState>>
+        static auto on_event(const e_self& ev) -> std::variant<Discard, TransitTo<SelfTransitState>>
         {
             if (ev.transit)
             {
-                return Transit<SelfTransitState>{};
+                return TransitTo<SelfTransitState>{};
             }
             return Discard{};
         }
@@ -77,7 +77,7 @@ TEST(sm_feature_transition_semantics, transition_to_sibling_state)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<Sibling>{};
+            return TransitTo<Sibling>{};
         }
     };
 
@@ -133,7 +133,7 @@ TEST(sm_feature_transition_semantics, transition_to_parents_child)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<SiblingChild>{};
+            return TransitTo<SiblingChild>{};
         }
     };
 
@@ -193,7 +193,7 @@ TEST(sm_feature_transition_semantics, transition_destroys_previous_state)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<Target>{};
+            return TransitTo<Target>{};
         }
     };
 
@@ -235,7 +235,7 @@ TEST(sm_feature_transition_semantics, multiple_consecutive_transitions)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<C>{};
+            return TransitTo<C>{};
         }
     };
 
@@ -245,7 +245,7 @@ TEST(sm_feature_transition_semantics, multiple_consecutive_transitions)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<B>{};
+            return TransitTo<B>{};
         }
     };
 
@@ -306,13 +306,13 @@ TEST(sm_feature_transition_semantics, transition_after_forwarded_event)
     {
         using events = nil::xalt::tlist<e_fwd_or_transit>;
 
-        static auto on_event(const e_fwd_or_transit& ev) -> std::variant<Forward, Transit<Target>>
+        static auto on_event(const e_fwd_or_transit& ev) -> std::variant<Forward, TransitTo<Target>>
         {
             if (ev.forward)
             {
                 return Forward{};
             }
-            return Transit<Target>{};
+            return TransitTo<Target>{};
         }
     };
 
@@ -386,13 +386,13 @@ TEST(sm_feature_transition_semantics, transition_after_discarded_event)
         using events = nil::xalt::tlist<e_discard_or_transit>;
 
         static auto on_event(const e_discard_or_transit& ev
-        ) -> std::variant<Discard, Transit<Target>>
+        ) -> std::variant<Discard, TransitTo<Target>>
         {
             if (ev.discard)
             {
                 return Discard{};
             }
-            return Transit<Target>{};
+            return TransitTo<Target>{};
         }
     };
 

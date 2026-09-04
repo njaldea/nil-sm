@@ -75,7 +75,7 @@ namespace
 
         static auto on_event(const e1& /* event */)
         {
-            return nil::sm::Transit<transit_target_no_default_ctor>();
+            return nil::sm::TransitTo<transit_target_no_default_ctor>();
         }
     };
 
@@ -101,7 +101,7 @@ namespace
 
     static_assert(!std::is_default_constructible_v<no_default_ctor>);
 
-    // Transit target validity is not diagnosed by has_on_event; it is validated later in template
+    // TransitTo target validity is not diagnosed by has_on_event; it is validated later in template
     // instantiation paths.
     static_assert(nil::sm::concepts::has_on_event<transit_to_invalid_target, e1>);
 

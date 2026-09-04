@@ -1,23 +1,13 @@
 # Diagram Formatters
 
-The library can render a state machine's structure to several diagram formats
-directly from its C++ types, with no separate schema or code generation step.
-
-## Enabling it
-
-Formatters live in a separate header from the core state machine so that
-projects which don't need diagrams don't pay for it:
+Include the formatter header only when diagrams are needed:
 
 ```cpp
-#include <nil/sm/uml.hpp> // pulls in dot, mermaid, puml, scxml, xstate
+#include <nil/sm/uml.hpp>
 ```
 
-`<nil/sm.hpp>` alone does **not** include this header.
-
-## Usage
-
-Each format is a small streamable wrapper keyed on your `SM<...>` type. Stream
-it to any `std::ostream`:
+The formatters build a diagram from the same compile-time state graph used by
+the machine. No machine instance is required:
 
 ```cpp
 using MySM = nil::sm::DefaultSM<Root>;
@@ -29,76 +19,24 @@ std::cout << nil::sm::scxml<MySM>();
 std::cout << nil::sm::xstate<MySM>();
 ```
 
-No instance of the state machine is needed — the diagram is derived purely
-from the types (`API`, the root state, and everything reachable from it via
-`regions`, `Transit<...>`, and `on_regions_finalized`). The internal
-`EvRegionsFinalized` notification is not a user event in `events_t`; the
-formatter represents it through the regions-finalized hook.
+Supported output:
 
-See [sandbox/uml.cpp](../sandbox/uml.cpp) for a runnable example covering
-hierarchical states, orthogonal regions, transitions, parent bubbling, defer,
-and event capture; run it with:
+| Format | Wrapper |
+| --- | --- |
+| PlantUML | `nil::sm::puml<SM>` |
+| Mermaid | `nil::sm::mermaid<SM>` |
+| Graphviz | `nil::sm::dot<SM>` |
+| SCXML | `nil::sm::scxml<SM>` |
+| XState | `nil::sm::xstate<SM>` |
 
-```sh
-.build/bin/sandbox_uml puml
-.build/bin/sandbox_uml mermaid
-.build/bin/sandbox_uml dot
-.build/bin/sandbox_uml scxml
-.build/bin/sandbox_uml xstate
-```
+The graph includes states reachable through `regions`, `TransitTo`, and
+termination. Captures and lifecycle actions are represented in the output.
 
-## Supported formats
+## Barriers
 
-| Format | Function | Notes |
-|---|---|---|
-| PlantUML | `nil::sm::puml<SM>()` | `@startuml` state diagram, orthogonal regions rendered as `--`-separated compartments. |
-| Mermaid | `nil::sm::mermaid<SM>()` | `stateDiagram-v2`, orthogonal regions rendered the same way as PlantUML. |
-| Graphviz | `nil::sm::dot<SM>()` | `digraph`, composite states become cluster subgraphs; regions get their own initial/termination pseudo-nodes. |
-| SCXML | `nil::sm::scxml<SM>()` | Orthogonal regions become `<parallel>` with one `<state>` wrapper per region so each region's completion has an unambiguous final id. |
-| XState | `nil::sm::xstate<SM>()` | JSON matching XState v5 machine config; orthogonal regions become `"type": "parallel"` with `"region_N"` keys. |
+A barrier provider must expose `ir()` when its graph is rendered. The provider
+can be declared with `NIL_SM_BARRIER_DECLARE` and defined with
+`NIL_SM_BARRIER_DEFINE`; see [Barriers](07_BARRIER.md).
 
-## What gets rendered
-
-- **States**: every state reachable from the root, transitively, through
-  `regions`, `Transit<Target>` (from `on_event`/`on_capture`/
-  `on_regions_finalized`), and the implicit "final" (`Fin`) target of
-  `Terminate`.
-- **Initial pseudostate**: each region's first reachable state is flagged as
-  its initial state; formatters render this as `[*] --> state`, an
-  `initial="..."` attribute, etc.
-- **Transitions**: one per `on_event`/`on_capture` handler whose result can
-  produce `Transit`, `Terminate`, `Emit`, or `Defer`. `Terminate` targets the
-  region's implicit final pseudostate (`[*]`).
-- **Actions**: `on_enter`, `on_exit`, and `on_regions_finalized` are annotated
-  on the state if they can produce an `Emit`.
-- **Regions completion**: `on_regions_finalized()` is rendered as the
-  `[**]` completion trigger. `EvRegionsFinalized` is an internal targeted
-  notification and is not rendered as a normal event or capture.
-- **Captures**: rendered the same as events, tagged so they're
-  distinguishable from normal `on_event` transitions (`[c]` in PlantUML/
-  Mermaid/Graphviz).
-
-## How it works internally
-
-All five formatters share one format-neutral intermediate representation
-(`nil::sm::ir::Model` / `nil::sm::ir::Node`, in
-[ir.hpp](../src/publish/nil/sm/ir.hpp)), built once by
-`nil::sm::ir::build<API, Root>()` ([ir.hpp](../src/publish/nil/sm/ir.hpp)) by
-walking the same compile-time reachability graph the runtime dispatcher uses.
-Each formatter (`dot.hpp`, `mermaid.hpp`, `puml.hpp`, `scxml.hpp`,
-`xstate.hpp`) only implements `render(std::ostream&, const ir::Model&)` — to
-add a new output format, build against the IR rather than the state machine's
-templates directly.
-
-State ids in the output (e.g. `ST_1a2b3c4d5e6f7890`) are a stable hash of each
-state's position in the hierarchy (ancestor region/state indices) plus its
-name, not its address — safe to diff across runs and builds.
-
-## Barrier states
-
-`nil::sm::barrier::State` (see [Barrier](07_BARRIER.md)) is opaque by default:
-its child's concrete types live in a separate translation unit, so `ir::build`
-can't traverse them. `barrier.hpp` specializes the IR builder for
-`barrier::State<FinalizeAction, Provider>` to delegate to the provider's
-static `ir()` instead. Include `<nil/sm/uml.hpp>` for the renderers.
-
+For runnable examples, see the retained sandbox targets:
+`sandbox_toll_uml` and `sandbox_toll_barrier_uml`.

@@ -75,7 +75,7 @@ public:
 
     static auto on_event(const e1& /* event */)
     {
-        return Transit<LeafStateDiscard>{};
+        return TransitTo<LeafStateDiscard>{};
     }
 };
 
@@ -180,7 +180,7 @@ TEST(sm_feature_basic_dispatch, leaf_event_transit)
     TestSM<LeafStateTransit> sm(nullptr, &mock);
 
     {
-        // Returns Transit<LeafStateDiscard> → source exits, target created
+        // Returns TransitTo<LeafStateDiscard> → source exits, target created
         EXPECT_CALL(mock, on_event_called(type_id<LeafStateTransit>, type_id<e1>)).Times(1);
         EXPECT_CALL(mock, on_exit_called(type_id<LeafStateTransit>)).Times(1);
         EXPECT_CALL(mock, on_make_called(type_id<LeafStateDiscard>)).Times(1);

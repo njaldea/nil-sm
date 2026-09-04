@@ -107,7 +107,7 @@ namespace
         auto on_event(const e1& event) const
         {
             obs->on_source_event(I, event);
-            return Transit<region_target<I>>();
+            return TransitTo<region_target<I>>();
         }
     };
 

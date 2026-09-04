@@ -27,8 +27,6 @@ namespace toll
 
         bool finished = false;
 
-        // Only used by the versions that run a job as its own type-erased machine.
-        bool job_done = false;
         struct trace_context* trace = nullptr;
 
         int fare_for(int klass) const
@@ -67,6 +65,21 @@ namespace toll
         std::size_t exited = 0;
         std::size_t events = 0;
         std::size_t max_depth = 0;
+
+        static void print_path(std::ostream& out, const nil::sm::Metadata* state_metadata)
+        {
+            if (state_metadata->parent != nullptr)
+            {
+                print_path(out, state_metadata->parent);
+                out << " --> ";
+            }
+
+            out << state_metadata->name;
+            if (state_metadata->parent != nullptr && state_metadata->parent->subregions > 1)
+            {
+                out << '[' << state_metadata->region << ']';
+            }
+        }
 
         void print(std::ostream& out) const
         {
@@ -150,7 +163,7 @@ namespace toll::policy
 namespace toll::generic
 {
     // Every generic state is parameterized on the *result* type of its transitions
-    // (Transit<X>, Terminate, Discard, ...) so `return Next();` composes bottom-up.
+    // (TransitTo<X>, Terminate, Discard, ...) so `return Next();` composes bottom-up.
 
     template <typename Tag, typename Ok, typename Fail>
     struct step final
@@ -480,30 +493,6 @@ namespace toll::generic
         }
     };
 
-    // One-shot top state: runs its region once and reports completion through the context.
-    // Used by the versions where a job is compiled into its own translation unit.
-    template <typename Inner>
-    struct once final
-    {
-        static constexpr std::string_view name = Inner::name;
-
-        using regions = nil::xalt::tlist<Inner>;
-
-        booth_context* ctx = nullptr;
-
-        template <typename Parent>
-        explicit once(Parent* /* parent */, booth_context* context)
-            : ctx(context)
-        {
-        }
-
-        auto on_regions_finalized() const
-        {
-            ctx->job_done = true;
-            return nil::sm::Terminate();
-        }
-    };
-
     // Top-level shell: owns the shutdown capture and restarts its region after every job.
     template <typename Inner>
     struct session final
@@ -531,7 +520,7 @@ namespace toll::generic
         auto on_regions_finalized() const
         {
             ctx->log(name, "job done, back to idle");
-            return nil::sm::Transit<session<Inner>>();
+            return nil::sm::TransitTo<session<Inner>>();
         }
     };
 }
@@ -556,6 +545,11 @@ namespace toll
             {
                 api_contexts->constructed++;
                 api_contexts->max_depth = std::max(api_contexts->max_depth, metadata.depth);
+                if (metadata.subregions == 0)
+                {
+                    trace_context::print_path(std::cout, &metadata);
+                    std::cout << '\n';
+                }
             }
             return nil::sm::api::Default<booth_context, trace_context>::type<T>::make(
                 parent,

@@ -61,7 +61,7 @@ namespace
 
         static auto on_event(const e_go& /* event */)
         {
-            return Transit<SaveReceiver>{};
+            return TransitTo<SaveReceiver>{};
         }
     };
 
@@ -109,7 +109,7 @@ namespace
 
         static auto on_event(const e_go& /* event */)
         {
-            return Transit<DataReceiver>{};
+            return TransitTo<DataReceiver>{};
         }
     };
 
@@ -152,7 +152,7 @@ namespace
 
         static auto on_event(const e_go& /* event */)
         {
-            return Transit<DataReceiver2>{};
+            return TransitTo<DataReceiver2>{};
         }
     };
 

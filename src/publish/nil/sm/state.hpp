@@ -47,36 +47,47 @@ namespace nil::sm
         template <typename... R, std::size_t... I>
         static std::array<detail::Region, regions_t::size> init_regions(
             [[maybe_unused]] self_t* self,
-            [[maybe_unused]] detail::Runtime* runtime,
+            [[maybe_unused]] detail::Queues* queues,
+            [[maybe_unused]] detail::Contexts* contexts,
             nil::xalt::tlist<R...> /* regions */,
             std::index_sequence<I...> /* region indices */
         )
         {
+            on_enter(self->current_state, queues, contexts);
+
             [[maybe_unused]] const auto parent = std::addressof(self->current_state);
             [[maybe_unused]] const auto metadata = std::addressof(self->metadata);
             return std::array<detail::Region, regions_t::size>{detail::Region(
                 typename detail::Region::template tag<API, R>{},
                 I,
                 parent,
-                runtime,
+                queues,
+                contexts,
                 metadata
             )...};
         }
 
     public:
         template <typename Parent>
-        explicit State(Parent* init_parent, detail::Runtime* init_runtime, metadata_t init_metadata)
+        explicit State(
+            Parent* init_parent,
+            detail::Queues* init_queues,
+            detail::Contexts* init_contexts,
+            metadata_t init_metadata
+        )
             : detail::IState(init_metadata)
             , current_state(api_t::make(
                   init_parent,
-                  static_cast<state_context_t*>(init_runtime->contexts.state),
-                  static_cast<api_context_t*>(init_runtime->contexts.api),
+                  static_cast<state_context_t*>(init_contexts->state),
+                  static_cast<api_context_t*>(init_contexts->api),
                   this->metadata
               ))
-            , runtime(on_enter(current_state, init_runtime))
+            , queues(init_queues)
+            , contexts(init_contexts)
             , regions(init_regions(
                   this,
-                  runtime,
+                  queues,
+                  contexts,
                   regions_t(),
                   std::make_index_sequence<regions_t::size>()
               ))
@@ -127,7 +138,7 @@ namespace nil::sm
             auto capture_result = capture_dispatch_t::dispatch(
                 e,
                 current_state,
-                static_cast<api_context_t*>(runtime->contexts.api)
+                static_cast<api_context_t*>(contexts->api)
             );
             if (!std::holds_alternative<Unhandled>(capture_result)
                 && !std::holds_alternative<Forward>(capture_result))
@@ -142,7 +153,7 @@ namespace nil::sm
                 auto this_result = event_dispatch_t::dispatch(
                     e,
                     current_state,
-                    static_cast<api_context_t*>(runtime->contexts.api)
+                    static_cast<api_context_t*>(contexts->api)
                 );
                 if (std::holds_alternative<Unhandled>(this_result))
                 {
@@ -156,7 +167,7 @@ namespace nil::sm
                     return Unhandled();
                 }
 
-                if (!std::holds_alternative<detail::Transit>(this_result))
+                if (!std::holds_alternative<detail::TransitTo>(this_result))
                 {
                     commit_region_results(e, sub_state.results);
                     check_finalize();
@@ -164,7 +175,7 @@ namespace nil::sm
 
                 if (std::holds_alternative<detail::Event>(this_result))
                 {
-                    runtime->queues.push_emit(std::get<detail::Event>(this_result));
+                    queues->push_emit(std::get<detail::Event>(this_result));
                     return Discard();
                 }
 
@@ -178,33 +189,36 @@ namespace nil::sm
 
     private:
         state_t current_state;
-        detail::Runtime* runtime;
+        detail::Queues* queues;
+        detail::Contexts* contexts;
         std::array<detail::Region, regions_t::size> regions;
         bool finalized = false;
 
-        static detail::Runtime* on_enter(state_t& state, detail::Runtime* init_runtime)
+        static void on_enter(
+            state_t& state,
+            detail::Queues* init_queues,
+            detail::Contexts* init_contexts
+        )
         {
             const auto on_enter_result = detail::to_runtime_action_as<detail::on_enter_t>(
-                api_t::on_enter(state, static_cast<api_context_t*>(init_runtime->contexts.api))
+                api_t::on_enter(state, static_cast<api_context_t*>(init_contexts->api))
             );
 
             if (std::holds_alternative<detail::Event>(on_enter_result))
             {
-                init_runtime->queues.push_emit(std::get<detail::Event>(on_enter_result));
+                init_queues->push_emit(std::get<detail::Event>(on_enter_result));
             }
-
-            return init_runtime;
         }
 
         void on_exit()
         {
             const auto on_exit_result = detail::to_runtime_action_as<detail::on_exit_t>(
-                api_t::on_exit(current_state, static_cast<api_context_t*>(runtime->contexts.api))
+                api_t::on_exit(current_state, static_cast<api_context_t*>(contexts->api))
             );
 
             if (std::holds_alternative<detail::Event>(on_exit_result))
             {
-                runtime->queues.push_emit(std::get<detail::Event>(on_exit_result));
+                queues->push_emit(std::get<detail::Event>(on_exit_result));
             }
         }
 
@@ -213,7 +227,7 @@ namespace nil::sm
             return detail::to_runtime_action_as<detail::on_regions_finalized_t>(
                 api_t::on_regions_finalized(
                     current_state,
-                    static_cast<api_context_t*>(runtime->contexts.api)
+                    static_cast<api_context_t*>(contexts->api)
                 )
             );
         }
@@ -258,7 +272,7 @@ namespace nil::sm
                 ))
             {
                 auto r = Emit<detail::EvRegionsFinalized>(std::addressof(current_state));
-                runtime->queues.push_emit(detail::Event(std::move(r)));
+                queues->push_emit(detail::Event(std::move(r)));
             }
         }
 
@@ -333,12 +347,19 @@ namespace nil::sm
 
     public:
         explicit SM(
-            state_context_t* state_contexts,
-            api_context_t* api_contexts,
+            state_context_t* init_state_contexts = nullptr,
+            api_context_t* init_api_contexts = nullptr,
             const Metadata* init_parent_metadata = nullptr
         )
-            : runtime{.api_id = nil::xalt::type_id<API<Root>>, .queues = {}, .contexts = {.state = state_contexts, .api = api_contexts}}
-            , region(detail::Region::tag<API, T>{}, 0, &root, &runtime, init_parent_metadata)
+            : contexts{.state = init_state_contexts, .api = init_api_contexts}
+            , region(
+                  detail::Region::tag<API, T>{},
+                  0,
+                  &root,
+                  &queues,
+                  &contexts,
+                  init_parent_metadata
+              )
         {
             flush();
         }
@@ -358,7 +379,8 @@ namespace nil::sm
 
     private:
         Root root;
-        detail::Runtime runtime;
+        detail::Queues queues;
+        detail::Contexts contexts;
         detail::Region region;
 
         detail::on_event_t dispatch(const detail::Event& event)
@@ -370,7 +392,7 @@ namespace nil::sm
 
         void flush()
         {
-            runtime.queues.flush([this](const detail::Event& event) { dispatch(event); });
+            queues.flush([this](const detail::Event& event) { dispatch(event); });
         }
 
         detail::on_event_t post_impl(detail::Event event) override

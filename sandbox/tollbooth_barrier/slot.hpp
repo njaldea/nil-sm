@@ -45,22 +45,22 @@ namespace toll::bslot
 
         static auto on_event(const ev::select_startup& /* event */)
         {
-            return nil::sm::Transit<startup>();
+            return nil::sm::TransitTo<startup>();
         }
 
         static auto on_event(const ev::select_collection& /* event */)
         {
-            return nil::sm::Transit<collection>();
+            return nil::sm::TransitTo<collection>();
         }
 
         static auto on_event(const ev::select_shift& /* event */)
         {
-            return nil::sm::Transit<shift>();
+            return nil::sm::TransitTo<shift>();
         }
 
         static auto on_event(const ev::select_maintenance& /* event */)
         {
-            return nil::sm::Transit<maintenance>();
+            return nil::sm::TransitTo<maintenance>();
         }
     };
 

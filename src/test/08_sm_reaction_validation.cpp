@@ -37,7 +37,7 @@ namespace
     {
         static auto on_event(const e1& /* event */)
         {
-            return nil::sm::Transit<target>();
+            return nil::sm::TransitTo<target>();
         }
     };
 
@@ -53,7 +53,7 @@ namespace
     struct returns_variant_dt
     {
         static auto on_event(const e1& /* event */)
-            -> std::variant<nil::sm::Discard, nil::sm::Transit<target>>
+            -> std::variant<nil::sm::Discard, nil::sm::TransitTo<target>>
         {
             return nil::sm::Discard{};
         }

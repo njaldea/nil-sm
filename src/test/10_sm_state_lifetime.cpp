@@ -51,7 +51,7 @@ TEST(sm_feature_state_lifetime, transition_destroys_previous_and_creates_new_ins
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<Target>{};
+            return TransitTo<Target>{};
         }
     };
 

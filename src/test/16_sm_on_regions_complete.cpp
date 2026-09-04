@@ -188,7 +188,7 @@ namespace
 
         static auto on_regions_finalized()
         {
-            return Transit<transit_target>{};
+            return TransitTo<transit_target>{};
         }
 
         static auto on_event(const e2& /* event */)

@@ -31,7 +31,7 @@ namespace demo::states
         static auto on_event(const demo::events::e1& /* ev */)
         {
             std::cout << "sub1<" << N << "> - e1" << std::endl;
-            return nil::sm::Transit<sub2<N + 1, FlavorTag>>();
+            return nil::sm::TransitTo<sub2<N + 1, FlavorTag>>();
         }
     };
 
@@ -111,13 +111,18 @@ struct SandboxAPI
 
         out << " --> ";
         out << metadata->name;
+
+        if (metadata->parent->subregions > 1)
+        {
+            out << '[' << metadata->region << ']';
+        }
     }
 
     template <typename Parent>
     static T make(
         Parent* parent,
         void* state_contexts,
-        SandboxAPIContext* /* api_contexts */,
+        api_context_t* /* api_contexts */,
         const nil::sm::Metadata& metadata
     )
     {

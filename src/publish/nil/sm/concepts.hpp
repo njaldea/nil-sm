@@ -11,12 +11,13 @@
 namespace nil::sm::concepts
 {
     template <typename T>
-    concept is_allowed_to_use_for_on_event         //
-        = std::is_same_v<T, Terminate>             //
-        || std::is_same_v<T, Forward>              //
-        || std::is_same_v<T, Defer>                //
-        || std::is_same_v<T, Discard>              //
-        || nil::xalt::is_of_template_v<T, Transit> //
+    concept is_allowed_to_use_for_on_event           //
+        = std::is_same_v<T, Terminate>               //
+        || std::is_same_v<T, Forward>                //
+        || std::is_same_v<T, Defer>                  //
+        || std::is_same_v<T, Discard>                //
+        || nil::xalt::is_of_template_v<T, TransitTo> //
+        || nil::xalt::is_of_template_v<T, DeferTo>   //
         || nil::xalt::is_of_template_v<T, Emit>;
 
     template <typename T>
@@ -72,7 +73,7 @@ namespace nil::sm::concepts
     concept is_allowed_to_use_for_on_regions_finalized //
         = std::is_same_v<T, NOOP>                      //
         || std::is_same_v<T, Terminate>                //
-        || nil::xalt::is_of_template_v<T, Transit>     //
+        || nil::xalt::is_of_template_v<T, TransitTo>   //
         || nil::xalt::is_of_template_v<T, Emit>;
 
     template <typename T>

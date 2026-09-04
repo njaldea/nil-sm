@@ -48,7 +48,7 @@ namespace
 
         static auto on_event(const event& /* event */)
         {
-            return nil::sm::Transit<ab_b>{};
+            return nil::sm::TransitTo<ab_b>{};
         }
     };
 
@@ -84,7 +84,7 @@ namespace
 
         static auto on_event(const event& /* event */)
         {
-            return nil::sm::Transit<cycle_b>{};
+            return nil::sm::TransitTo<cycle_b>{};
         }
     };
 
@@ -94,7 +94,7 @@ namespace
 
         static auto on_event(const event& /* event */)
         {
-            return nil::sm::Transit<cycle_c>{};
+            return nil::sm::TransitTo<cycle_c>{};
         }
     };
 
@@ -104,7 +104,7 @@ namespace
 
         static auto on_event(const event& /* event */)
         {
-            return nil::sm::Transit<cycle_a>{};
+            return nil::sm::TransitTo<cycle_a>{};
         }
     };
 

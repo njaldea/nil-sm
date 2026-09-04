@@ -23,7 +23,7 @@ TEST(sm_feature_composite_single_region, child_transition_applies_when_parent_no
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<Target>{};
+            return TransitTo<Target>{};
         }
     };
 
@@ -150,7 +150,7 @@ TEST(sm_feature_composite_single_region, parent_transition_after_child_forward)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<ParentTarget>{};
+            return TransitTo<ParentTarget>{};
         }
     };
 

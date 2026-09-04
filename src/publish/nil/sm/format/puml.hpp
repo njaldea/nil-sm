@@ -92,7 +92,7 @@ namespace nil::sm::format::puml
             return;
         }
 
-        const auto* stereotype = node.display_name == "[barrier]" ? " <<barrier>>" : "";
+        const auto* stereotype = node.display_name == "[/]" ? " <<barrier>>" : "";
 
         if (!node.regions.empty())
         {

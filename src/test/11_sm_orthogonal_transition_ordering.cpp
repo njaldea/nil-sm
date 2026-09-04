@@ -18,7 +18,7 @@ TEST(sm_feature_orthogonal_transition_ordering, child_transition_plus_parent_dis
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<R1Target>{};
+            return TransitTo<R1Target>{};
         }
     };
 
@@ -85,7 +85,7 @@ TEST(sm_feature_orthogonal_transition_ordering, child_transition_plus_parent_for
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<R1Target>{};
+            return TransitTo<R1Target>{};
         }
     };
 
@@ -174,7 +174,7 @@ TEST(sm_feature_orthogonal_transition_ordering, child_transition_plus_parent_tra
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<R1Target>{};
+            return TransitTo<R1Target>{};
         }
     };
 
@@ -195,7 +195,7 @@ TEST(sm_feature_orthogonal_transition_ordering, child_transition_plus_parent_tra
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<ParentTarget>{};
+            return TransitTo<ParentTarget>{};
         }
     };
 
@@ -256,7 +256,7 @@ TEST(sm_feature_orthogonal_transition_ordering, multiple_child_transitions)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<R1Target>{};
+            return TransitTo<R1Target>{};
         }
     };
 
@@ -266,7 +266,7 @@ TEST(sm_feature_orthogonal_transition_ordering, multiple_child_transitions)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<R2Target>{};
+            return TransitTo<R2Target>{};
         }
     };
 
@@ -330,7 +330,7 @@ TEST(sm_feature_orthogonal_transition_ordering, nested_child_transitions)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<LeafTarget>{};
+            return TransitTo<LeafTarget>{};
         }
     };
 
@@ -420,7 +420,7 @@ TEST(sm_feature_orthogonal_transition_ordering, sibling_transitions_independent)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<R1Target>{};
+            return TransitTo<R1Target>{};
         }
     };
 
@@ -430,7 +430,7 @@ TEST(sm_feature_orthogonal_transition_ordering, sibling_transitions_independent)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<R2Target>{};
+            return TransitTo<R2Target>{};
         }
     };
 
@@ -499,7 +499,7 @@ TEST(sm_feature_orthogonal_transition_ordering, parent_transition_cancels_pendin
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<T1Target>{};
+            return TransitTo<T1Target>{};
         }
     };
 
@@ -509,7 +509,7 @@ TEST(sm_feature_orthogonal_transition_ordering, parent_transition_cancels_pendin
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<T2Target>{};
+            return TransitTo<T2Target>{};
         }
     };
 
@@ -530,7 +530,7 @@ TEST(sm_feature_orthogonal_transition_ordering, parent_transition_cancels_pendin
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<ParentTarget>{};
+            return TransitTo<ParentTarget>{};
         }
     };
 

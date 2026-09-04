@@ -13,7 +13,7 @@ using nil::sm::Emit;
 using nil::sm::Forward;
 using nil::sm::NOOP;
 using nil::sm::Terminate;
-using nil::sm::Transit;
+using nil::sm::TransitTo;
 using nil::xalt::tlist;
 using nil::xalt::type_id;
 
@@ -56,7 +56,8 @@ template <typename State, typename... StateContexts>
 struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
 {
     using state_t = State;
-    using state_context_t = std::tuple<StateContexts*...>;
+    using state_context_t
+        = std::conditional_t<sizeof...(StateContexts) == 0, void, std::tuple<StateContexts*...>*>;
     using api_context_t = testing::StrictMock<APIMock>;
     using api_t = nil::sm::api::Default<state_context_t, api_context_t>::template type<State>;
     using regions_t = nil::xalt::coalesce_t<State, nil::sm::detail::regions_tag>;

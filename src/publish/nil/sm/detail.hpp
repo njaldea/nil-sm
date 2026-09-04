@@ -31,18 +31,10 @@ namespace nil::sm::detail
     NIL_XALT_COALESCE_TAG(events, nil::xalt::tlist<>);
     NIL_XALT_COALESCE_TAG(captures, nil::xalt::tlist<>);
 
-    using on_event_t = std::variant<
-        Terminate,
-        Forward,
-        Discard,
-        Unhandled,
-        Defer,
-        Transit,
-        Event //
-        >;
+    using on_event_t = std::variant<Forward, Discard, Unhandled, Defer, TransitTo, Event>;
     using on_enter_t = std::variant<Unhandled, NOOP, Event>;
     using on_exit_t = std::variant<Unhandled, NOOP, Event>;
-    using on_regions_finalized_t = std::variant<Unhandled, NOOP, Terminate, Transit, Event>;
+    using on_regions_finalized_t = std::variant<Unhandled, NOOP, TransitTo, Event>;
 
     template <typename T>
     Metadata make_metadata(
@@ -146,24 +138,16 @@ namespace nil::sm::detail
 
     struct Contexts
     {
-        void* state;
-        void* api;
-    };
-
-    // Owns the queues and contexts shared by a state tree; State and Region
-    // each hold a single pointer to it instead of separate pointers.
-    struct Runtime
-    {
-        const void* api_id = nullptr;
-        Queues queues;
-        Contexts contexts;
+        void* state = nullptr;
+        void* api = nullptr;
     };
 
     struct Region
     {
         std::size_t index;
         void* parent = nullptr;
-        Runtime* runtime = nullptr;
+        Queues* queues = nullptr;
+        Contexts* contexts = nullptr;
         std::unique_ptr<IState> active_state;
         std::vector<Event> deferred;
         bool terminated = false;
@@ -178,15 +162,18 @@ namespace nil::sm::detail
             tag<API, R> /* tag */,
             std::size_t init_index,
             Parent* init_parent,
-            Runtime* init_runtime,
+            Queues* init_queues,
+            Contexts* init_contexts,
             const Metadata* init_parent_metadata
         )
             : index(init_index)
             , parent(init_parent)
-            , runtime(init_runtime)
-            , active_state(std::make_unique<::nil::sm::State<API, R>>(
+            , queues(init_queues)
+            , contexts(init_contexts)
+            , active_state(std::make_unique<State<API, R>>(
                   init_parent,
-                  init_runtime,
+                  init_queues,
+                  init_contexts,
                   make_metadata<R>(init_index, 0, API<R>::regions_t::size, init_parent_metadata)
               ))
         {
@@ -202,13 +189,11 @@ namespace nil::sm::detail
             active_state.reset();
             for (auto& event : deferred)
             {
-                runtime->queues.push_defer(event);
+                queues->push_defer(event);
             }
             deferred.clear();
         }
 
-        // Applies one region-level runtime action, using RegionDispatcher to
-        // (re)build active_state for Transit/Terminate.
         template <typename RegionDispatcher>
         void consume_action(const Event& e, on_event_t action, const Metadata* parent_metadata)
         {
@@ -218,29 +203,33 @@ namespace nil::sm::detail
                 {
                     if constexpr (std::is_same_v<Action, Event>)
                     {
-                        runtime->queues.push_emit(r);
+                        queues->push_emit(r);
                     }
                     else if constexpr (std::is_same_v<Action, Defer>)
                     {
                         deferred.push_back(e.clone());
                     }
-                    else if constexpr (std::is_same_v<Action, Transit>)
+                    else if constexpr (std::is_same_v<Action, TransitTo>)
                     {
+                        if (r.defer)
+                        {
+                            deferred.push_back(e.clone());
+                        }
+
                         transit_out();
                         active_state = RegionDispatcher::make(
                             static_cast<Parent*>(parent),
-                            runtime,
+                            queues,
+                            contexts,
                             index,
                             parent_metadata,
                             r.target
                         );
-                    }
-                    else if constexpr (std::is_same_v<Action, Terminate>)
-                    {
-                        transit_out();
-                        active_state = RegionDispatcher::
-                            make(static_cast<Parent*>(parent), runtime, index, parent_metadata, nil::xalt::type_id<Fin>);
-                        terminated = true;
+
+                        if (r.target == nil::xalt::type_id<Fin>)
+                        {
+                            terminated = true;
+                        }
                     }
                 },
                 action
@@ -260,7 +249,13 @@ namespace nil::sm::detail
     };
 
     template <typename U>
-    struct transit_targets_from_action<sm::Transit<U>>
+    struct transit_targets_from_action<sm::TransitTo<U>>
+    {
+        using type = nil::xalt::tlist<U>;
+    };
+
+    template <typename U>
+    struct transit_targets_from_action<sm::DeferTo<U>>
     {
         using type = nil::xalt::tlist<U>;
     };
@@ -429,12 +424,13 @@ namespace nil::sm::detail
     {
         template <typename Parent>
         using maker_t = std::unique_ptr<
-            IState> (*)(Parent*, Runtime*, std::size_t, std::size_t, const Metadata*);
+            IState> (*)(Parent*, Queues*, Contexts*, std::size_t, std::size_t, const Metadata*);
 
         template <typename Parent, typename Candidate>
         static std::unique_ptr<IState> make(
             Parent* parent,
-            Runtime* runtime,
+            Queues* queues,
+            Contexts* contexts,
             std::size_t region,
             std::size_t state,
             const Metadata* parent_metadata
@@ -442,7 +438,8 @@ namespace nil::sm::detail
         {
             return std::make_unique<::nil::sm::State<API, Candidate>>(
                 parent,
-                runtime,
+                queues,
+                contexts,
                 make_metadata<Candidate>(
                     region,
                     state,
@@ -498,7 +495,8 @@ namespace nil::sm::detail
             std::size_t region,
             const void* target,
             Parent* parent,
-            Runtime* runtime,
+            Queues* queues,
+            Contexts* contexts,
             const Metadata* parent_metadata
         )
         {
@@ -510,7 +508,8 @@ namespace nil::sm::detail
 
             return state_maker<API, states>::template get_maker<Parent>(state)(
                 parent,
-                runtime,
+                queues,
+                contexts,
                 region,
                 state,
                 parent_metadata
@@ -531,20 +530,28 @@ namespace nil::sm::detail
 
     private:
         using maker_t = std::unique_ptr<
-            IState> (*)(std::size_t, const void*, Parent*, Runtime*, const Metadata*);
+            IState> (*)(std::size_t, const void*, Parent*, Queues*, Contexts*, const Metadata*);
 
         template <std::size_t I>
         static std::unique_ptr<IState> make_indexed(
             std::size_t region,
             const void* target,
             Parent* parent,
-            Runtime* runtime,
+            Queues* queues,
+            Contexts* contexts,
             const Metadata* parent_metadata
         )
         {
             using region_t = typename nil::xalt::tlist<Region...>::template at<I>;
             using graph_t = region_reachability_graph<API, region_t>;
-            return graph_t::template make<Parent>(region, target, parent, runtime, parent_metadata);
+            return graph_t::template make<Parent>(
+                region,
+                target,
+                parent,
+                queues,
+                contexts,
+                parent_metadata
+            );
         }
 
         template <std::size_t... I>
@@ -558,7 +565,8 @@ namespace nil::sm::detail
     public:
         static std::unique_ptr<IState> make(
             Parent* parent,
-            Runtime* runtime,
+            Queues* queues,
+            Contexts* contexts,
             std::size_t region,
             const Metadata* parent_metadata,
             const void* target
@@ -568,7 +576,8 @@ namespace nil::sm::detail
             {
                 return std::make_unique<::nil::sm::State<API, Fin>>(
                     parent,
-                    runtime,
+                    queues,
+                    contexts,
                     make_metadata<Fin>(
                         region,
                         Fin::state_index,
@@ -580,7 +589,7 @@ namespace nil::sm::detail
 
             if (region < table.size())
             {
-                return table[region](region, target, parent, runtime, parent_metadata);
+                return table[region](region, target, parent, queues, contexts, parent_metadata);
             }
 
             return {};
@@ -594,9 +603,17 @@ namespace nil::sm::detail
         {
             return std::visit([](auto& v) { return to_runtime_action_as<O>(std::move(v)); }, r);
         }
-        else if constexpr (nil::xalt::is_of_template_v<R, ::nil::sm::Transit>)
+        else if constexpr (std::is_same_v<R, ::nil::sm::Terminate>)
         {
-            return O{Transit{.target = nil::xalt::type_id<typename R::type>}};
+            return O{TransitTo{.defer = false, .target = nil::xalt::type_id<Fin>}};
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, ::nil::sm::TransitTo>)
+        {
+            return O{TransitTo{.defer = false, .target = nil::xalt::type_id<typename R::type>}};
+        }
+        else if constexpr (nil::xalt::is_of_template_v<R, ::nil::sm::DeferTo>)
+        {
+            return O{TransitTo{.defer = true, .target = nil::xalt::type_id<typename R::type>}};
         }
         else if constexpr (nil::xalt::is_of_template_v<R, ::nil::sm::Emit>)
         {

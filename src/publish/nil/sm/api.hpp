@@ -115,8 +115,8 @@ namespace nil::sm::api
         struct type final
         {
             using inner_t = T;
-            NIL_XALT_COALESCE_TAG(state_context_t, void*);
-            NIL_XALT_COALESCE_TAG(api_context_t, void*);
+            NIL_XALT_COALESCE_TAG(state_context_t, void);
+            NIL_XALT_COALESCE_TAG(api_context_t, void);
 
             using state_context_t = nil::xalt::coalesce_t<API<T>, state_context_t_tag>;
             using api_context_t = nil::xalt::coalesce_t<API<T>, api_context_t_tag>;

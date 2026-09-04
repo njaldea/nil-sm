@@ -62,13 +62,14 @@ namespace
     template <typename T>
     struct MakeOnlyAPI
     {
+        using state_context_t = void;
         using api_context_t = MakeObserver;
 
         template <typename Parent>
         static T make(
             Parent* parent,
-            void* state_contexts,
-            MakeObserver* api_contexts,
+            state_context_t* state_contexts,
+            api_context_t* api_contexts,
             const nil::sm::Metadata& metadata
         )
         {
@@ -77,7 +78,7 @@ namespace
                 api_contexts->on_construct();
             }
             // Delegate construction to api::Default
-            return nil::sm::api::Default<>::type<T>::make(
+            return nil::sm::api::Default<state_context_t, api_context_t>::type<T>::make(
                 parent,
                 state_contexts,
                 api_contexts,
@@ -101,16 +102,20 @@ namespace
     template <typename T>
     struct EnterOnlyAPI
     {
+        using state_context_t = void;
         using api_context_t = EnterObserver;
 
-        static auto on_enter(T& state, EnterObserver* api_contexts)
+        static auto on_enter(T& state, api_context_t* api_contexts)
         {
             if constexpr (!std::is_same_v<T, nil::sm::Fin>)
             {
                 api_contexts->on_enter_intercepted();
             }
             // Delegate to api::Default for actual state hook dispatch
-            return nil::sm::api::Default<>::type<T>::on_enter(state, api_contexts);
+            return nil::sm::api::Default<state_context_t, api_context_t>::type<T>::on_enter(
+                state,
+                api_contexts
+            );
         }
 
         // make, on_event, on_exit, on_regions_finalized — not defined here
@@ -138,7 +143,11 @@ namespace
             {
                 api_contexts->on_event_intercepted();
             }
-            return nil::sm::api::Default<>::type<T>::template on_event<E>(state, event, nullptr);
+            return nil::sm::api::Default<void, EventObserver>::type<T>::template on_event<E>(
+                state,
+                event,
+                api_contexts
+            );
         }
 
         // make, on_enter, on_exit, on_regions_finalized — not defined here
@@ -180,12 +189,13 @@ namespace
     struct SpreadMakeAPI
     {
         using state_context_t = std::tuple<CtxA*, CtxB*>;
+        using api_context_t = void;
 
         template <typename Parent>
         static T make(
             Parent* parent,
             state_context_t* state_contexts,
-            void* /* api_contexts */,
+            api_context_t* /* api_contexts */,
             const nil::sm::Metadata& /* metadata */
         )
         {
@@ -249,7 +259,7 @@ TEST(sm_feature_coalesce_api, on_event_intercepted_event_observer_called)
     testing::StrictMock<EventObserver> obs;
     testing::InSequence sequence;
 
-    nil::sm::SM<nil::sm::api::Coalesce<EventOnlyAPI>::type, lifecycle_leaf> sm{nullptr, &obs};
+    nil::sm::SM<nil::sm::api::Coalesce<EventOnlyAPI>::type, lifecycle_leaf> sm{{}, &obs};
 
     {
         EXPECT_CALL(obs, on_event_intercepted()).Times(1);

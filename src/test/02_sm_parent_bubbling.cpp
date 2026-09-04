@@ -292,7 +292,7 @@ TEST(sm_feature_parent_bubbling, parent_transits_after_child_forward)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<NewState>{};
+            return TransitTo<NewState>{};
         }
     };
 
@@ -460,7 +460,7 @@ TEST(sm_feature_parent_bubbling, parent_handles_event_unregistered_in_child)
     EXPECT_CALL(mock, on_exit_called(type_id<Parent>)).Times(1);
 }
 
-// Test: child transit does not bubble to parent (Transit != Forward);
+// Test: child transit does not bubble to parent (TransitTo != Forward);
 //       child region is replaced by the target state, parent on_event is never called
 TEST(sm_feature_parent_bubbling, child_transit_does_not_bubble_to_parent)
 {
@@ -475,7 +475,7 @@ TEST(sm_feature_parent_bubbling, child_transit_does_not_bubble_to_parent)
 
         static auto on_event(const e1& /* event */)
         {
-            return Transit<ChildTarget>{};
+            return TransitTo<ChildTarget>{};
         }
     };
 
@@ -499,7 +499,7 @@ TEST(sm_feature_parent_bubbling, child_transit_does_not_bubble_to_parent)
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
     TestSM<Parent> sm(nullptr, &mock);
 
-    // Child transits → Parent on_event NOT called (Transit does not forward)
+    // Child transits → Parent on_event NOT called (TransitTo does not forward)
     {
         EXPECT_CALL(mock, on_event_called(type_id<Child>, type_id<e1>)).Times(1);
         EXPECT_CALL(mock, on_exit_called(type_id<Child>)).Times(1);

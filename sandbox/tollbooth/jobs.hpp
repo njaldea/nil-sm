@@ -157,7 +157,7 @@ namespace toll::tag
     };
 }
 
-// Chains are declared bottom-up so every target of a Transit<> is already complete.
+// Chains are declared bottom-up so every target of a TransitTo<> is already complete.
 namespace toll::region
 {
     template <typename Job>
@@ -166,15 +166,15 @@ namespace toll::region
 
     template <typename Job>
     using gate_open = generic::
-        waiting<tag::gate_open<Job>, ev::gate_close, nil::sm::Transit<gate_closing<Job>>>;
+        waiting<tag::gate_open<Job>, ev::gate_close, nil::sm::TransitTo<gate_closing<Job>>>;
 
     template <typename Job>
     using gate_opening = generic::
-        step<tag::gate_opening<Job>, nil::sm::Transit<gate_open<Job>>, nil::sm::Terminate>;
+        step<tag::gate_opening<Job>, nil::sm::TransitTo<gate_open<Job>>, nil::sm::Terminate>;
 
     template <typename Job>
     using gate_arm = generic::
-        waiting<tag::gate_closed<Job>, ev::gate_open, nil::sm::Transit<gate_opening<Job>>>;
+        waiting<tag::gate_closed<Job>, ev::gate_open, nil::sm::TransitTo<gate_opening<Job>>>;
 
     template <typename Job>
     using selftest_done
@@ -183,14 +183,14 @@ namespace toll::region
     template <typename Job>
     using selftest_gate = generic::step<
         tag::selftest_gate<Job>,
-        nil::sm::Transit<selftest_done<Job>>,
-        nil::sm::Transit<selftest_done<Job>>>;
+        nil::sm::TransitTo<selftest_done<Job>>,
+        nil::sm::TransitTo<selftest_done<Job>>>;
 
     template <typename Job>
     using selftest = generic::step<
         tag::selftest_boot<Job>,
-        nil::sm::Transit<selftest_gate<Job>>,
-        nil::sm::Transit<selftest_done<Job>>>;
+        nil::sm::TransitTo<selftest_gate<Job>>,
+        nil::sm::TransitTo<selftest_done<Job>>>;
 
     using lane_dispensing
         = generic::escaping<tag::lane_dispensing, ev::depart, nil::sm::Terminate, ev::cancel>;
@@ -212,23 +212,23 @@ namespace toll::region
         ev::receipt,
         ev::pay,
         policy::fare_check,
-        nil::sm::Transit<lane_paid>,
-        nil::sm::Transit<lane_rejected>,
+        nil::sm::TransitTo<lane_paid>,
+        nil::sm::TransitTo<lane_rejected>,
         policy::record_payment>;
 
     using lane_classify = generic::announcing<
         tag::lane_classify,
         ev::gate_open,
         ev::tick,
-        nil::sm::Transit<lane_await_payment>>;
+        nil::sm::TransitTo<lane_await_payment>>;
 
     using lane_occupied
-        = generic::workflow<tag::lane_occupied, nil::sm::Transit<lane_dispensing>, lane_classify>;
+        = generic::workflow<tag::lane_occupied, nil::sm::TransitTo<lane_dispensing>, lane_classify>;
 
     using lane = generic::waiting<
         tag::lane_empty,
         ev::arrive,
-        nil::sm::Transit<lane_occupied>,
+        nil::sm::TransitTo<lane_occupied>,
         policy::record_vehicle>;
 
     using health_degraded
@@ -237,7 +237,7 @@ namespace toll::region
     using health = generic::choosing<
         tag::health_nominal,
         ev::alarm,
-        nil::sm::Transit<health_degraded>,
+        nil::sm::TransitTo<health_degraded>,
         ev::reset,
         nil::sm::Terminate>;
 
@@ -248,14 +248,14 @@ namespace toll::region
         ev::receipt,
         nil::sm::Discard,
         ev::ok,
-        nil::sm::Transit<cash_count>>;
+        nil::sm::TransitTo<cash_count>>;
 
     using cash
-        = generic::parking<tag::cash_seal, ev::receipt, ev::ok, nil::sm::Transit<cash_drawer>>;
+        = generic::parking<tag::cash_seal, ev::receipt, ev::ok, nil::sm::TransitTo<cash_drawer>>;
 
     using audit_verify = generic::counting<tag::audit_verify, ev::tick, nil::sm::Terminate, 2>;
 
-    using audit = generic::waiting<tag::audit_start, ev::tick, nil::sm::Transit<audit_verify>>;
+    using audit = generic::waiting<tag::audit_start, ev::tick, nil::sm::TransitTo<audit_verify>>;
 
     using diag_report = generic::choosing<
         tag::diag_report,
@@ -266,10 +266,10 @@ namespace toll::region
         policy::report>;
 
     using diag_scan = generic::
-        announcing<tag::diag_scan, ev::gate_open, ev::tick, nil::sm::Transit<diag_report>>;
+        announcing<tag::diag_scan, ev::gate_open, ev::tick, nil::sm::TransitTo<diag_report>>;
 
     using diag = generic::
-        step<tag::diag_start, nil::sm::Transit<diag_scan>, nil::sm::Transit<diag_report>>;
+        step<tag::diag_start, nil::sm::TransitTo<diag_scan>, nil::sm::TransitTo<diag_report>>;
 }
 
 // Each job is parameterized on what happens once it completes. The four top-level jobs simply
@@ -330,22 +330,22 @@ namespace toll::job
 
         static auto on_event(const ev::select_startup& /* event */)
         {
-            return nil::sm::Transit<startup_job>();
+            return nil::sm::TransitTo<startup_job>();
         }
 
         static auto on_event(const ev::select_collection& /* event */)
         {
-            return nil::sm::Transit<collection_job>();
+            return nil::sm::TransitTo<collection_job>();
         }
 
         static auto on_event(const ev::select_shift& /* event */)
         {
-            return nil::sm::Transit<shift_job>();
+            return nil::sm::TransitTo<shift_job>();
         }
 
         static auto on_event(const ev::select_maintenance& /* event */)
         {
-            return nil::sm::Transit<maintenance_job>();
+            return nil::sm::TransitTo<maintenance_job>();
         }
     };
 }

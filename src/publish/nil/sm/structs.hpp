@@ -67,8 +67,9 @@ namespace nil::sm::detail
         const void* target = nullptr;
     };
 
-    struct Transit final
+    struct TransitTo final
     {
+        bool defer = false;
         // type id of the target state to transit into
         const void* target = nullptr;
     };
@@ -132,11 +133,21 @@ namespace nil::sm
     };
 
     template <typename T>
-    struct Transit final
+    struct TransitTo final
     {
         static_assert(
             !std::is_same_v<T, Fin>,
-            "Transit<Fin> is not allowed; use Terminate instead."
+            "TransitTo<Fin> is not allowed; use Terminate instead."
+        );
+        using type = T;
+    };
+
+    template <typename T>
+    struct DeferTo final
+    {
+        static_assert(
+            !std::is_same_v<T, Fin>,
+            "TransitTo<Fin> is not allowed; use Terminate instead."
         );
         using type = T;
     };

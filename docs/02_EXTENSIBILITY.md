@@ -1,29 +1,12 @@
-# Extending the State Machine
+# Extensibility
 
-The core library handles state transitions and event dispatch. Your application
-can provide the parts that are specific to it, such as logging, timers, or
-memory allocation.
-
-For the core API, read the [Guide](01_GUIDE.md). For the complete template
-contract, read [Advanced](05_ADVANCED.md).
-
-## The API Parameter
-
-The main type is:
-
-```cpp
-nil::sm::SM<API, Root>
-```
-
-`API` tells the machine how to construct states and call their hooks. `Root`
-is your single top-level state (it can declare its own `regions` if you need
-multiple orthogonal top-level regions). The library provides a default API, so
-you only need a custom API when you want to add application behavior.
+Start with the built-in API. Use a custom API when states need application
+services or when you want to observe construction and lifecycle calls.
 
 ## Contexts
 
-A context is an object shared with states. The machine stores a pointer to it;
-it does not own the object.
+Context types are object types. `SM` is non-owning and receives their addresses.
+Use `void` when a context is not needed.
 
 ```cpp
 struct AppContext
@@ -31,115 +14,74 @@ struct AppContext
     int user_id;
 };
 
-template <typename State>
-using AppAPI = nil::sm::api::Default<AppContext>::type<State>;
-
 struct logged_in
 {
-    template <typename Parent>
-    logged_in(Parent*, AppContext* context)
+    explicit logged_in(auto*, AppContext* context)
         : user_id(context->user_id) {}
 
     int user_id;
 };
 
 AppContext context{42};
-nil::sm::SM<AppAPI, logged_in> machine{&context, nullptr};
+nil::sm::SM<nil::sm::api::Default<AppContext>::template type, logged_in> machine{
+    &context,
+    nullptr
+};
 ```
 
-Keep `context` alive until after `machine` is destroyed.
+Keep both context objects alive until after the machine is destroyed. The
+machine does not copy or delete them.
 
-## Logging
+## Custom hooks
 
-A custom API can call an observer before delegating to the default behavior.
-The important idea is to wrap one hook and leave the rest unchanged.
+An API is a template that supplies `API<State>`. The easiest way to customize
+one hook is to use `Coalesce` and delegate everything else to the default API:
 
 ```cpp
-struct Logger
+struct Observer
 {
-    void entered(const char* state_name);
+    void entered(const void* state_id);
 };
 
 template <typename State>
-struct LoggingAPI : nil::sm::api::Default<void, Logger>::type<State>
+struct LoggingAPI
 {
-    using base = nil::sm::api::Default<void, Logger>::type<State>;
-    using api_context_t = Logger;
+    using api_context_t = Observer;
 
-    static auto on_enter(State& state, Logger* logger)
+    static auto on_enter(State& state, Observer* observer)
     {
-        if (logger != nullptr)
-            logger->entered(nil::xalt::type_name_v<State>);
-
-        return base::on_enter(state, logger);
+        if constexpr (!std::is_same_v<State, nil::sm::Fin>)
+            observer->entered(nil::xalt::type_id<State>);
+        return nil::sm::api::Default<void, Observer>::type<State>::on_enter(
+            state,
+            observer
+        );
     }
 };
+
+Observer observer;
+nil::sm::CoalescedSM<LoggingAPI, logged_in> machine{nullptr, &observer};
 ```
 
-The exact observer type and name formatting are application choices. The
-library does not require a logging framework.
+Use `Default` directly when only context types are needed. Use `Coalesce` when
+only selected hooks are overridden. The complete hook contract is in
+[Advanced API](05_ADVANCED.md).
 
-## Timers
+## Timers and threads
 
-Timers should produce ordinary events. A state can start a timer in
-`on_enter()` and cancel it in `on_exit()`.
+Timers are application services. Schedule a callback that posts a typed timeout
+event, and cancel it before the state is destroyed.
 
-```cpp
-struct waiting
-{
-    TimerService* timers;
-    TimerId timer = 0;
+The state machine is synchronous and not thread-safe. A common integration is:
 
-    auto on_enter()
-    {
-        timer = timers->schedule(5s, [this] { post(timeout{}); });
-        return nil::sm::NOOP{};
-    }
+1. Other threads enqueue application events.
+2. One owner thread drains that queue.
+3. Only that thread calls `post()`.
 
-    auto on_exit()
-    {
-        timers->cancel(timer);
-        return nil::sm::NOOP{};
-    }
-};
-```
+## Allocation and other services
 
-The callback mechanism depends on your timer service. Make sure the callback
-cannot use the state after `on_exit()` has run; cancel the timer before the
-state is destroyed.
+Custom APIs can replace state construction or add logging, profiling, timers,
+and allocators. Keep those changes small and delegate to `api::Default` for
+behavior you do not need to change.
 
-## Memory Pools
-
-Override the API's state-construction hook and allocate states from your pool.
-This is an advanced optimization; start with the default heap allocation.
-
-```cpp
-template <typename State>
-struct PooledAPI
-{
-    // Keep the normal aliases and hooks from the default API.
-    // Override make(...) to acquire storage from your pool.
-};
-```
-
-See [Advanced](05_ADVANCED.md) for the required hook signatures.
-
-## Posting From Other Threads
-
-The state machine itself is single-threaded. A safe application design is:
-
-1. Other threads put events into a thread-safe queue.
-2. One owner thread removes events from the queue.
-3. Only that owner thread calls `machine.post(event)`.
-
-This keeps the state machine simple while allowing the surrounding application
-to use multiple threads.
-
-## Practical Rules
-
-- Start with `DefaultSM` and add a custom API only when needed.
-- Delegate to `nil::sm::api::Default` instead of rewriting normal behavior.
-- Document who owns every context pointer.
-- Keep timer callbacks from outliving their states.
-- Keep logging and profiling hooks lightweight.
-- Treat custom allocation as an optimization, not a starting requirement.
+Continue to [Advanced API](05_ADVANCED.md) for signatures and coalescing rules.

@@ -178,7 +178,7 @@ namespace nil::sm::ir::detail
                 ir::action::RegionsFinalized{ir::response::ERegionsFinalized::noop}
             );
         }
-        else if constexpr (nil::xalt::is_of_template_v<R, Transit>)
+        else if constexpr (nil::xalt::is_of_template_v<R, TransitTo>)
         {
             using reachable_states_t
                 = nil::sm::detail::region_reachability_graph<API, RegionInitial>;
@@ -252,23 +252,7 @@ namespace nil::sm::ir::detail
         {
             return;
         }
-        else if constexpr (nil::xalt::is_of_template_v<R, Transit>)
-        {
-            const auto target_state
-                = nil::sm::detail::region_reachability_graph<API, RegionInitial>::template index_of<
-                    typename R::type>();
-            const auto target_metadata = nil::sm::detail::make_metadata<typename R::type>(
-                metadata.region,
-                target_state,
-                API<typename R::type>::regions_t::size,
-                metadata.parent
-            );
-            node.transitions.push_back(TransitionInfoT{
-                format_stable_id(nil::sm::id::stable_id(target_metadata)),
-                std::string(event_name)
-            });
-        }
-        if constexpr (std::is_same_v<R, Terminate>)
+        else if constexpr (std::is_same_v<R, Terminate>)
         {
             node.transitions.push_back(TransitionInfoT{"[*]", std::string(event_name)});
         }
@@ -282,6 +266,29 @@ namespace nil::sm::ir::detail
                  ),
                  ...);
             }(nil::xalt::to_tlist_t<R>{});
+        }
+        else
+        {
+            if constexpr (nil::xalt::is_of_template_v<R, DeferTo>)
+            {
+                node.actions.emplace_back(
+                    ActionInfoT{std::string(event_name), ir::response::EEvent::defer}
+                );
+            }
+
+            const auto target_state
+                = nil::sm::detail::region_reachability_graph<API, RegionInitial>::template index_of<
+                    typename R::type>();
+            const auto target_metadata = nil::sm::detail::make_metadata<typename R::type>(
+                metadata.region,
+                target_state,
+                API<typename R::type>::regions_t::size,
+                metadata.parent
+            );
+            node.transitions.push_back(TransitionInfoT{
+                format_stable_id(nil::sm::id::stable_id(target_metadata)),
+                std::string(event_name)
+            });
         }
     }
 

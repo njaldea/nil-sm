@@ -1,33 +1,22 @@
 # Common Patterns
 
-This cookbook shows small patterns you can adapt. Read
-[Guide](01_GUIDE.md) first for the basic actions.
+Short designs to adapt after reading the [Guide](01_GUIDE.md).
 
-## Guard a Transition
+## Guard a transition
 
-Check a condition before changing state. Keep the event in the current state
-or forward it when the condition is not satisfied.
+Return a variant when a condition decides between actions:
 
 ```cpp
-struct waiting
+auto on_event(const start& event)
+    -> std::variant<nil::sm::TransitTo<running>, nil::sm::Discard>
 {
-    bool ready = false;
-    using events = nil::xalt::tlist<start>;
-
-    auto on_event(const start& event)
-        -> std::variant<nil::sm::Transit<running>, nil::sm::Discard>
-    {
-        if (ready && can_start(event))
-            return nil::sm::Transit<running>{};
-
-        return nil::sm::Discard{};
-    }
-};
+    if (ready && can_start(event))
+        return nil::sm::TransitTo<running>{};
+    return nil::sm::Discard{};
+}
 ```
 
-## Defer Until Ready
-
-Use `Defer` when another state should receive the event later.
+## Defer until ready
 
 ```cpp
 struct starting
@@ -35,45 +24,22 @@ struct starting
     using events = nil::xalt::tlist<data, ready>;
 
     auto on_event(const data&) { return nil::sm::Defer{}; }
-    auto on_event(const ready&) { return nil::sm::Transit<running>{}; }
-};
-
-struct running
-{
-    using events = nil::xalt::tlist<data>;
-    auto on_event(const data&) { return nil::sm::Discard{}; }
+    auto on_event(const ready&) { return nil::sm::TransitTo<running>{}; }
 };
 ```
 
-Deferred events are replayed after the transition, in FIFO order.
+The deferred event is replayed after the transition. It is discarded if the
+region terminates instead.
 
-## Acquire and Release a Resource
-
-Use lifecycle hooks for state-specific setup and cleanup.
+Use `DeferTo<T>{}` when the event should be saved while transitioning:
 
 ```cpp
-struct connected
-{
-    auto on_enter()
-    {
-        open_connection();
-        return nil::sm::NOOP{};
-    }
-
-    auto on_exit()
-    {
-        close_connection();
-        return nil::sm::NOOP{};
-    }
-};
+auto on_event(const data&) { return nil::sm::DeferTo<ready>{}; }
 ```
 
-For exception-safe ownership, prefer a member such as `std::unique_ptr` and
-RAII.
+## Parent and child
 
-## Parent and Child States
-
-Put shared behavior in a parent and let children handle specific events.
+A child can handle a local event or return `Forward`:
 
 ```cpp
 struct child
@@ -86,16 +52,13 @@ struct screen
 {
     using regions = nil::xalt::tlist<child>;
     using events = nil::xalt::tlist<cancel>;
-
-    auto on_event(const cancel&) { return nil::sm::Transit<home>{}; }
+    auto on_event(const cancel&) { return nil::sm::TransitTo<home>{}; }
 };
 ```
 
-The child gets the event first. `Forward` lets the parent handle it.
+## Communicate between regions
 
-## Communicate Between Regions
-
-Emit a typed event when one region needs to notify another.
+Emit a typed event when one active region should notify another:
 
 ```cpp
 struct refresh {};
@@ -118,49 +81,36 @@ struct app
 };
 ```
 
-The emitted event is dispatched through the machine, so every active region
-can respond to it.
+## Acquire and release resources
 
-## Handle an Emergency Event
-
-Capture an important event before child regions can consume it.
+Use `on_enter()` and `on_exit()` for state-scoped setup. Prefer RAII for
+resources that must always be released.
 
 ```cpp
-struct emergency_stop {};
-
-struct machine
+struct connected
 {
-    using captures = nil::xalt::tlist<emergency_stop>;
+    auto on_enter() -> nil::sm::NOOP { open_connection(); return {}; }
+    auto on_exit() -> nil::sm::NOOP { close_connection(); return {}; }
+};
+```
+
+## Capture an important event
+
+Captures run before child dispatch:
+
+```cpp
+struct controller
+{
+    using captures = nil::xalt::tlist<shutdown>;
     using regions = nil::xalt::tlist<worker>;
 
-    auto on_capture(const emergency_stop&)
-    {
-        return nil::sm::Terminate{};
-    }
+    auto on_capture(const shutdown&) { return nil::sm::Terminate{}; }
 };
 ```
 
-Use captures for shutdown, cancellation, or safety events.
+## Request and response
 
-## Run Independent Regions
-
-Use orthogonal regions when parts of the system are active together.
-
-```cpp
-struct network;
-struct user_interface;
-
-struct application
-{
-    using regions = nil::xalt::tlist<network, user_interface>;
-};
-```
-
-Each region handles the same event independently, in declaration order.
-
-## Request and Response
-
-Represent the waiting period as its own state.
+Represent the waiting period explicitly:
 
 ```cpp
 struct idle
@@ -169,44 +119,22 @@ struct idle
     auto on_event(const request& value)
     {
         send(value);
-        return nil::sm::Transit<waiting>{};
+        return nil::sm::TransitTo<waiting>{};
     }
 };
 
 struct waiting
 {
     using events = nil::xalt::tlist<response, timeout>;
-
-    auto on_event(const response&) { return nil::sm::Transit<idle>{}; }
-    auto on_event(const timeout&) { return nil::sm::Transit<idle>{}; }
+    auto on_event(const response&) { return nil::sm::TransitTo<idle>{}; }
+    auto on_event(const timeout&) { return nil::sm::TransitTo<idle>{}; }
 };
 ```
 
-A timer service can post `timeout`; see
-[Extensibility](02_EXTENSIBILITY.md) for integration options.
+## Practical rules
 
-## Test State Changes
-
-A custom API can observe transitions without changing state code.
-
-```cpp
-struct Observer
-{
-    void entered(const char* name);
-    void exited(const char* name);
-};
-
-// Pass an Observer through a custom API and record on_enter/on_exit.
-```
-
-Keep tests focused on one event and one expected state change. The repository's
-test suite contains complete mock API examples.
-
-## Practical Rules
-
-- One state should have one clear responsibility.
-- Use `Emit` for follow-up events created during dispatch.
-- Use `Forward` when a parent owns the decision.
-- Use `Defer` only when a future state is guaranteed to handle the event.
+- Keep each state focused.
+- Use `Forward` for parent-owned decisions.
+- Use `Emit` for typed follow-up events.
 - Keep emitted-event chains finite.
-- Add external synchronization before calling `post()` from multiple threads.
+- Add external synchronization before cross-thread posting.
