@@ -6,10 +6,11 @@ Small programs used to exercise `nil::sm` and measure compile cost.
 |---|---|---|
 | `sandbox` | `main.cpp` | small feature scratchpad |
 | `sandbox_tollbooth` | `tollbooth/` | toll booth machine, single translation unit |
-| `sandbox_toll_uml` | `tollbooth/uml.cpp` | PlantUML for the toll booth machine |
+| `sandbox_tollbooth_uml` | `tollbooth/uml.cpp` | PlantUML for the toll booth machine |
 | `sandbox_tollbooth_barrier` | `tollbooth_barrier/` | same machine, jobs behind `nil::sm::barrier::State` |
 | `sandbox_barrier_property` | `barrier_property.cpp` | barrier state context selected from a parent property |
 | `sandbox_barrier_shared_ptr` | `barrier_shared_ptr.cpp` | shared_ptr barrier context converted to a base |
+| `sandbox_barrier_provider_uml` | `barrier_provider_uml.cpp` | one provider used twice, with root and standalone PlantUML output |
 
 ## Toll booth
 
@@ -93,7 +94,7 @@ Clean serialized build, link included (`ninja -C .build -j1 <target>`):
 | target | wall | maxrss |
 |---|---:|---:|
 | `sandbox_tollbooth` | 3.47s | 408 276 KB |
-| `sandbox_toll_uml` | 2.79s | 275 040 KB |
+| `sandbox_tollbooth_uml` | 2.79s | 275 040 KB |
 
 Findings:
 
@@ -106,7 +107,7 @@ Findings:
   ceiling from 408 MB to 284 MB — the limit becomes the collection job alone.
 - Total wall time goes *up* (3.5s → 5.2s / 6.0s) because the shared headers are reparsed per TU and
   there are more LTO objects to link. The win is peak memory and parallelism, not total work.
-- `sandbox_toll_uml` names the same SM type but only instantiates the formatter's compile-time
+- `sandbox_tollbooth_uml` names the same SM type but only instantiates the formatter's compile-time
   traversal, not the runtime `State` / `Region` tree, and peaks 130 MB lower — a useful control
   when trying to reduce instantiation cost.
 

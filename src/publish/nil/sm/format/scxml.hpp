@@ -1,9 +1,10 @@
 #pragma once
 
 #include "../ir.hpp"
-#include "../state.hpp"
+#include "diagram.hpp"
 #include "utils.hpp"
 
+#include <format>
 #include <ostream>
 
 #include <string>
@@ -11,9 +12,8 @@
 #include <variant>
 #include <vector>
 
-// TODO: unique identifier is not used per state
-// need to find a way for states to have separate
-// id and display text
+// TODO: SCXML currently resolves node IDs to display names; preserve unique IDs while retaining
+// separate display labels.
 
 namespace nil::sm::format::scxml
 {
@@ -23,9 +23,9 @@ namespace nil::sm::format::scxml
         std::string final_id;
     };
 
-    // Recursively collect display-name-to-ID mappings
+    // Recursively collect node-ID-to-display-name mappings.
     inline void collect_id_mappings(
-        const std::vector<ir::Node>& region,
+        std::span<const ir::Node> region,
         std::unordered_map<std::string, std::string>& id_map
     )
     {
@@ -53,22 +53,12 @@ namespace nil::sm::format::scxml
         return raw_id;
     }
 
-    inline bool is_final_node(const ir::Node& node)
-    {
-        return node.is_final;
-    }
-
-    inline bool is_initial_node(const ir::Node& node)
-    {
-        return node.is_initial;
-    }
-
     // Final target is the sibling [**] pseudostate in the same region.
-    inline std::string find_final_id(const std::vector<ir::Node>& siblings)
+    inline std::string find_final_id(std::span<const ir::Node> siblings)
     {
         for (const auto& node : siblings)
         {
-            if (is_final_node(node))
+            if (node.is_final)
             {
                 return node.id;
             }
@@ -77,11 +67,11 @@ namespace nil::sm::format::scxml
     }
 
     // Find the region's initial state from the explicit is_initial flag.
-    inline std::string initial_id_of(const std::vector<ir::Node>& region)
+    inline std::string initial_id_of(std::span<const ir::Node> region)
     {
         for (const auto& node : region)
         {
-            if (is_initial_node(node))
+            if (node.is_initial)
             {
                 return node.id;
             }
@@ -89,7 +79,7 @@ namespace nil::sm::format::scxml
         return "";
     }
 
-    inline RegionContext make_region_context(const std::vector<ir::Node>& region)
+    inline RegionContext make_region_context(std::span<const ir::Node> region)
     {
         return RegionContext{
             .initial_id = initial_id_of(region),
@@ -99,7 +89,8 @@ namespace nil::sm::format::scxml
 
     inline bool is_final_target(std::string_view raw_target_id, std::string_view final_id)
     {
-        return raw_target_id == "[*]" || (!final_id.empty() && raw_target_id == final_id);
+        return raw_target_id == reserved::termination_node
+            || (!final_id.empty() && raw_target_id == final_id);
     }
 
     inline std::string resolve_transition_target(
@@ -234,14 +225,14 @@ namespace nil::sm::format::scxml
     inline void render_children(
         std::ostream& os,
         std::size_t depth,
-        const std::vector<ir::Node>& region,
+        std::span<const ir::Node> region,
         const RegionContext& context,
         const std::unordered_map<std::string, std::string>& id_map
     )
     {
         for (const auto& child : region)
         {
-            if (is_final_node(child))
+            if (child.is_final)
             {
                 if (!context.final_id.empty())
                 {
@@ -271,7 +262,8 @@ namespace nil::sm::format::scxml
             child_context = make_region_context(node.regions.front());
             if (!child_context.initial_id.empty())
             {
-                initial_attr = " initial=\"" + resolve_id(child_context.initial_id, id_map) + "\"";
+                initial_attr
+                    = std::format(" initial=\"{}\"", resolve_id(child_context.initial_id, id_map));
             }
         }
 
@@ -295,7 +287,7 @@ namespace nil::sm::format::scxml
         std::size_t depth,
         std::size_t index,
         const std::string& parent_state_id,
-        const std::vector<ir::Node>& reg,
+        std::span<const ir::Node> reg,
         const std::unordered_map<std::string, std::string>& id_map
     )
     {
@@ -306,12 +298,12 @@ namespace nil::sm::format::scxml
 
         indent(os, depth) << "<!-- Region " << index << " -->\n";
 
-        const std::string reg_state_id = std::to_string(index) + "_" + parent_state_id;
+        const std::string reg_state_id = std::format("{}_{}", index, parent_state_id);
         const auto context = make_region_context(reg);
         std::string initial_attr;
         if (!context.initial_id.empty())
         {
-            initial_attr = " initial=\"" + resolve_id(context.initial_id, id_map) + "\"";
+            initial_attr = std::format(" initial=\"{}\"", resolve_id(context.initial_id, id_map));
         }
 
         indent(os, depth) << "<state id=\"" << reg_state_id << "\"" << initial_attr << ">\n";
@@ -362,15 +354,15 @@ namespace nil::sm::format::scxml
         }
     }
 
-    inline std::ostream& render(std::ostream& os, const ir::Model& model)
+    inline void render(std::ostream& os, std::span<const ir::Node> roots)
     {
         std::unordered_map<std::string, std::string> id_map;
-        collect_id_mappings(model.roots, id_map);
+        collect_id_mappings(roots, id_map);
 
         os << "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
            << R"(<scxml xmlns="http://www.w3.org/2005/07/scxml" version="1.0")";
 
-        const auto root_context = make_region_context(model.roots);
+        const auto root_context = make_region_context(roots);
         if (!root_context.initial_id.empty())
         {
             os << " initial=\"" << resolve_id(root_context.initial_id, id_map) << "\">\n";
@@ -380,9 +372,9 @@ namespace nil::sm::format::scxml
             os << ">\n";
         }
 
-        for (const auto& root : model.roots)
+        for (const auto& root : roots)
         {
-            if (is_final_node(root))
+            if (root.is_final)
             {
                 continue;
             }
@@ -395,21 +387,11 @@ namespace nil::sm::format::scxml
         }
 
         os << "</scxml>\n";
-        return os;
     }
 }
 
 namespace nil::sm
 {
     template <typename SM>
-    struct scxml;
-
-    template <template <typename> typename API, typename T>
-    struct scxml<SM<API, T>>
-    {
-        friend std::ostream& operator<<(std::ostream& os, const scxml<SM<API, T>>& /* doc */)
-        {
-            return format::scxml::render(os, nil::sm::ir::build<API, T>());
-        }
-    };
+    using scxml = format::diagram<SM, &format::scxml::render>;
 }

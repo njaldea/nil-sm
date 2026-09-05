@@ -34,7 +34,7 @@ namespace nil::sm::id
 
     inline void hash_ancestry(std::uint64_t& hash, const Metadata* metadata)
     {
-        if (metadata->parent != nullptr)
+        if (metadata->parent != nullptr && !metadata->parent->is_barrier)
         {
             hash_ancestry(hash, metadata->parent);
         }

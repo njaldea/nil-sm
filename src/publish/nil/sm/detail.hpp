@@ -50,6 +50,7 @@ namespace nil::sm::detail
             .subregions = subregions,
             .depth = parent_metadata == nullptr ? 0 : parent_metadata->depth + 1,
             .is_final = std::is_same_v<T, Fin>,
+            .is_barrier = nil::xalt::is_of_template_v<T, barrier::State>,
             .name = type_name<T>(),
             .parent = parent_metadata
         };

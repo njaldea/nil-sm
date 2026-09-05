@@ -1,14 +1,14 @@
 #pragma once
 
 #include "../ir.hpp"
-#include "../state.hpp"
+#include "diagram.hpp"
 #include "utils.hpp"
 
+#include <format>
 #include <ostream>
 #include <string>
 #include <string_view>
 #include <variant>
-#include <vector>
 
 namespace nil::sm::format::dot
 {
@@ -20,47 +20,46 @@ namespace nil::sm::format::dot
         bool needs_term = false;
     };
 
-    inline bool is_final_node(const ir::Node& node)
-    {
-        return node.is_final;
-    }
-
     inline std::string format_action(const ir::action::Info& action)
     {
-        std::string result;
-        std::visit(
-            [&](const auto& info)
+        return std::visit(
+            [](const auto& info) -> std::string
             {
                 using T = std::decay_t<decltype(info)>;
                 if constexpr (std::is_same_v<T, ir::action::Entry>)
                 {
-                    result = "on Enter / " + std::string(action_name(info.response));
+                    return std::format("on Enter / {}", action_name(info.response));
                 }
                 else if constexpr (std::is_same_v<T, ir::action::Exit>)
                 {
-                    result = "on Exit / " + std::string(action_name(info.response));
+                    return std::format("on Exit / {}", action_name(info.response));
                 }
                 else if constexpr (std::is_same_v<T, ir::action::RegionsFinalized>)
                 {
-                    result = "on [**] / " + std::string(action_name(info.response));
+                    return std::format(
+                        "on {} / {}",
+                        reserved::ev_regions_finalized,
+                        action_name(info.response)
+                    );
                 }
                 else if constexpr (std::is_same_v<T, ir::action::Capture>)
                 {
-                    result = "on " + info.event_name + " [c] / "
-                        + std::string(action_name(info.response));
+                    return std::format(
+                        "on {} [c] / {}",
+                        info.event_name,
+                        action_name(info.response)
+                    );
                 }
                 else
                 {
-                    result
-                        = "on " + info.event_name + " / " + std::string(action_name(info.response));
+                    return std::format("on {} / {}", info.event_name, action_name(info.response));
                 }
             },
             action
         );
-        return result;
     }
 
-    inline std::string initial_id_of(const std::vector<ir::Node>& region)
+    inline std::string initial_id_of(std::span<const ir::Node> region)
     {
         for (const auto& node : region)
         {
@@ -72,11 +71,11 @@ namespace nil::sm::format::dot
         return "";
     }
 
-    inline std::string final_id_of(const std::vector<ir::Node>& region)
+    inline std::string final_id_of(std::span<const ir::Node> region)
     {
         for (const auto& node : region)
         {
-            if (is_final_node(node))
+            if (node.is_final)
             {
                 return node.id;
             }
@@ -86,35 +85,28 @@ namespace nil::sm::format::dot
 
     inline bool is_termination_target(std::string_view target_id_value, std::string_view final_id)
     {
-        return target_id_value == "[*]" || (!final_id.empty() && target_id_value == final_id);
+        return target_id_value == reserved::termination_node
+            || (!final_id.empty() && target_id_value == final_id);
     }
 
     inline RegionContext make_region_context(
         std::string_view prefix,
-        const std::vector<ir::Node>& region
+        std::span<const ir::Node> region
     )
     {
         auto context = RegionContext{
-            .init_id = std::string(prefix) + "_init",
-            .term_id = std::string(prefix) + "_term",
+            .init_id = std::format("{}_init", prefix),
+            .term_id = std::format("{}_term", prefix),
             .final_id = final_id_of(region),
             .needs_term = false,
         };
 
         for (const auto& node : region)
         {
-            if (is_final_node(node))
+            if (node.is_final)
             {
-                continue;
-            }
-
-            for (const auto& transition : node.transitions)
-            {
-                if (is_termination_target(ir::target_id(transition), context.final_id))
-                {
-                    context.needs_term = true;
-                    return context;
-                }
+                context.needs_term = true;
+                break;
             }
         }
 
@@ -123,7 +115,7 @@ namespace nil::sm::format::dot
 
     inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
-        if (is_final_node(node))
+        if (node.is_final)
         {
             return;
         }
@@ -156,7 +148,7 @@ namespace nil::sm::format::dot
             // Render regions as internal clusters
             for (std::size_t r_idx = 0; r_idx < node.regions.size(); ++r_idx)
             {
-                std::string reg_cluster_id = "cluster_" + node.id + "_reg_" + std::to_string(r_idx);
+                std::string reg_cluster_id = std::format("cluster_{}_reg_{}", node.id, r_idx);
                 indent(os, depth + 1) << "subgraph " << reg_cluster_id << " {\n";
                 indent(os, depth + 2) << "label=\"\";\n";
                 indent(os, depth + 2) << "style=\"invis\";\n";
@@ -165,7 +157,7 @@ namespace nil::sm::format::dot
                 if (!region.empty())
                 {
                     const auto context
-                        = make_region_context(node.id + "_reg_" + std::to_string(r_idx), region);
+                        = make_region_context(std::format("{}_reg_{}", node.id, r_idx), region);
                     const auto initial_id = initial_id_of(region);
 
                     if (!initial_id.empty())
@@ -212,7 +204,7 @@ namespace nil::sm::format::dot
         const RegionContext& context
     )
     {
-        if (is_final_node(node))
+        if (node.is_final)
         {
             return;
         }
@@ -263,7 +255,7 @@ namespace nil::sm::format::dot
         }
     }
 
-    inline std::ostream& render(std::ostream& os, const ir::Model& model)
+    inline void render(std::ostream& os, std::span<const ir::Node> roots)
     {
         os << "digraph sm {\n"
               "    compound=true;\n"
@@ -271,13 +263,13 @@ namespace nil::sm::format::dot
               "    edge [fontname=\"Helvetica\", fontsize=9];\n\n";
 
         // Render root states and hierarchy
-        for (const auto& node : model.roots)
+        for (const auto& node : roots)
         {
             render_node(os, 1, node);
         }
 
-        const auto root_context = make_region_context("root", model.roots);
-        const auto root_initial_id = initial_id_of(model.roots);
+        const auto root_context = make_region_context("root", roots);
+        const auto root_initial_id = initial_id_of(roots);
 
         if (!root_initial_id.empty())
         {
@@ -291,27 +283,17 @@ namespace nil::sm::format::dot
         }
 
         os << "\n    // Transitions\n";
-        for (const auto& node : model.roots)
+        for (const auto& node : roots)
         {
             render_transitions(os, 1, node, root_context);
         }
 
         os << "}\n";
-        return os;
     }
 }
 
 namespace nil::sm
 {
     template <typename SM>
-    struct dot;
-
-    template <template <typename> typename API, typename T>
-    struct dot<SM<API, T>>
-    {
-        friend std::ostream& operator<<(std::ostream& os, const dot<SM<API, T>>& /* d */)
-        {
-            return format::dot::render(os, nil::sm::ir::build<API, T>());
-        }
-    };
+    using dot = format::diagram<SM, &format::dot::render>;
 }

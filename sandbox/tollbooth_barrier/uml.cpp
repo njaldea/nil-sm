@@ -12,6 +12,7 @@ int main()
 {
     using machine
         = nil::sm::SM<nil::sm::api::Coalesce<toll::tracing_api>::type, toll::bslot::booth>;
-    std::cout << nil::sm::puml<machine>() << std::flush;
+    nil::sm::puml<machine> diagram;
+    std::cout << diagram.root << std::flush;
     return 0;
 }

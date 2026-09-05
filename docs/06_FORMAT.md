@@ -39,4 +39,4 @@ can be declared with `NIL_SM_BARRIER_DECLARE` and defined with
 `NIL_SM_BARRIER_DEFINE`; see [Barriers](07_BARRIER.md).
 
 For runnable examples, see the retained sandbox targets:
-`sandbox_toll_uml` and `sandbox_toll_barrier_uml`.
+`sandbox_tollbooth_uml` and `sandbox_tollbooth_barrier_uml`.

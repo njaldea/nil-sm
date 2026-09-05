@@ -1,14 +1,13 @@
 #pragma once
 
 #include "../ir.hpp"
-#include "../state.hpp"
+#include "diagram.hpp"
 #include "utils.hpp"
 
 #include <ostream>
 #include <string>
 #include <string_view>
 #include <variant>
-#include <vector>
 
 namespace nil::sm::format::xstate
 {
@@ -25,36 +24,14 @@ namespace nil::sm::format::xstate
         const RegionContext& context
     );
 
-    inline bool is_initial_node(const ir::Node& node)
-    {
-        return node.is_initial;
-    }
-
     // A [**] pseudostate node marks where [*] transitions in its region terminate into
-    inline bool is_final_node(const ir::Node& node)
-    {
-        return node.is_final;
-    }
-
-    inline const ir::Node* find_node_by_id(const std::vector<ir::Node>& region, std::string_view id)
-    {
-        for (const auto& node : region)
-        {
-            if (node.id == id)
-            {
-                return &node;
-            }
-        }
-        return nullptr;
-    }
-
-    inline RegionContext make_region_context(const std::vector<ir::Node>& region)
+    inline RegionContext make_region_context(std::span<const ir::Node> region)
     {
         auto context = RegionContext{};
 
         for (const auto& node : region)
         {
-            if (is_final_node(node))
+            if (node.is_final)
             {
                 context.final_id = node.id;
                 break;
@@ -63,9 +40,9 @@ namespace nil::sm::format::xstate
 
         for (const auto& node : region)
         {
-            if (is_initial_node(node))
+            if (node.is_initial)
             {
-                context.initial_key = is_final_node(node) ? "done" : node.display_name;
+                context.initial_key = node.is_final ? "done" : node.display_name;
                 return context;
             }
         }
@@ -78,7 +55,8 @@ namespace nil::sm::format::xstate
         const RegionContext& context
     )
     {
-        if (raw_target == "[*]" || (!context.final_id.empty() && raw_target == context.final_id))
+        if (raw_target == reserved::termination_node
+            || (!context.final_id.empty() && raw_target == context.final_id))
         {
             return "done";
         }
@@ -88,7 +66,7 @@ namespace nil::sm::format::xstate
     inline void render_region_states(
         std::ostream& os,
         std::size_t depth,
-        const std::vector<ir::Node>& region,
+        std::span<const ir::Node> region,
         const RegionContext& context
     )
     {
@@ -96,7 +74,7 @@ namespace nil::sm::format::xstate
         auto rendered_final = false;
         for (const auto& node : region)
         {
-            if (is_final_node(node) && rendered_final)
+            if (node.is_final && rendered_final)
             {
                 continue;
             }
@@ -106,7 +84,7 @@ namespace nil::sm::format::xstate
                 os << ",\n";
             }
             render_node(os, depth, node, context);
-            rendered_final = rendered_final || is_final_node(node);
+            rendered_final = rendered_final || node.is_final;
             first = false;
         }
         os << "\n";
@@ -120,7 +98,7 @@ namespace nil::sm::format::xstate
         const RegionContext& context
     )
     {
-        if (is_final_node(node))
+        if (node.is_final)
         {
             // The [**] pseudostate renders as XState's own final-state marker
             indent(os, depth) << "\"done\": {\n";
@@ -299,39 +277,28 @@ namespace nil::sm::format::xstate
         indent(os, depth) << "}";
     }
 
-    // NOLINTNEXTLINE
-    inline std::ostream& render(std::ostream& os, const ir::Model& model)
+    inline void render(std::ostream& os, std::span<const ir::Node> roots)
     {
         os << "{\n";
         indent(os, 1) << "\"id\": \"SM\",\n";
-        if (!model.roots.empty())
+        if (!roots.empty())
         {
-            const auto root_context = make_region_context(model.roots);
+            const auto root_context = make_region_context(roots);
             if (!root_context.initial_key.empty())
             {
                 indent(os, 1) << R"("initial": ")" << root_context.initial_key << "\",\n";
             }
 
             indent(os, 1) << "\"states\": {\n";
-            render_region_states(os, 2, model.roots, root_context);
+            render_region_states(os, 2, roots, root_context);
             indent(os, 1) << "}\n";
         }
         os << "}\n";
-        return os;
     }
 }
 
 namespace nil::sm
 {
     template <typename SM>
-    struct xstate;
-
-    template <template <typename> typename API, typename T>
-    struct xstate<SM<API, T>>
-    {
-        friend std::ostream& operator<<(std::ostream& os, const xstate<SM<API, T>>& /* d */)
-        {
-            return format::xstate::render(os, nil::sm::ir::build<API, T>());
-        }
-    };
+    using xstate = format::diagram<SM, &format::xstate::render>;
 }

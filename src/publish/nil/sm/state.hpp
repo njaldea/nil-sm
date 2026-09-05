@@ -6,13 +6,25 @@
 #include <nil/xalt/tlist.hpp>
 #include <nil/xalt/typed.hpp>
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <memory>
 #include <type_traits>
 #include <utility>
 #include <variant>
+
+namespace nil::sm::barrier
+{
+    template <typename FinalizeAction, typename Provider>
+    struct State final
+    {
+        static constexpr auto name = reserved::barrier;
+
+        // Used by compile-time reachability analysis; the nil::sm::State
+        // specialization applies the action when the child finalizes.
+        static auto on_regions_finalized() -> FinalizeAction;
+    };
+}
 
 namespace nil::sm
 {

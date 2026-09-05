@@ -22,6 +22,7 @@ add_test_executable(
     19_sm_defer_handling.cpp
     20_sm_coalesce_api.cpp
     22_sm_capture_handling.cpp
+    23_sm_barrier_provider_ir.cpp
 )
 target_link_libraries(sm_test PRIVATE sm)
 target_link_libraries(sm_test PRIVATE GTest::gmock)

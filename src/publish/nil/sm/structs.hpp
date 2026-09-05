@@ -12,6 +12,24 @@
 
 namespace nil::sm
 {
+    namespace reserved
+    {
+        // [**] names the synthetic termination node.
+        inline constexpr auto termination_node = "[**]";
+
+        // [**] labels the regions-finalized event.
+        inline constexpr auto ev_regions_finalized = "[**]";
+
+        // [/] is the runtime barrier state's reserved name.
+        inline constexpr auto barrier = "[/]";
+    }
+
+    namespace barrier
+    {
+        template <typename FinalizeAction, typename Provider>
+        struct State;
+    }
+
     template <typename T>
     struct siblings
     {
@@ -25,6 +43,7 @@ namespace nil::sm
         std::size_t subregions = 0;
         std::size_t depth = 0;
         bool is_final = false;
+        bool is_barrier = false;
         std::string_view name;
         const Metadata* parent = nullptr;
     };
@@ -97,7 +116,7 @@ namespace nil::sm
 {
     struct Fin final
     {
-        static constexpr auto name = "[**]";
+        static constexpr auto name = reserved::termination_node;
         // Reserved Metadata::state value; never a real reachable-state index.
         static constexpr std::size_t state_index = std::numeric_limits<std::size_t>::max();
     };

@@ -8,19 +8,24 @@ endif()
 add_executable(${PROJECT_NAME} main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 
+project(sandbox_uml)
+
+add_executable(${PROJECT_NAME} uml.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE sm)
+
 project(sandbox_tollbooth)
 
 add_executable(${PROJECT_NAME} tollbooth/main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 
-project(sandbox_toll_uml)
+project(sandbox_tollbooth_uml)
 
 add_executable(${PROJECT_NAME} tollbooth/uml.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 
 # tollbooth_barrier - one machine, jobs held behind nil::sm::barrier::State.
 foreach(JOB startup collection shift maintenance)
-    project(toll_barrier_job_${JOB})
+    project(tollbooth_barrier_job_${JOB})
 
     add_library(
         ${PROJECT_NAME}
@@ -37,10 +42,10 @@ add_executable(${PROJECT_NAME} tollbooth_barrier/main.cpp)
 target_link_libraries(
     ${PROJECT_NAME}
     PRIVATE sm
-            toll_barrier_job_startup
-            toll_barrier_job_collection
-            toll_barrier_job_shift
-            toll_barrier_job_maintenance
+            tollbooth_barrier_job_startup
+            tollbooth_barrier_job_collection
+            tollbooth_barrier_job_shift
+            tollbooth_barrier_job_maintenance
 )
 
 project(sandbox_barrier_property)
@@ -53,14 +58,19 @@ project(sandbox_barrier_shared_ptr)
 add_executable(${PROJECT_NAME} barrier_shared_ptr.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 
-project(sandbox_toll_barrier_uml)
+project(sandbox_barrier_provider_uml)
+
+add_executable(${PROJECT_NAME} barrier_provider_uml.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE sm)
+
+project(sandbox_tollbooth_barrier_uml)
 
 add_executable(${PROJECT_NAME} tollbooth_barrier/uml.cpp)
 target_link_libraries(
     ${PROJECT_NAME}
     PRIVATE sm
-            toll_barrier_job_startup
-            toll_barrier_job_collection
-            toll_barrier_job_shift
-            toll_barrier_job_maintenance
+            tollbooth_barrier_job_startup
+            tollbooth_barrier_job_collection
+            tollbooth_barrier_job_shift
+            tollbooth_barrier_job_maintenance
 )

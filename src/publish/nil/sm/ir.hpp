@@ -3,10 +3,10 @@
 #include "detail.hpp"
 #include "id.hpp"
 
-#include <algorithm>
 #include <format>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -76,11 +76,11 @@ namespace nil::sm::ir::transit
 {
     struct Event
     {
-        // target_id uses "[*]" as a synthetic termination sentinel (Terminate action).
-        // Otherwise it stores a concrete node id.
+        // target_id uses reserved::termination_node as a synthetic termination sentinel (Terminate
+        // action). Otherwise it stores a concrete node id.
         std::string target_id;
         // event_name is the transition label.
-        // For on_regions_finalized hooks, formatter/detail emits the pseudo-event label "[**]".
+        // For on_regions_finalized hooks, the IR builder emits reserved::ev_regions_finalized.
         std::string event_name;
     };
 
@@ -98,7 +98,9 @@ namespace nil::sm::ir
 {
     struct Node
     {
-        std::string id; // stable state id (unique across the entire model)
+        // Stable occurrence ID. Provider definition nodes use provider-local metadata;
+        // barrier occurrences retain their host ancestry so repeated occurrences stay distinct.
+        std::string id;
 
         // display_name is the rendered state label (normally type_name<T>).
         std::string_view display_name;
@@ -107,15 +109,25 @@ namespace nil::sm::ir
         // Formatters use this to render initial markers/attributes.
         bool is_initial = false;
         bool is_final = false;
+        bool is_barrier = false;
         std::vector<action::Info> actions; // entry, exit, regions-finalized, event, capture
         std::vector<transit::Info> transitions;
         // event/capture transitions (no entry/exit/regions-finalized transitions)
         std::vector<std::vector<Node>> regions; // empty regions => leaf state
+        const void* provider_id = nullptr; // non-null when this node references a provider model
+    };
+
+    struct Provider
+    {
+        const void* id = nullptr;
+        std::string_view name;
+        std::vector<Node> roots;
     };
 
     struct Model
     {
         std::vector<Node> roots;
+        std::vector<Provider> providers;
     };
 }
 
@@ -145,6 +157,36 @@ namespace nil::sm::ir
 
 namespace nil::sm::ir::detail
 {
+    struct BuildContext
+    {
+        std::vector<ir::Provider> providers;
+        std::unordered_map<const void*, std::size_t> provider_indices;
+
+        bool contains(const void* provider_id) const
+        {
+            return provider_indices.contains(provider_id);
+        }
+
+        void add(const void* provider_id, std::string_view provider_name, ir::Model model)
+        {
+            if (!contains(provider_id))
+            {
+                provider_indices.emplace(provider_id, providers.size());
+                providers.push_back(ir::Provider{provider_id, provider_name, std::move(model.roots)}
+                );
+            }
+
+            for (auto& provider : model.providers)
+            {
+                if (!contains(provider.id))
+                {
+                    provider_indices.emplace(provider.id, providers.size());
+                    providers.push_back(std::move(provider));
+                }
+            }
+        }
+    };
+
     inline std::string format_stable_id(std::uint64_t value)
     {
         return std::format("ST_{:016x}", value);
@@ -191,12 +233,15 @@ namespace nil::sm::ir::detail
             );
             node.transitions.emplace_back(ir::transit::Event{
                 format_stable_id(nil::sm::id::stable_id(target_metadata)),
-                "[**]"
+                std::string(reserved::ev_regions_finalized)
             });
         }
         else if constexpr (std::is_same_v<R, Terminate>)
         {
-            node.transitions.emplace_back(ir::transit::Event{"[*]", "[**]"});
+            node.transitions.emplace_back(ir::transit::Event{
+                std::string(reserved::termination_node),
+                std::string(reserved::ev_regions_finalized)
+            });
         }
         else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
         {
@@ -254,7 +299,9 @@ namespace nil::sm::ir::detail
         }
         else if constexpr (std::is_same_v<R, Terminate>)
         {
-            node.transitions.push_back(TransitionInfoT{"[*]", std::string(event_name)});
+            node.transitions.push_back(
+                TransitionInfoT{std::string(reserved::termination_node), std::string(event_name)}
+            );
         }
         else if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
         {
@@ -385,16 +432,25 @@ namespace nil::sm::ir::detail
     }
 
     template <template <typename> typename API, typename T, typename RegionInitial>
-    ir::Node build_node(const nil::sm::Metadata* parent, std::size_t region, std::size_t state);
+    ir::Node build_node(
+        const nil::sm::Metadata* parent,
+        std::size_t region,
+        std::size_t state,
+        BuildContext& context
+    );
 
     template <template <typename> typename API, typename T>
-    std::vector<ir::Node> build_region(const nil::sm::Metadata* parent, std::size_t index)
+    std::vector<ir::Node> build_region(
+        const nil::sm::Metadata* parent,
+        std::size_t index,
+        BuildContext& context
+    )
     {
         using reachable_t = typename nil::sm::detail::region_reachability_graph<API, T>::states;
         auto nodes =
             [&]<typename... C, std::size_t... I>(nil::xalt::tlist<C...>, std::index_sequence<I...>)
         {
-            return std::vector<ir::Node>{build_node<API, C, T>(parent, index, I)...};
+            return std::vector<ir::Node>{build_node<API, C, T>(parent, index, I, context)...};
         }(reachable_t{}, std::make_index_sequence<reachable_t::size>{});
 
         const auto has_termination = std::any_of(
@@ -405,7 +461,8 @@ namespace nil::sm::ir::detail
                 return std::any_of(
                     node.transitions.begin(),
                     node.transitions.end(),
-                    [](const auto& transition) { return target_id(transition) == "[*]"; }
+                    [](const auto& transition)
+                    { return target_id(transition) == reserved::termination_node; }
                 );
             }
         );
@@ -417,57 +474,99 @@ namespace nil::sm::ir::detail
                 [](const auto& node) { return node.is_final; }
             ))
         {
-            nodes.push_back(build_node<API, Fin, T>(parent, index, Fin::state_index));
+            nodes.push_back(build_node<API, Fin, T>(parent, index, Fin::state_index, context));
         }
 
         return nodes;
     }
 
     template <template <typename> typename API, typename... R>
-    std::vector<std::vector<ir::Node>> build_regions(const nil::sm::Metadata* parent)
+    std::vector<std::vector<ir::Node>> build_regions(
+        const nil::sm::Metadata* parent,
+        BuildContext& context
+    )
     {
         return [&]<std::size_t... I>(std::index_sequence<I...> /* indices */) {
-            return std::vector<std::vector<ir::Node>>{build_region<API, R>(parent, I)...};
+            return std::vector<std::vector<ir::Node>>{build_region<API, R>(parent, I, context)...};
         }(std::index_sequence_for<R...>());
     }
 
-    // Primary template builds a node's regions from API<T>::regions_t; barrier.hpp specializes
-    // this for barrier::State<FinalizeAction, Provider> to delegate to Provider::ir instead.
+    // Primary template builds a node from API<T>::regions_t.
     template <template <typename> typename API, typename T>
-    struct regions_builder
+    struct node_builder
     {
-        static std::vector<std::vector<ir::Node>> regions(const nil::sm::Metadata* metadata)
+        template <typename RegionInitial>
+        static ir::Node node(
+            const nil::sm::Metadata* metadata,
+            std::size_t state,
+            BuildContext& context
+        )
         {
             using regions_t = typename API<T>::regions_t;
-            if constexpr (regions_t::size > 0)
+            auto node = ir::Node{
+                .id = format_stable_id(nil::sm::id::stable_id(*metadata)),
+                .display_name = metadata->name,
+                .is_initial = state == 0,
+                .is_final = metadata->is_final,
+                .is_barrier = metadata->is_barrier,
+                .actions = {},
+                .transitions = {},
+                .regions = [metadata, &context]<typename... R>(nil::xalt::tlist<R...>)
+                { return build_regions<API, R...>(metadata, context); }(regions_t{}),
+            };
+
+            emit_node_annotations<API, T, RegionInitial>(*metadata, node);
+            return node;
+        }
+    };
+
+    template <template <typename> typename API, typename FinalizeAction, typename Provider>
+    struct node_builder<API, barrier::State<FinalizeAction, Provider>>
+    {
+        template <typename RegionInitial>
+        static ir::Node node(const Metadata* metadata, std::size_t state, BuildContext& context)
+        {
+            constexpr auto provider_type_id = nil::xalt::type_id<Provider>;
+            if (!context.contains(provider_type_id))
             {
-                return [metadata]<typename... R>(nil::xalt::tlist<R...>)
-                { return build_regions<API, R...>(metadata); }(regions_t{});
+                context.add(
+                    provider_type_id,
+                    nil::sm::detail::type_name<Provider>(),
+                    Provider::ir(nullptr)
+                );
             }
-            else
-            {
-                return {};
-            }
+
+            auto node = ir::Node{
+                .id = format_stable_id(nil::sm::id::stable_id(*metadata)),
+                .display_name = nil::sm::detail::type_name<Provider>(),
+                .is_initial = state == 0,
+                .is_final = metadata->is_final,
+                .is_barrier = metadata->is_barrier,
+                .actions = {},
+                .transitions = {},
+                .regions = {},
+                .provider_id = provider_type_id,
+            };
+
+            emit_node_annotations<API, barrier::State<FinalizeAction, Provider>, RegionInitial>(
+                *metadata,
+                node
+            );
+            return node;
         }
     };
 
     template <template <typename> typename API, typename T, typename RegionInitial>
-    ir::Node build_node(const nil::sm::Metadata* parent, std::size_t region, std::size_t state)
+    ir::Node build_node(
+        const nil::sm::Metadata* parent,
+        std::size_t region,
+        std::size_t state,
+        BuildContext& context
+    )
     {
         const auto metadata
             = nil::sm::detail::make_metadata<T>(region, state, API<T>::regions_t::size, parent);
-        auto node = ir::Node{
-            .id = format_stable_id(nil::sm::id::stable_id(metadata)),
-            .display_name = metadata.name,
-            .is_initial = state == 0,
-            .is_final = metadata.is_final,
-            .actions = {},
-            .transitions = {},
-            .regions = regions_builder<API, T>::regions(&metadata),
-        };
-
-        emit_node_annotations<API, T, RegionInitial>(metadata, node);
-        return node;
+        return node_builder<API, T>::template node<RegionInitial>(&metadata, state, context);
     }
 }
 
@@ -476,6 +575,37 @@ namespace nil::sm::ir
     template <template <typename> typename API, typename T>
     Model build(const nil::sm::Metadata* parent = nullptr)
     {
-        return Model{.roots = detail::build_region<API, T>(parent, 0)};
+        auto context = detail::BuildContext{};
+        return Model{
+            .roots = detail::build_region<API, T>(parent, 0, context),
+            .providers = std::move(context.providers),
+        };
+    }
+
+    inline const Provider* find_provider(const Model& model, const void* provider_id)
+    {
+        for (const auto& provider : model.providers)
+        {
+            if (provider.id == provider_id)
+            {
+                return &provider;
+            }
+        }
+        return nullptr;
+    }
+
+    template <typename ProviderT>
+    const Provider* find_provider(const Model& model)
+    {
+        return find_provider(model, nil::xalt::type_id<ProviderT>);
+    }
+
+    template <typename Function>
+    void for_each_provider(const Model& model, Function&& function)
+    {
+        for (const auto& provider : model.providers)
+        {
+            function(provider);
+        }
     }
 }

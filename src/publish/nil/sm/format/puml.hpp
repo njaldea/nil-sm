@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../ir.hpp"
-#include "../state.hpp"
+#include "diagram.hpp"
 #include "utils.hpp"
 
 namespace nil::sm::format::puml
@@ -29,8 +29,8 @@ namespace nil::sm::format::puml
                 }
                 else if constexpr (std::is_same_v<T, ir::action::RegionsFinalized>)
                 {
-                    indent(os, depth)
-                        << node_id << " : on [**] / " << action_name(info.response) << "\n";
+                    indent(os, depth) << node_id << " : on " << reserved::ev_regions_finalized
+                                      << " / " << action_name(info.response) << "\n";
                 }
                 else if constexpr (std::is_same_v<T, ir::action::Capture>)
                 {
@@ -61,7 +61,10 @@ namespace nil::sm::format::puml
 
         for (const auto& transition : node.transitions)
         {
-            indent(os, depth) << node.id << " --> " << ir::target_id(transition);
+            const auto target = ir::target_id(transition) == reserved::termination_node
+                ? std::string_view{"[*]"}
+                : std::string_view{ir::target_id(transition)};
+            indent(os, depth) << node.id << " --> " << target;
             if (!ir::event_name(transition).empty())
             {
                 os << " : " << ir::event_name(transition)
@@ -73,11 +76,7 @@ namespace nil::sm::format::puml
 
     inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node);
 
-    inline void render_region(
-        std::ostream& os,
-        std::size_t depth,
-        const std::vector<ir::Node>& region
-    )
+    inline void render_region(std::ostream& os, std::size_t depth, std::span<const ir::Node> region)
     {
         for (const auto& node : region)
         {
@@ -87,17 +86,23 @@ namespace nil::sm::format::puml
 
     inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
-        if (node.display_name == "[**]")
+        if (node.is_final)
         {
             return;
         }
 
-        const auto* stereotype = node.display_name == "[/]" ? " <<barrier>>" : "";
+        if (node.provider_id != nullptr)
+        {
+            indent(os, depth) << "state " << node.id << " as \"" << node.display_name
+                              << "\" <<barrier>>\n";
+            render_annotations(os, depth, node);
+            return;
+        }
 
         if (!node.regions.empty())
         {
             indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\""
-                              << stereotype << " {\n";
+                              << (node.is_barrier ? " <<barrier>>" : "") << " {\n";
             for (auto region_idx = std::size_t{0}; region_idx < node.regions.size(); ++region_idx)
             {
                 render_region(os, depth + 1, node.regions[region_idx]);
@@ -110,14 +115,13 @@ namespace nil::sm::format::puml
         }
         else
         {
-            indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\""
-                              << stereotype << "\n";
+            indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\"\n";
         }
 
         render_annotations(os, depth, node);
     }
 
-    inline std::ostream& render(std::ostream& os, const ir::Model& model)
+    inline void render(std::ostream& os, std::span<const ir::Node> roots)
     {
         os << "@startuml\n"
               "skin rose\n"
@@ -128,24 +132,14 @@ namespace nil::sm::format::puml
               "    BorderStyle<<barrier>> dashed\n"
               "}\n";
 
-        render_region(os, 0, model.roots);
+        render_region(os, 0, roots);
 
         os << "@enduml\n";
-        return os;
     }
 }
 
 namespace nil::sm
 {
     template <typename SM>
-    struct puml;
-
-    template <template <typename> typename API, typename T>
-    struct puml<SM<API, T>>
-    {
-        friend std::ostream& operator<<(std::ostream& os, const puml<SM<API, T>>& /* uml */)
-        {
-            return format::puml::render(os, nil::sm::ir::build<API, T>());
-        }
-    };
+    using puml = format::diagram<SM, &format::puml::render>;
 }

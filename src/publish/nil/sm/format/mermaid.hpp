@@ -1,8 +1,10 @@
 #pragma once
 
 #include "../ir.hpp"
-#include "../state.hpp"
+#include "diagram.hpp"
 #include "utils.hpp"
+
+#include <format>
 
 namespace nil::sm::format::mermaid
 {
@@ -14,25 +16,31 @@ namespace nil::sm::format::mermaid
                 using T = std::decay_t<decltype(info)>;
                 if constexpr (std::is_same_v<T, ir::action::Entry>)
                 {
-                    return std::string("on Enter / ") + std::string(action_name(info.response));
+                    return std::format("on Enter / {}", action_name(info.response));
                 }
                 else if constexpr (std::is_same_v<T, ir::action::Exit>)
                 {
-                    return std::string("on Exit / ") + std::string(action_name(info.response));
+                    return std::format("on Exit / {}", action_name(info.response));
                 }
                 else if constexpr (std::is_same_v<T, ir::action::RegionsFinalized>)
                 {
-                    return std::string("on [**] / ") + std::string(action_name(info.response));
+                    return std::format(
+                        "on {} / {}",
+                        reserved::ev_regions_finalized,
+                        action_name(info.response)
+                    );
                 }
                 else if constexpr (std::is_same_v<T, ir::action::Capture>)
                 {
-                    return "on " + info.event_name + " [c] / "
-                        + std::string(action_name(info.response));
+                    return std::format(
+                        "on {} [c] / {}",
+                        info.event_name,
+                        action_name(info.response)
+                    );
                 }
                 else
                 {
-                    return "on " + info.event_name + " / "
-                        + std::string(action_name(info.response));
+                    return std::format("on {} / {}", info.event_name, action_name(info.response));
                 }
             },
             action
@@ -64,7 +72,10 @@ namespace nil::sm::format::mermaid
 
         for (const auto& transition : node.transitions)
         {
-            indent(os, depth) << node.id << " --> " << ir::target_id(transition);
+            const auto target = ir::target_id(transition) == reserved::termination_node
+                ? std::string_view{"[*]"}
+                : std::string_view{ir::target_id(transition)};
+            indent(os, depth) << node.id << " --> " << target;
             if (!ir::event_name(transition).empty())
             {
                 os << " : " << ir::event_name(transition)
@@ -76,11 +87,7 @@ namespace nil::sm::format::mermaid
 
     inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node);
 
-    inline void render_region(
-        std::ostream& os,
-        std::size_t depth,
-        const std::vector<ir::Node>& region
-    )
+    inline void render_region(std::ostream& os, std::size_t depth, std::span<const ir::Node> region)
     {
         for (const auto& node : region)
         {
@@ -90,7 +97,7 @@ namespace nil::sm::format::mermaid
 
     inline void render_node(std::ostream& os, std::size_t depth, const ir::Node& node)
     {
-        if (node.display_name == "[**]")
+        if (node.is_final)
         {
             return;
         }
@@ -118,25 +125,15 @@ namespace nil::sm::format::mermaid
         render_annotations(os, depth, node);
     }
 
-    inline std::ostream& render(std::ostream& os, const ir::Model& model)
+    inline void render(std::ostream& os, std::span<const ir::Node> roots)
     {
         os << "stateDiagram-v2\n";
-        render_region(os, 0, model.roots);
-        return os;
+        render_region(os, 0, roots);
     }
 }
 
 namespace nil::sm
 {
     template <typename SM>
-    struct mermaid;
-
-    template <template <typename> typename API, typename T>
-    struct mermaid<SM<API, T>>
-    {
-        friend std::ostream& operator<<(std::ostream& os, const mermaid<SM<API, T>>& /* mmd */)
-        {
-            return format::mermaid::render(os, nil::sm::ir::build<API, T>());
-        }
-    };
+    using mermaid = format::diagram<SM, &format::mermaid::render>;
 }

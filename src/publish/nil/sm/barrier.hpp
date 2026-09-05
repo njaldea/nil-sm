@@ -147,27 +147,6 @@ namespace nil::sm::barrier
         }
     };
 
-    template <typename FinalizeAction, typename Provider>
-    struct State final
-    {
-        static constexpr auto name = "[/]";
-
-        // Used by compile-time reachability analysis; the nil::sm::State
-        // specialization further below applies the action when the child finalizes.
-        static auto on_regions_finalized() -> FinalizeAction;
-    };
-}
-
-namespace nil::sm::ir::detail
-{
-    template <template <typename> typename API, typename FinalizeAction, typename Provider>
-    struct regions_builder<API, barrier::State<FinalizeAction, Provider>>
-    {
-        static std::vector<std::vector<ir::Node>> regions(const Metadata* metadata)
-        {
-            return {Provider::ir(metadata).roots};
-        }
-    };
 }
 
 namespace nil::sm
