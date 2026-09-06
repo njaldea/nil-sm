@@ -1,8 +1,7 @@
 # Barrier States
 
 `nil::sm::barrier::State` hides a child machine behind a small provider
-interface. It is useful when a large machine should be compiled across
-translation units.
+interface, so a large machine can be split across translation units.
 
 ```cpp
 #include <nil/sm/barrier.hpp>
@@ -40,16 +39,14 @@ macro. The provider factory receives shared queues and erased contexts.
 passed by the barrier state. The host owns the actual context objects and must
 keep them alive while the child exists.
 
-State and API contexts are bridged by `nil::sm::barrier::context_adapter<Parent, Child>`.
-Two partial specializations cover the common cases:
+State and API contexts are bridged by `nil::sm::barrier::context_adapter<Parent, Child>`,
+which covers two common cases automatically:
 
-- an `adapt_context(Parent*, Child**)` call when one is available;
-- value conversion for non-borrowable constructible contexts, such as
+- borrowing, via a built-in `adapt_context(Parent*, Child**)` overload when
+  `Parent*` converts to `Child*` — no user code needed;
+- value conversion for non-borrowable but constructible contexts, such as
   `std::shared_ptr<Derived>` to `std::shared_ptr<Base>`, where the converted
   object is stored in the adapter.
-
-The library provides one `adapt_context` overload, constrained to pairs where
-`Parent*` converts to `Child*`, so borrowing needs no user code.
 
 ### Custom bridging
 
@@ -64,10 +61,10 @@ void adapt_context(parent_context* parent, child_context** out)
 }
 ```
 
-Being a non-template, such an overload also wins over the library's borrowing
-overload when both apply. Declare it before the barrier state is instantiated;
-otherwise the constraint silently resolves to a different default, and two
-translation units that disagree violate the one-definition rule.
+A non-template overload like this wins over the library's borrowing overload
+when both apply. Declare it before the barrier state is instantiated —
+otherwise a different default is silently chosen, and mismatched translation
+units violate the one-definition rule.
 
 This form only borrows, so the parent must own the object. When the child
 context has to be assembled and owned by the bridge, specialize the adapter
@@ -91,10 +88,9 @@ struct nil::sm::barrier::context_adapter<parent_context, child_context> final
 };
 ```
 
-A full specialization always wins over the partial ones. An adapter provides a
-constructor receiving `Parent*` and a `context()` function returning the child
-context slot. Its storage belongs to the barrier state and lives as long as the
-child machine.
+A full specialization always wins over the partial ones. Every adapter needs a
+constructor from `Parent*` and a `context()` accessor; its storage lives as
+long as the child machine.
 
 ## Runtime behavior
 

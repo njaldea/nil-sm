@@ -4,5 +4,9 @@
 
 namespace toll::bslot
 {
-    NIL_SM_BARRIER_DEFINE(shift_provider, nil::sm::api::Coalesce<tracing_api>::type, job::shift_job)
+    NIL_SM_BARRIER_DEFINE(
+        shift_provider,
+        nil::sm::api::Coalesce<tracing_api>::type,
+        job::shift_job
+    );
 }

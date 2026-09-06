@@ -33,10 +33,6 @@ namespace nil::sm::api
                 {
                     return T(parent, state_contexts);
                 }
-                else if constexpr (requires() { T(parent); })
-                {
-                    return T(parent);
-                }
                 else
                 {
                     static_assert(

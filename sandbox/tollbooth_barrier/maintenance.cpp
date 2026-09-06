@@ -8,5 +8,5 @@ namespace toll::bslot
         maintenance_provider,
         nil::sm::api::Coalesce<tracing_api>::type,
         job::maintenance_job
-    )
+    );
 }

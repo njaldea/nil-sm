@@ -513,6 +513,7 @@ namespace nil::sm::ir::detail
                 .transitions = {},
                 .regions = [metadata, &context]<typename... R>(nil::xalt::tlist<R...>)
                 { return build_regions<API, R...>(metadata, context); }(regions_t{}),
+                .provider_id = nullptr
             };
 
             emit_node_annotations<API, T, RegionInitial>(*metadata, node);

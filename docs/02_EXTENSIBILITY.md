@@ -1,7 +1,7 @@
 # Extensibility
 
-Start with the built-in API. Use a custom API when states need application
-services or when you want to observe construction and lifecycle calls.
+Use a custom API when states need application services, or to observe
+construction and lifecycle calls.
 
 ## Contexts
 
@@ -34,8 +34,8 @@ machine does not copy or delete them.
 
 ## Custom hooks
 
-An API is a template that supplies `API<State>`. The easiest way to customize
-one hook is to use `Coalesce` and delegate everything else to the default API:
+An API is a template supplying `API<State>`. `Coalesce` fills in everything else
+from the default API when only one hook needs to change:
 
 ```cpp
 struct Observer
@@ -80,8 +80,6 @@ The state machine is synchronous and not thread-safe. A common integration is:
 
 ## Allocation and other services
 
-Custom APIs can replace state construction or add logging, profiling, timers,
-and allocators. Keep those changes small and delegate to `api::Default` for
-behavior you do not need to change.
-
-Continue to [Advanced API](05_ADVANCED.md) for signatures and coalescing rules.
+Custom APIs can replace construction or add logging, profiling, timers, and
+allocators — keep changes small and delegate the rest to `api::Default`.
+See [Advanced API](05_ADVANCED.md) for signatures and coalescing rules.

@@ -147,6 +147,8 @@ namespace nil::sm::detail
     {
         std::size_t index;
         void* parent = nullptr;
+        const Metadata* parent_metadata = nullptr;
+
         Queues* queues = nullptr;
         Contexts* contexts = nullptr;
         std::unique_ptr<IState> active_state;
@@ -169,13 +171,14 @@ namespace nil::sm::detail
         )
             : index(init_index)
             , parent(init_parent)
+            , parent_metadata(init_parent_metadata)
             , queues(init_queues)
             , contexts(init_contexts)
             , active_state(std::make_unique<State<API, R>>(
                   init_parent,
                   init_queues,
                   init_contexts,
-                  make_metadata<R>(init_index, 0, API<R>::regions_t::size, init_parent_metadata)
+                  make_metadata<R>(init_index, 0, API<R>::regions_t::size, parent_metadata)
               ))
         {
         }
@@ -196,19 +199,21 @@ namespace nil::sm::detail
         }
 
         template <typename RegionDispatcher>
-        void consume_action(const Event& e, on_event_t action, const Metadata* parent_metadata)
+        action_t consume_action(const Event& e, on_event_t action)
         {
             using Parent = typename RegionDispatcher::parent_t;
-            std::visit(
-                [&]<typename Action>(Action& r)
+            return std::visit(
+                [&]<typename Action>(Action& r) -> action_t
                 {
                     if constexpr (std::is_same_v<Action, Event>)
                     {
                         queues->push_emit(r);
+                        return Discard();
                     }
                     else if constexpr (std::is_same_v<Action, Defer>)
                     {
                         deferred.push_back(e.clone());
+                        return Discard();
                     }
                     else if constexpr (std::is_same_v<Action, TransitTo>)
                     {
@@ -231,6 +236,20 @@ namespace nil::sm::detail
                         {
                             terminated = true;
                         }
+
+                        return Discard();
+                    }
+                    else if constexpr (std::is_same_v<Action, Forward>)
+                    {
+                        return Forward();
+                    }
+                    else if constexpr (std::is_same_v<Action, Unhandled>)
+                    {
+                        return Unhandled();
+                    }
+                    else
+                    {
+                        return Discard();
                     }
                 },
                 action

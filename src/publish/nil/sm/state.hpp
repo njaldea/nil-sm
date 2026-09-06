@@ -18,6 +18,8 @@ namespace nil::sm::barrier
     template <typename FinalizeAction, typename Provider>
     struct State final
     {
+        // Provider name is only surfaced in IR (see ir.hpp's node_builder); the runtime
+        // metadata name stays the reserved barrier token.
         static constexpr auto name = reserved::barrier;
 
         // Used by compile-time reachability analysis; the nil::sm::State
@@ -179,16 +181,15 @@ namespace nil::sm
                     return Unhandled();
                 }
 
+                // If the current state transitions, its child regions are destroyed,
+                // so their pending actions are not committed.
+                //
+                // TODO: evaluate if dropping of event/deferral actions from child regions is
+                // acceptable
                 if (!std::holds_alternative<detail::TransitTo>(this_result))
                 {
                     commit_region_results(e, sub_state.results);
                     check_finalize();
-                }
-
-                if (std::holds_alternative<detail::Event>(this_result))
-                {
-                    queues->push_emit(std::get<detail::Event>(this_result));
-                    return Discard();
                 }
 
                 return this_result;
@@ -292,11 +293,7 @@ namespace nil::sm
         {
             for (auto i = 0U; i < regions_t::size; ++i)
             {
-                regions[i].template consume_action<region_dispatcher_t>(
-                    e,
-                    sub_state_result[i],
-                    std::addressof(this->metadata)
-                );
+                regions[i].template consume_action<region_dispatcher_t>(e, sub_state_result[i]);
             }
         }
     };
@@ -329,24 +326,13 @@ namespace nil::sm
         // Posts an already type-erased event and returns its normalized action.
         action_t post(detail::Event event)
         {
-            const auto result = post_impl(event);
-            if (std::holds_alternative<Forward>(result))
-            {
-                return Forward();
-            }
-
-            if (std::holds_alternative<Unhandled>(result))
-            {
-                return Unhandled();
-            }
-
-            return Discard();
+            return post_impl(event);
         }
 
         virtual bool is_finalized() const = 0;
 
     private:
-        virtual detail::on_event_t post_impl(detail::Event event) = 0;
+        virtual action_t post_impl(detail::Event event) = 0;
     };
 
     template <template <typename> typename API, typename T>
@@ -390,16 +376,15 @@ namespace nil::sm
         }
 
     private:
-        Root root;
+        typename API<Root>::state_t root{};
         detail::Queues queues;
         detail::Contexts contexts;
         detail::Region region;
 
-        detail::on_event_t dispatch(const detail::Event& event)
+        action_t dispatch(const detail::Event& event)
         {
             auto action = region.active_state->on_event(event);
-            region.template consume_action<region_dispatcher_t>(event, action, nullptr);
-            return action;
+            return region.template consume_action<region_dispatcher_t>(event, action);
         }
 
         void flush()
@@ -407,7 +392,7 @@ namespace nil::sm
             queues.flush([this](const detail::Event& event) { dispatch(event); });
         }
 
-        detail::on_event_t post_impl(detail::Event event) override
+        action_t post_impl(detail::Event event) override
         {
             auto action = dispatch(event);
             flush();

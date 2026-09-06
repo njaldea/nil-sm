@@ -60,7 +60,6 @@ are active together.
 | --- | --- |
 | [Guide](docs/01_GUIDE.md) | States, events, regions, and actions |
 | [Patterns](docs/03_PATTERNS.md) | Short reusable designs |
-| [Use cases](docs/04_USE_CASES.md) | Small domain examples |
 | [Extensibility](docs/02_EXTENSIBILITY.md) | Contexts, observers, timers, and threading |
 | [Advanced API](docs/05_ADVANCED.md) | Complete API customization reference |
 | [Formatters](docs/06_FORMAT.md) | Diagram output |

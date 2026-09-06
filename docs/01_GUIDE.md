@@ -1,7 +1,7 @@
 # Core Guide
 
-This is the shortest path to a useful state machine. For contexts and custom
-hooks, see [Extensibility](02_EXTENSIBILITY.md).
+The shortest path to a working state machine. See [Extensibility](02_EXTENSIBILITY.md)
+for contexts and custom hooks.
 
 ## States and events
 
@@ -29,8 +29,8 @@ nil::sm::DefaultSM<stopped> machine;
 machine.post(start{});
 ```
 
-The default machine has no context. Context-enabled construction is covered in
-[Extensibility](02_EXTENSIBILITY.md).
+The default machine has no context; see [Extensibility](02_EXTENSIBILITY.md) for
+context-enabled construction.
 
 ## Actions
 
@@ -80,6 +80,20 @@ struct starting
 Deferred events are replayed after the transition and are kept per region. If
 the region terminates, its deferred events are discarded.
 
+## Dispatch order
+
+For one `post(event)` call:
+
+1. Captures are checked.
+2. Child regions process the event.
+3. The parent may process it if it was not consumed.
+4. Transitions and terminations are applied.
+5. Deferred events are replayed after a transition.
+6. Emitted events are delivered from the queue.
+
+The sections below build on this order: captures run first, child regions
+before their parent, and lifecycle hooks around transitions.
+
 ## Child regions
 
 A state can contain child regions:
@@ -97,13 +111,13 @@ struct application
 };
 ```
 
-Child regions process an event before their parent. `Forward` asks the parent
+`Forward` asks the parent
 to handle it. Multiple entries in `regions` create orthogonal regions; each is
 active and processes events in declaration order.
 
 ## Captures
 
-Use `captures` for events that should be intercepted before child dispatch:
+Use `captures` for events that must run before the child regions see them:
 
 ```cpp
 struct shutdown {};
@@ -147,17 +161,6 @@ struct connected
 `on_regions_finalized()` runs after all direct child regions terminate. It can
 return `NOOP`, `Emit`, `TransitTo`, or `Terminate` as appropriate.
 
-## Dispatch order
-
-For one `post(event)` call:
-
-1. Captures are checked.
-2. Child regions process the event.
-3. The parent may process it if it was not consumed.
-4. Transitions and terminations are applied.
-5. Deferred events are replayed after a transition.
-6. Emitted events are delivered from the queue.
-
 ## Compile-time checks
 
 The compiler checks event handlers, action types, and reachable transition
@@ -166,6 +169,5 @@ state graph.
 
 ## Next steps
 
-- [Patterns](03_PATTERNS.md) for compact designs.
-- [Extensibility](02_EXTENSIBILITY.md) for contexts and custom hooks.
-- [Advanced API](05_ADVANCED.md) for the complete customization contract.
+See [Patterns](03_PATTERNS.md) for compact designs, or
+[Extensibility](02_EXTENSIBILITY.md) for contexts and custom hooks.

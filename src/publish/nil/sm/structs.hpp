@@ -123,10 +123,13 @@ namespace nil::sm
 
     struct Root final
     {
+        // Synthetic top-level parent for all states; always default-constructed, even under a
+        // custom API whose state_t wraps it (e.g. a null shared_ptr<Root>).
     };
 
     struct Unhandled final
     {
+        // Mainly to be used by api policy when the hook is not provided by the user.
     };
 
     struct Terminate final

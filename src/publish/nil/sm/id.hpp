@@ -7,8 +7,8 @@
 
 namespace nil::sm::id
 {
-    constexpr std::uint64_t fnv_offset = 14695981039346656037ULL;
-    constexpr std::uint64_t fnv_prime = 1099511628211ULL;
+    inline constexpr std::uint64_t fnv_offset = 14695981039346656037ULL;
+    inline constexpr std::uint64_t fnv_prime = 1099511628211ULL;
 
     inline void hash_byte(std::uint64_t& hash, std::uint8_t byte)
     {

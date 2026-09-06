@@ -40,7 +40,7 @@ static auto on_exit(state_t&, api_context_t*);
 static auto on_regions_finalized(state_t&, api_context_t*);
 ```
 
-`api::Default` tries `(Parent*, state_context_t*)`, then `(Parent*)`, then
+`api::Default` tries `(Parent*, state_context_t*)`, then falls back to
 default construction. Event and capture hooks may return `Discard`, `Forward`,
 `Defer`, `DeferTo<T>`, `TransitTo<T>`, `Emit<E>`, or a variant of valid actions.
 Lifecycle hooks have a smaller set of valid actions. See the [Guide](01_GUIDE.md)
@@ -58,8 +58,8 @@ nil::sm::SM<MyAPI, Root> machine{&app, &observer};
 ```
 
 `SM` stores those addresses in `detail::Contexts`; it does not own, copy, or
-destroy the objects. A context type that is itself a pointer or smart pointer
-is valid, but then the constructor receives a pointer to that context value.
+destroy the objects. A pointer/smart-pointer context type works too — the
+constructor then receives a pointer to that value.
 
 ## Coalesce
 
@@ -85,7 +85,7 @@ nil::sm::CoalescedSM<PartialAPI, Root> machine{nullptr, &observer};
 ```
 
 A partial API should delegate to `api::Default` when it still wants normal
-state behavior. See the test files for complete mock-based examples.
+state behavior.
 
 ## Runtime metadata
 

@@ -3,18 +3,36 @@
 #include "ir.hpp" // IWYU pragma: keep
 #include "state.hpp"
 
+#include <nil/xalt/MACROS.h>
+
 #include <memory>
 #include <type_traits>
 
-#define NIL_SM_BARRIER_DECLARE(NAME, API)                                                          \
+#define NIL_SM_BARRIER_DECLARE_MEMBERS(API)                                                        \
+    using api_class_t = API<nil::sm::Root>;                                                        \
+    using state_context_t = api_class_t::state_context_t;                                          \
+    using api_context_t = api_class_t::api_context_t;                                              \
+    static std::unique_ptr<nil::sm::ISM>                                                           \
+        make(nil::sm::detail::Queues*, nil::sm::detail::Contexts*, const nil::sm::Metadata*);      \
+    static nil::sm::ir::Model ir(const nil::sm::Metadata*)
+
+#define NIL_SM_BARRIER_DECLARE_1(NAME, API)                                                        \
     struct NAME final                                                                              \
     {                                                                                              \
-        using state_context_t = API<nil::sm::Root>::state_context_t;                               \
-        using api_context_t = API<nil::sm::Root>::api_context_t;                                   \
-        static std::unique_ptr<nil::sm::ISM>                                                       \
-            make(nil::sm::detail::Queues*, nil::sm::detail::Contexts*, const nil::sm::Metadata*);  \
-        static nil::sm::ir::Model ir(const nil::sm::Metadata*);                                    \
+        NIL_SM_BARRIER_DECLARE_MEMBERS(API);                                                       \
     }
+
+#define NIL_SM_BARRIER_DECLARE_2(NAME, API, DISPLAY_NAME)                                          \
+    struct NAME final                                                                              \
+    {                                                                                              \
+        static constexpr auto name = DISPLAY_NAME;                                                 \
+        NIL_SM_BARRIER_DECLARE_MEMBERS(API);                                                       \
+    }
+
+// NIL_XALT_NARG counts args after the first (like APPLY's leading MACRO token),
+// so (NAME, API) -> 1 and (NAME, API, DISPLAY_NAME) -> 2.
+#define NIL_SM_BARRIER_DECLARE(...)                                                                \
+    NIL_XALT_CONCAT(NIL_SM_BARRIER_DECLARE_, NIL_XALT_NARG(__VA_ARGS__))(__VA_ARGS__)
 
 #define NIL_SM_BARRIER_DEFINE(NAME, API, STATE)                                                    \
     [[maybe_unused]] std::unique_ptr<nil::sm::ISM> NAME::make(                                     \
@@ -32,7 +50,12 @@
     [[maybe_unused]] nil::sm::ir::Model NAME::ir(const nil::sm::Metadata* parent_metadata)         \
     {                                                                                              \
         return nil::sm::ir::build<API, STATE>(parent_metadata);                                    \
-    }
+    }                                                                                              \
+    static_assert(                                                                                 \
+        std::is_same_v<typename NAME::api_class_t, API<nil::sm::Root>>,                            \
+        "NIL_SM_BARRIER_DEFINE: "                                                                  \
+        "API must match the API passed to NIL_SM_BARRIER_DECLARE(" #NAME ")"                       \
+    )
 
 namespace nil::sm::barrier
 {
@@ -134,16 +157,15 @@ namespace nil::sm::barrier
         }
 
     private:
-        Root root;
+        typename API<Root>::state_t root{};
         detail::Queues* queues;
         detail::Contexts* contexts;
         detail::Region region;
 
-        detail::on_event_t post_impl(detail::Event event) override
+        action_t post_impl(detail::Event event) override
         {
             auto action = region.active_state->on_event(event);
-            region.template consume_action<region_dispatcher_t>(event, action, nullptr);
-            return action;
+            return region.template consume_action<region_dispatcher_t>(event, action);
         }
     };
 
