@@ -527,7 +527,7 @@ namespace nil::sm::ir::detail
         template <typename RegionInitial>
         static ir::Node node(const Metadata* metadata, std::size_t state, BuildContext& context)
         {
-            constexpr auto provider_type_id = nil::xalt::type_id<Provider>;
+            constexpr auto provider_type_id = Provider::id;
             if (!context.contains(provider_type_id))
             {
                 context.add(
@@ -598,7 +598,7 @@ namespace nil::sm::ir
     template <typename ProviderT>
     const Provider* find_provider(const Model& model)
     {
-        return find_provider(model, nil::xalt::type_id<ProviderT>);
+        return find_provider(model, ProviderT::id);
     }
 
     template <typename Function>

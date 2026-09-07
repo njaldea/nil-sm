@@ -33,6 +33,20 @@ using MyBarrier = nil::sm::barrier::State<
 A provider exposes the context types of its child API through the declaration
 macro. The provider factory receives shared queues and erased contexts.
 
+The declared struct isn't `final`. To customize a shared provider per
+embedding site — e.g. a display `name`, or a `payload()` hook (see below) —
+inherit from it instead of redeclaring:
+
+```cpp
+struct MyNamedProvider : MyProvider
+{
+    static constexpr auto name = "custom-name";
+};
+```
+
+Every such view shares the base's `id` (a `nil::xalt::type_id<NAME>` baked in
+by the declaration), so the IR still groups them as one provider.
+
 ## Contexts
 
 `barrier::SM` is non-owning. It borrows the host queues and the context slots
@@ -98,6 +112,75 @@ Events reaching the barrier are posted to the child. Child transitions,
 `DeferTo` transitions, emissions, and termination are applied inside the child.
 When the child reports `is_finalized()`, the barrier returns its `FinalizeAction` once;
 subsequent events are unhandled.
+
+## Payload injection
+
+A provider can define a `payload()` hook to hand the child machine data
+computed from the parent's own state context, without changing `make()`'s
+signature or the `NIL_SM_BARRIER_DECLARE`/`DEFINE` macros:
+
+```cpp
+struct MyProvider : /* the declared provider */
+{
+    static MyPayload payload(state_context_t* ctx)
+    {
+        return MyPayload{ /* built from *ctx */ };
+    }
+};
+```
+
+If `Provider::payload(state_context_t*)` is defined, the barrier state calls it
+right after the child machine is constructed and posts the result as
+`nil::sm::barrier::EvPayload<MyPayload>{ value }` (aggregate CTAD deduces
+`MyPayload`). If `payload()` isn't defined, nothing is posted.
+
+### Only one state needs the payload
+
+If a single state needs the payload before moving on, it just declares
+`EvPayload<T>` in its `events` and then returns an action:
+
+```cpp
+using events = nil::xalt::tlist<barrier::EvPayload<MyPayload>>;
+
+auto on_event(const barrier::EvPayload<MyPayload>& e)
+{
+    return Action(); // Emit, Discard, Forward, Defer, DeferTo<T>, TransitTo<T>
+}
+```
+
+`nil::sm::barrier::WaitForPayload<Next, T>` is a ready-made state for exactly
+this: it declares `EvPayload<T>` in its `events` and transits to `Next` on
+receipt.
+
+### Multiple states need the payload
+
+When more than one state down the tree needs the payload, the top-level state
+must `captures`/`on_capture` it (not `on_event` — a composite's own `on_event`
+doesn't run for events routed straight to its active region) and `Forward` it,
+so descendants can still receive it. Use `WaitForPayload<Next, T>` as the
+initial state of any region that must not progress until the payload has
+arrived:
+
+```cpp
+struct Root
+{
+    using regions = nil::xalt::tlist<barrier::WaitForPayload<Next, MyPayload> /*, ... */>;
+    using captures = nil::xalt::tlist<barrier::EvPayload<MyPayload>>;
+
+    static auto on_capture(const barrier::EvPayload<MyPayload>& e)
+    {
+        payload = e.value;
+        return Forward{};
+    }
+
+    MyPayload payload;
+};
+```
+
+Ordering: the payload always arrives strictly after the child's own initial
+`on_enter` chain has already run (construction and entry happen atomically
+inside `Provider::make()`), so it can influence event handling but never the
+child's initial `on_enter` or which initial region/state gets entered.
 
 ## Diagrams
 
