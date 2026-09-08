@@ -16,22 +16,15 @@ namespace demo
         int* result = nullptr;
     };
 
-    struct parent_context
-    {
-        child_context child;
-    };
-
     template <typename T>
-    using parent_api = nil::sm::api::Default<parent_context, void>::type<T>;
-
-    template <typename T>
-    using child_api = nil::sm::api::Default<child_context, void>::type<T>;
+    using child_api = nil::sm::api::Default<>::type<T>;
 
     struct child
     {
         using events = nil::xalt::tlist<finish>;
+        using args = nil::xalt::tlist<child_context>;
 
-        explicit child(auto* /* parent */, child_context* context_value)
+        explicit child(child_context* context_value)
             : context(context_value)
         {
             assert(context->value == 23);
@@ -52,24 +45,30 @@ namespace demo
 
     NIL_SM_BARRIER_DEFINE(provider, child_api, child);
 
-    void adapt_context(parent_context* parent, child_context** out)
-    {
-        *out = &parent->child;
-    }
-
     using barrier = nil::sm::barrier::State<nil::sm::Terminate, provider>;
 
+    // Exposes child_context to descendants (including the barrier-wrapped child) via get().
     struct root
     {
         using regions = nil::xalt::tlist<barrier>;
+        using args = nil::xalt::tlist<int>;
+
+        child_context child;
+
+        explicit root(int* result)
+            : child{.result = result}
+        {
+        }
+
+        static constexpr auto child_ptr = &root::child;
+        using provides = nil::xalt::tlist<nil::sm::provide<child_context, child_ptr>>;
     };
 }
 
 int main()
 {
     int result = 23;
-    demo::parent_context context{.child = {.result = &result}};
-    nil::sm::SM<demo::parent_api, demo::root> machine{&context, nullptr};
+    nil::sm::DefaultSM<demo::root, int> machine{&result};
 
     machine.post(demo::finish{});
 

@@ -49,35 +49,31 @@ public:
 
 // Custom API template that receives mock through APIContexts
 // This allows lifecycle hooks (on_enter, on_exit, etc.) to call mock methods
-template <typename State, typename StateContexts = nil::xalt::tlist<>>
-struct TestAPI;
-
-template <typename State, typename... StateContexts>
-struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
+template <typename State>
+struct TestAPI
 {
     using state_t = State;
-    using state_context_t
-        = std::conditional_t<sizeof...(StateContexts) == 0, void, std::tuple<StateContexts*...>*>;
     using api_context_t = testing::StrictMock<APIMock>;
-    using api_t = nil::sm::api::Default<state_context_t, api_context_t>::template type<State>;
+    using api_t = nil::sm::api::Default<api_context_t>::template type<State>;
     using regions_t = nil::xalt::coalesce_t<State, nil::sm::detail::regions_tag>;
     using events_t = nil::xalt::coalesce_t<State, nil::sm::detail::events_tag>;
     using captures_t = nil::xalt::coalesce_t<State, nil::sm::detail::captures_tag>;
+    using args_t = nil::xalt::coalesce_t<State, nil::sm::detail::args_tag>;
+    using provides_t = nil::xalt::coalesce_t<State, nil::sm::detail::provides_tag>;
 
     // Make the state - delegate to api::Default
-    template <typename Parent>
+    template <typename... Args>
     static state_t make(
-        Parent* parent,
-        state_context_t* state_contexts,
         api_context_t* api_contexts,
-        const nil::sm::Metadata& metadata
+        const nil::sm::Metadata& metadata,
+        Args*... args
     )
     {
         if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
         {
             api_contexts->on_make_called(nil::xalt::type_id<state_t>);
         }
-        return api_t::make(parent, state_contexts, api_contexts, metadata);
+        return api_t::make(api_contexts, metadata, args...);
     }
 
     // Lifecycle hooks that receive the mock from APIContexts
@@ -129,5 +125,5 @@ struct TestAPI<State, nil::xalt::tlist<StateContexts...>>
     }
 };
 
-template <typename... Regions>
-using TestSM = nil::sm::SM<TestAPI, Regions...>;
+template <typename T, typename... RootArgs>
+using TestSM = nil::sm::SM<TestAPI, T, RootArgs...>;

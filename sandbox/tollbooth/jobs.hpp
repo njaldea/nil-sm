@@ -315,9 +315,9 @@ namespace toll::job
             ev::select_maintenance>;
 
         booth_context* ctx = nullptr;
+        using args = nil::xalt::tlist<booth_context>;
 
-        template <typename Parent>
-        explicit waiting(Parent* /* parent */, booth_context* context)
+        explicit waiting(booth_context* context)
             : ctx(context)
         {
         }

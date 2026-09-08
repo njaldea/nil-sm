@@ -20,30 +20,22 @@ namespace
     class ConstructionObserver
     {
     public:
-        MOCK_METHOD(void, on_construct, (bool parent_non_null, int ctx_marker), ());
-        MOCK_METHOD(
-            void,
-            on_construct_two,
-            (bool parent_non_null, int ctx1_marker, int ctx2_marker),
-            ()
-        );
+        MOCK_METHOD(void, on_construct, (int ctx_marker), ());
+        MOCK_METHOD(void, on_construct_two, (int ctx1_marker, int ctx2_marker), ());
         MOCK_METHOD(void, on_react, (), ());
-        MOCK_METHOD(void, on_correct_parent_type, (), ());
     };
 
     struct parent_and_context_state
     {
         using events = nil::xalt::tlist<e1>;
+        using args = nil::xalt::tlist<custom_context, ConstructionObserver>;
 
         ConstructionObserver* obs;
 
-        explicit parent_and_context_state(
-            auto* parent,
-            std::tuple<custom_context*, ConstructionObserver*>* o
-        )
-            : obs(get<1>(*o))
+        explicit parent_and_context_state(custom_context* ctx, ConstructionObserver* o)
+            : obs(o)
         {
-            obs->on_construct(parent != nullptr, get<0>(*o)->marker);
+            obs->on_construct(ctx->marker);
         }
 
         auto on_event(const e1& /* event */) const
@@ -56,10 +48,11 @@ namespace
     struct default_only_state
     {
         using events = nil::xalt::tlist<e1>;
+        using args = nil::xalt::tlist<ConstructionObserver>;
 
         ConstructionObserver* obs;
 
-        explicit default_only_state(auto* /* parent */, ConstructionObserver* o)
+        explicit default_only_state(ConstructionObserver* o)
             : obs(o)
         {
         }
@@ -74,39 +67,24 @@ namespace
     struct parent_and_two_contexts_state
     {
         using events = nil::xalt::tlist<e1>;
+        using args = nil::xalt::tlist<custom_context, custom_context2, ConstructionObserver>;
 
         ConstructionObserver* obs;
 
         explicit parent_and_two_contexts_state(
-            auto* parent,
-            std::tuple<custom_context*, custom_context2*, ConstructionObserver*>* o
+            custom_context* ctx_1,
+            custom_context2* ctx_2,
+            ConstructionObserver* o
         )
-            : obs(get<2>(*o))
+            : obs(o)
         {
-            obs->on_construct_two(parent != nullptr, get<0>(*o)->marker, get<1>(*o)->marker);
+            obs->on_construct_two(ctx_1->marker, ctx_2->marker);
         }
 
         auto on_event(const e1& /* event */) const
         {
             obs->on_react();
             return Discard{};
-        }
-    };
-
-    struct expected_parent_state
-    {
-        using regions = nil::xalt::tlist<struct child_parent_type_state>;
-    };
-
-    struct child_parent_type_state
-    {
-        template <typename Parent>
-        explicit child_parent_type_state(Parent* /* parent */, ConstructionObserver* o)
-        {
-            if constexpr (std::is_same_v<Parent, expected_parent_state>)
-            {
-                o->on_correct_parent_type();
-            }
         }
     };
 }
@@ -120,12 +98,13 @@ TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_co
 
     testing::InSequence seq;
 
-    EXPECT_CALL(obs, on_construct(true, 42)).Times(1);
+    EXPECT_CALL(obs, on_construct(42)).Times(1);
     using sm_t = nil::sm::SM<
-        nil::sm::api::Default<std::tuple<custom_context*, ConstructionObserver*>, void>::type,
-        parent_and_context_state>;
-    auto state_contexts = std::tuple<custom_context*, ConstructionObserver*>(&ctx, &obs);
-    sm_t sm(&state_contexts, nullptr);
+        nil::sm::api::Default<void>::type,
+        parent_and_context_state,
+        custom_context,
+        ConstructionObserver>;
+    sm_t sm(&ctx, &obs);
     {
         EXPECT_CALL(obs, on_react()).Times(1);
         sm.post(e1{});
@@ -140,8 +119,8 @@ TEST(
     testing::StrictMock<ConstructionObserver> obs;
 
     using sm_t
-        = nil::sm::SM<nil::sm::api::Default<ConstructionObserver, void>::type, default_only_state>;
-    sm_t sm{&obs, nullptr};
+        = nil::sm::SM<nil::sm::api::Default<void>::type, default_only_state, ConstructionObserver>;
+    sm_t sm{&obs};
     {
         EXPECT_CALL(obs, on_react()).Times(1);
         sm.post(e1{});
@@ -157,35 +136,17 @@ TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_tw
 
     testing::InSequence seq;
 
-    EXPECT_CALL(obs, on_construct_two(true, 7, 99)).Times(1);
+    EXPECT_CALL(obs, on_construct_two(7, 99)).Times(1);
     using sm_t = nil::sm::SM<
-        nil::sm::api::Default<
-            std::tuple<custom_context*, custom_context2*, ConstructionObserver*>,
-            void>::type,
-        parent_and_two_contexts_state>;
-    auto state_contexts = std::tuple<custom_context*, custom_context2*, ConstructionObserver*>(
-        &ctx_1,
-        &ctx_2,
-        &obs
-    );
-    sm_t sm{&state_contexts, nullptr};
+        nil::sm::api::Default<void>::type,
+        parent_and_two_contexts_state,
+        custom_context,
+        custom_context2,
+        ConstructionObserver>;
+    sm_t sm{&ctx_1, &ctx_2, &obs};
 
     {
         EXPECT_CALL(obs, on_react()).Times(1);
         sm.post(e1{});
     }
-}
-
-TEST(sm_feature_state_construction_contexts, child_constructor_receives_parent_user_state_type)
-{
-    testing::StrictMock<ConstructionObserver> obs;
-    testing::InSequence sequence;
-
-    EXPECT_CALL(obs, on_correct_parent_type()).Times(1);
-
-    using sm_t = nil::sm::
-        SM<nil::sm::api::Default<ConstructionObserver, void>::type, expected_parent_state>;
-
-    sm_t sm{&obs, nullptr};
-    (void)sm;
 }

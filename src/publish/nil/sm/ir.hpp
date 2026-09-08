@@ -352,7 +352,6 @@ namespace nil::sm::ir::detail
     )
     {
         using api_t = API<T>;
-        using state_t = typename api_t::state_t;
         using api_context_t = typename api_t::api_context_t;
 
         (emit_reaction_action<
@@ -360,7 +359,7 @@ namespace nil::sm::ir::detail
              RegionInitial,
              E,
              decltype(api_t::template on_event<E>(
-                 std::declval<state_t&>(),
+                 std::declval<T&>(),
                  std::declval<const E&>(),
                  static_cast<api_context_t*>(nullptr)
              )),
@@ -382,7 +381,6 @@ namespace nil::sm::ir::detail
     )
     {
         using api_t = API<T>;
-        using state_t = typename api_t::state_t;
         using api_context_t = typename api_t::api_context_t;
 
         (emit_reaction_action<
@@ -390,7 +388,7 @@ namespace nil::sm::ir::detail
              RegionInitial,
              E,
              decltype(api_t::template on_capture<E>(
-                 std::declval<state_t&>(),
+                 std::declval<T&>(),
                  std::declval<const E&>(),
                  static_cast<api_context_t*>(nullptr)
              )),
@@ -403,18 +401,13 @@ namespace nil::sm::ir::detail
     void emit_node_annotations(const nil::sm::Metadata& metadata, ir::Node& node)
     {
         using api_t = API<T>;
-        using state_t = typename api_t::state_t;
         using api_context_t = typename api_t::api_context_t;
-        using on_enter_result_t = decltype(api_t::on_enter(
-            std::declval<state_t&>(),
-            static_cast<api_context_t*>(nullptr)
-        ));
-        using on_exit_result_t = decltype(api_t::on_exit(
-            std::declval<state_t&>(),
-            static_cast<api_context_t*>(nullptr)
-        ));
+        using on_enter_result_t
+            = decltype(api_t::on_enter(std::declval<T&>(), static_cast<api_context_t*>(nullptr)));
+        using on_exit_result_t
+            = decltype(api_t::on_exit(std::declval<T&>(), static_cast<api_context_t*>(nullptr)));
         using on_regions_finalized_result_t = decltype(api_t::on_regions_finalized(
-            std::declval<state_t&>(),
+            std::declval<T&>(),
             static_cast<api_context_t*>(nullptr)
         ));
 
@@ -527,11 +520,10 @@ namespace nil::sm::ir::detail
         template <typename RegionInitial>
         static ir::Node node(const Metadata* metadata, std::size_t state, BuildContext& context)
         {
-            constexpr auto provider_type_id = Provider::id;
-            if (!context.contains(provider_type_id))
+            if (!context.contains(Provider::id))
             {
                 context.add(
-                    provider_type_id,
+                    Provider::id,
                     nil::sm::detail::type_name<Provider>(),
                     Provider::ir(nullptr)
                 );
@@ -546,7 +538,7 @@ namespace nil::sm::ir::detail
                 .actions = {},
                 .transitions = {},
                 .regions = {},
-                .provider_id = provider_type_id,
+                .provider_id = Provider::id,
             };
 
             emit_node_annotations<API, barrier::State<FinalizeAction, Provider>, RegionInitial>(

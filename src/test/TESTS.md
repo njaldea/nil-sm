@@ -74,10 +74,9 @@
 | [terminate_in_child_stops_only_child](12_sm_edge_cases.cpp#L393) | Child terminates in a multi-region parent; only the child's region is nulled, others continue |
 | [static_checks_compile](13_sm_compile_time_diagnostics.cpp#L112) | `static_assert` checks for missing handler, bad return types, and overload legality |
 | [orthogonal_two_region_reaction_matrix](14_sm_regression_matrix.cpp#L191) | Matrix of all Forward/Discard/Unhandled/TransitTo combinations across two orthogonal regions |
-| [state_constructs_with_parent_and_context_args](15_sm_state_construction_contexts.cpp#L124) | State constructor receives parent pointer and one state context |
-| [state_can_still_default_construct_when_it_expects_nothing](15_sm_state_construction_contexts.cpp#L144) | State with default constructor works even when contexts are present in the SM |
-| [state_constructs_with_parent_and_two_contexts](15_sm_state_construction_contexts.cpp#L161) | State constructor receives parent pointer and two state contexts |
-| [child_constructor_receives_parent_user_state_type](15_sm_state_construction_contexts.cpp#L181) | Child receives the actual parent user-state type (not the SM wrapper) as parent pointer |
+| [state_constructs_with_parent_and_context_args](15_sm_state_construction_contexts.cpp#L124) | State constructor receives one arg resolved via `args` |
+| [state_can_still_default_construct_when_it_expects_nothing](15_sm_state_construction_contexts.cpp#L144) | State with default constructor works even when root args are present in the SM |
+| [state_constructs_with_parent_and_two_contexts](15_sm_state_construction_contexts.cpp#L161) | State constructor receives two args resolved via `args` |
 | [triggers_only_when_all_regions_terminated](16_sm_on_regions_complete.cpp#L217) | `on_regions_finalized` fires only after every region has terminated |
 | [explicit_target_reaches_nested_state_only](16_sm_on_regions_complete.cpp#L250) | `EvRegionsFinalized` targets the direct owner state; nested ancestors are not notified |
 | [on_regions_finalized_can_emit_follow_up_event](16_sm_on_regions_complete.cpp#L268) | `on_regions_finalized` returns `Emit`; follow-up event dispatched in next SM cycle |

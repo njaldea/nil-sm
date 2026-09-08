@@ -26,10 +26,11 @@ namespace
     struct on_enter_emit_sink
     {
         using events = nil::xalt::tlist<e4>;
+        using args = nil::xalt::tlist<OnEnterObserver>;
 
         OnEnterObserver* obs;
 
-        explicit on_enter_emit_sink(auto* /* parent */, OnEnterObserver* o)
+        explicit on_enter_emit_sink(OnEnterObserver* o)
             : obs(o)
         {
         }
@@ -42,10 +43,10 @@ namespace
     };
 
     template <typename T>
-    using OnEnterTestAPI = nil::sm::api::Default<OnEnterObserver, void>::template type<T>;
+    using OnEnterTestAPI = nil::sm::api::Default<void>::template type<T>;
 
-    template <typename... Regions>
-    using OnEnterTestSM = nil::sm::SM<OnEnterTestAPI, Regions...>;
+    template <typename T, typename... RootArgs>
+    using OnEnterTestSM = nil::sm::SM<OnEnterTestAPI, T, RootArgs...>;
 }
 
 TEST(sm_feature_on_enter, on_enter_can_publish_event)
@@ -63,7 +64,7 @@ TEST(sm_feature_on_enter, on_enter_can_publish_event)
 
     {
         EXPECT_CALL(obs, on_event).Times(1);
-        OnEnterTestSM<Root> sm(&obs, {});
+        OnEnterTestSM<Root, OnEnterObserver> sm(&obs);
     }
 }
 
@@ -83,7 +84,7 @@ TEST(sm_feature_on_enter, on_enter_noop_does_not_emit)
 
     EXPECT_CALL(mock, on_make_called(type_id<NoopState>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<NoopState>)).Times(1);
-    TestSM<NoopState> sm({}, &mock);
+    TestSM<NoopState> sm(&mock);
 
     {
         sm.post(e1{}); // ignored by state
@@ -121,7 +122,7 @@ TEST(sm_feature_on_enter, parent_enters_before_child)
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
     // Parent entered before child; both exit on SM destroy
-    TestSM<Parent> sm({}, &mock);
+    TestSM<Parent> sm(&mock);
 
     {
         sm.post(e1{}); // ignored by both

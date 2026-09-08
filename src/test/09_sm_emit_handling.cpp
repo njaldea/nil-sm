@@ -41,7 +41,9 @@ namespace
 
         EmitObserver* obs;
 
-        explicit EmitSink(auto* /* parent */, EmitObserver* o)
+        using args = nil::xalt::tlist<EmitObserver>;
+
+        explicit EmitSink(EmitObserver* o)
             : obs(o)
         {
         }
@@ -124,10 +126,10 @@ namespace
     };
 
     template <typename T>
-    using EmitTestAPI = nil::sm::api::Default<EmitObserver, void>::template type<T>;
+    using EmitTestAPI = nil::sm::api::Default<void>::template type<T>;
 
-    template <typename... Regions>
-    using EmitTestSM = nil::sm::SM<EmitTestAPI, Regions...>;
+    template <typename T, typename... RootArgs>
+    using EmitTestSM = nil::sm::SM<EmitTestAPI, T, RootArgs...>;
 
     struct ForwardParent
     {
@@ -136,7 +138,9 @@ namespace
 
         EmitObserver* obs;
 
-        explicit ForwardParent(auto* /* parent */, EmitObserver* o)
+        using args = nil::xalt::tlist<EmitObserver>;
+
+        explicit ForwardParent(EmitObserver* o)
             : obs(o)
         {
         }
@@ -160,7 +164,7 @@ TEST(sm_feature_emit_handling, emit_from_leaf_reaction)
         using regions = nil::xalt::tlist<EmitLeaf, EmitSink>;
     };
 
-    EmitTestSM<Root> sm(&obs, {});
+    EmitTestSM<Root, EmitObserver> sm(&obs);
     {
         EXPECT_CALL(obs, received_a(11)).Times(1);
         sm.post(e1{});
@@ -178,7 +182,7 @@ TEST(sm_feature_emit_handling, emit_during_forward_path)
         using regions = nil::xalt::tlist<ForwardParent, EmitSink>;
     };
 
-    EmitTestSM<Root> sm(&obs, {});
+    EmitTestSM<Root, EmitObserver> sm(&obs);
     {
         EXPECT_CALL(obs, received_a(21)).Times(1);
         EXPECT_CALL(obs, parent_handled()).Times(1);
@@ -200,7 +204,7 @@ TEST(sm_feature_emit_handling, emit_from_parent_reaction)
         using regions = nil::xalt::tlist<EmitParent, EmitSink>;
     };
 
-    EmitTestSM<Root> sm(&obs, {});
+    EmitTestSM<Root, EmitObserver> sm(&obs);
     {
         EXPECT_CALL(obs, received_b(22)).Times(1);
         sm.post(e1{});
@@ -238,7 +242,7 @@ TEST(sm_feature_emit_handling, emit_from_orthogonal_regions)
         using regions = nil::xalt::tlist<EmitLeaf1, EmitLeaf2, EmitSink>;
     };
 
-    EmitTestSM<Root> sm(&obs, {});
+    EmitTestSM<Root, EmitObserver> sm(&obs);
     {
         EXPECT_CALL(obs, received_a(11)).Times(2);
         sm.post(e1{});
@@ -256,7 +260,7 @@ TEST(sm_feature_emit_handling, multiple_emit_events_preserve_order)
         using regions = nil::xalt::tlist<EmitSequenceLeaf, EmitSink>;
     };
 
-    EmitTestSM<Root> sm(&obs, {});
+    EmitTestSM<Root, EmitObserver> sm(&obs);
     {
         EXPECT_CALL(obs, received_a(31)).Times(1);
         sm.post(e1{});

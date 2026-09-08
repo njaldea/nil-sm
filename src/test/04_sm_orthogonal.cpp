@@ -47,7 +47,7 @@ TEST(sm_feature_orthogonal, all_discard_parent_skipped)
     EXPECT_CALL(mock, on_enter_called(type_id<R1>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // Both discard → parent NOT called
     {
@@ -104,7 +104,7 @@ TEST(sm_feature_orthogonal, forward_discard_parent_handles)
     EXPECT_CALL(mock, on_enter_called(type_id<R1>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // R1 forwards → parent called
     {
@@ -152,7 +152,7 @@ TEST(sm_feature_orthogonal, all_unhandled_parent_handles)
     EXPECT_CALL(mock, on_enter_called(type_id<U1>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<U2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<U2>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // All unhandled → parent called
     {
@@ -193,7 +193,7 @@ TEST(sm_feature_orthogonal, no_parent_all_unhandled)
     EXPECT_CALL(mock, on_enter_called(type_id<U1>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<U2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<U2>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // No on_event calls (parent has no events)
     {
@@ -248,7 +248,7 @@ TEST(sm_feature_orthogonal, both_regions_forward_parent_handles)
     EXPECT_CALL(mock, on_enter_called(type_id<R1>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // Both forward → parent called
     {
@@ -301,7 +301,7 @@ TEST(sm_feature_orthogonal, one_forward_one_unhandled_parent_handles)
     EXPECT_CALL(mock, on_enter_called(type_id<R1>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // R1 forwards (R2 unhandled) → parent called
     {
@@ -353,7 +353,7 @@ TEST(sm_feature_orthogonal, both_regions_terminate_triggers_regions_complete)
     EXPECT_CALL(mock, on_enter_called(type_id<R1>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // Both terminate → regions nulled in order → all null → EvRegionsFinalized
     {

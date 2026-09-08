@@ -73,7 +73,7 @@ TEST(sm_feature_nested_composite, one_branch_discards_other_forwards_asymmetric)
     EXPECT_CALL(mock, on_enter_called(type_id<Branch2>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Branch2Leaf>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Branch2Leaf>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // Branch1Leaf discards → Branch1 not called (discard from child suppresses parent)
     // Branch2Leaf forwards → Branch2 called → Branch2 forwards → Root called
@@ -161,7 +161,7 @@ TEST(sm_feature_nested_composite, both_branches_discard_parent_skipped)
     EXPECT_CALL(mock, on_enter_called(type_id<Branch2>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Branch2Leaf>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Branch2Leaf>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // Both leaves discard → branch parents skipped → root skipped
     {
@@ -246,7 +246,7 @@ TEST(sm_feature_nested_composite, both_branches_forward_parent_handles)
     EXPECT_CALL(mock, on_enter_called(type_id<Branch2>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Branch2Leaf>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Branch2Leaf>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // Both leaves forward → both branch parents called → root called
     {

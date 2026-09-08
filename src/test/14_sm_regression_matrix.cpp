@@ -36,10 +36,11 @@ namespace
     struct region_target
     {
         using events = nil::xalt::tlist<e1>;
+        using args = nil::xalt::tlist<RegressionMatrixObserver>;
 
         RegressionMatrixObserver* obs;
 
-        explicit region_target(auto* /* parent */, RegressionMatrixObserver* o)
+        explicit region_target(RegressionMatrixObserver* o)
             : obs(o)
         {
         }
@@ -56,10 +57,11 @@ namespace
     {
         static constexpr region_rx kind = region_rx::forward;
         using events = nil::xalt::tlist<e1>;
+        using args = nil::xalt::tlist<RegressionMatrixObserver>;
 
         RegressionMatrixObserver* obs;
 
-        explicit region_source(auto* /* parent */, RegressionMatrixObserver* o)
+        explicit region_source(RegressionMatrixObserver* o)
             : obs(o)
         {
         }
@@ -76,10 +78,11 @@ namespace
     {
         static constexpr region_rx kind = region_rx::discard;
         using events = nil::xalt::tlist<e1>;
+        using args = nil::xalt::tlist<RegressionMatrixObserver>;
 
         RegressionMatrixObserver* obs;
 
-        explicit region_source(auto* /* parent */, RegressionMatrixObserver* o)
+        explicit region_source(RegressionMatrixObserver* o)
             : obs(o)
         {
         }
@@ -96,10 +99,11 @@ namespace
     {
         static constexpr region_rx kind = region_rx::transit;
         using events = nil::xalt::tlist<e1>;
+        using args = nil::xalt::tlist<RegressionMatrixObserver>;
 
         RegressionMatrixObserver* obs;
 
-        explicit region_source(auto* /* parent */, RegressionMatrixObserver* o)
+        explicit region_source(RegressionMatrixObserver* o)
             : obs(o)
         {
         }
@@ -116,10 +120,11 @@ namespace
     {
         using regions = nil::xalt::tlist<R1, R2>;
         using events = nil::xalt::tlist<e1>;
+        using args = nil::xalt::tlist<RegressionMatrixObserver>;
 
         RegressionMatrixObserver* obs;
 
-        explicit parent(auto* /* parent */, RegressionMatrixObserver* o)
+        explicit parent(RegressionMatrixObserver* o)
             : obs(o)
         {
         }
@@ -146,10 +151,10 @@ namespace
     }
 
     template <typename T>
-    using MatrixTestAPI = nil::sm::api::Default<RegressionMatrixObserver, void>::template type<T>;
+    using MatrixTestAPI = nil::sm::api::Default<void>::template type<T>;
 
-    template <typename... Regions>
-    using MatrixTestSM = nil::sm::SM<MatrixTestAPI, Regions...>;
+    template <typename T, typename... RootArgs>
+    using MatrixTestSM = nil::sm::SM<MatrixTestAPI, T, RootArgs...>;
 
     template <region_rx K1, region_rx K2>
     void run_matrix_case(const char* /* label */)
@@ -160,7 +165,7 @@ namespace
 
         testing::StrictMock<RegressionMatrixObserver> obs;
 
-        MatrixTestSM<root> sm(&obs, {});
+        MatrixTestSM<root, RegressionMatrixObserver> sm(&obs);
 
         {
             testing::InSequence sequence;

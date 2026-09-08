@@ -118,15 +118,9 @@ struct SandboxAPI
         }
     }
 
-    template <typename Parent>
-    static T make(
-        Parent* parent,
-        void* state_contexts,
-        api_context_t* /* api_contexts */,
-        const nil::sm::Metadata& metadata
-    )
+    static T make(api_context_t* /* api_contexts */, const nil::sm::Metadata& metadata)
     {
-        auto r = nil::sm::api::Default<>::type<T>::make(parent, state_contexts, nullptr, metadata);
+        auto r = nil::sm::api::Default<>::type<T>::make(nullptr, metadata);
 
         if (metadata.subregions == 0)
         {
@@ -152,7 +146,7 @@ int main()
     using top_state = demo::states::multi_region<random_flavor>;
 
     SandboxAPIContext api_context;
-    nil::sm::SM<nil::sm::api::Coalesce<SandboxAPI>::type, top_state> ss{nullptr, &api_context};
+    nil::sm::SM<nil::sm::api::Coalesce<SandboxAPI>::type, top_state> ss{&api_context};
 
     {
         demo::events::e1 e;

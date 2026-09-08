@@ -27,7 +27,7 @@ TEST(sm_feature_event_matching, event_matches_first_handler)
 
     EXPECT_CALL(mock, on_make_called(type_id<TwoEventState>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<TwoEventState>)).Times(1);
-    TestSM<TwoEventState> sm({}, &mock);
+    TestSM<TwoEventState> sm(&mock);
 
     {
         EXPECT_CALL(mock, on_event_called(type_id<TwoEventState>, type_id<e1>)).Times(1);
@@ -60,7 +60,7 @@ TEST(sm_feature_event_matching, event_matches_last_handler)
 
     EXPECT_CALL(mock, on_make_called(type_id<TwoEventState>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<TwoEventState>)).Times(1);
-    TestSM<TwoEventState> sm({}, &mock);
+    TestSM<TwoEventState> sm(&mock);
 
     {
         EXPECT_CALL(mock, on_event_called(type_id<TwoEventState>, type_id<e2>)).Times(1);
@@ -93,7 +93,7 @@ TEST(sm_feature_event_matching, event_matches_none)
 
     EXPECT_CALL(mock, on_make_called(type_id<TwoEventState>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<TwoEventState>)).Times(1);
-    TestSM<TwoEventState> sm({}, &mock);
+    TestSM<TwoEventState> sm(&mock);
 
     {
         // e3 is not in events list → no on_event_called
@@ -116,7 +116,7 @@ TEST(sm_feature_event_matching, state_with_empty_event_list)
 
     EXPECT_CALL(mock, on_make_called(type_id<ExplicitEmptyEvents>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<ExplicitEmptyEvents>)).Times(1);
-    TestSM<ExplicitEmptyEvents> sm({}, &mock);
+    TestSM<ExplicitEmptyEvents> sm(&mock);
 
     {
         // No on_event_called (empty events list)
@@ -139,7 +139,7 @@ TEST(sm_feature_event_matching, state_with_default_events_only)
 
     EXPECT_CALL(mock, on_make_called(type_id<DefaultEventsState>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<DefaultEventsState>)).Times(1);
-    TestSM<DefaultEventsState> sm({}, &mock);
+    TestSM<DefaultEventsState> sm(&mock);
 
     {
         // No on_event_called (no events member defaults to empty)

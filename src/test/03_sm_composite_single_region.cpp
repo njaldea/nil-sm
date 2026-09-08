@@ -45,7 +45,7 @@ TEST(sm_feature_composite_single_region, child_transition_applies_when_parent_no
     EXPECT_CALL(mock, on_enter_called(type_id<Root>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Source>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // e1: Source transits → Source exits, Target created+entered
     {
@@ -111,7 +111,7 @@ TEST(sm_feature_composite_single_region, composite_receives_child_forward)
     EXPECT_CALL(mock, on_enter_called(type_id<Mid>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Leaf>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Leaf>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     {
         EXPECT_CALL(mock, on_event_called(type_id<Leaf>, type_id<e1>)).Times(1);
@@ -161,7 +161,7 @@ TEST(sm_feature_composite_single_region, parent_transition_after_child_forward)
     EXPECT_CALL(mock, on_enter_called(type_id<Root>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     {
         EXPECT_CALL(mock, on_event_called(type_id<Child>, type_id<e1>)).Times(1);

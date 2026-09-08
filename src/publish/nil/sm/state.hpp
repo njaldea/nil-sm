@@ -37,19 +37,19 @@ namespace nil::sm
         using api_t = API<T>;
         using self_t = State<API, T>;
         using metadata_t = Metadata;
+        using api_context_t = typename api_t::api_context_t;
 
     private:
-        using state_t = typename api_t::state_t;
         using regions_t = typename api_t::regions_t;
         using events_t = typename api_t::events_t;
         using captures_t = typename api_t::captures_t;
-        using event_dispatch_t = detail::event_dispatcher<self_t, events_t>;
-        using capture_dispatch_t = detail::capture_dispatcher<self_t, captures_t>;
-        using state_context_t = typename api_t::state_context_t;
-        using api_context_t = typename api_t::api_context_t;
+        using event_dispatch_t = detail::event_dispatcher<self_t, T, events_t>;
+        using capture_dispatch_t = detail::capture_dispatcher<self_t, T, captures_t>;
+        using args_t = typename api_t::args_t;
+        using provides_t = typename api_t::provides_t;
         using on_event_results_t = std::array<detail::on_event_t, regions_t::size>;
 
-        using region_dispatcher_t = detail::region_dispatcher<API, state_t, regions_t>;
+        using region_dispatcher_t = detail::region_dispatcher<API, regions_t>;
 
         struct sub_state_scan_t
         {
@@ -60,52 +60,117 @@ namespace nil::sm
 
         template <typename... R, std::size_t... I>
         static std::array<detail::Region, regions_t::size> init_regions(
-            [[maybe_unused]] self_t* self,
+            [[maybe_unused]] State<API, T>* self,
             [[maybe_unused]] detail::Queues* queues,
-            [[maybe_unused]] detail::Contexts* contexts,
+            [[maybe_unused]] api_context_t* api_contexts,
             nil::xalt::tlist<R...> /* regions */,
             std::index_sequence<I...> /* region indices */
         )
         {
-            on_enter(self->current_state, queues, contexts);
+            on_enter(self->current_state, queues, api_contexts);
 
-            [[maybe_unused]] const auto parent = std::addressof(self->current_state);
             [[maybe_unused]] const auto metadata = std::addressof(self->metadata);
             return std::array<detail::Region, regions_t::size>{detail::Region(
                 typename detail::Region::template tag<API, R>{},
                 I,
-                parent,
+                self,
                 queues,
-                contexts,
+                api_contexts,
                 metadata
             )...};
         }
 
+        // Resolves a single arg via the parent chain's get(); direct_parent<T> always
+        // matches on the fixed direct_parent_marker sentinel, then casts to T*.
+        template <typename Arg>
+        static auto resolve_arg(detail::IState* parent)
+        {
+            if constexpr (nil::xalt::is_of_template_v<Arg, direct_parent>)
+            {
+                static_assert(
+                    std::is_convertible_v<T*, typename Arg::type*>,
+                    "incompatible parent type"
+                );
+                return static_cast<typename Arg::type*>(
+                    parent->get(nil::xalt::type_id<detail::direct_parent_marker>)
+                );
+            }
+            else
+            {
+                return static_cast<Arg*>(parent->get(nil::xalt::type_id<Arg>));
+            }
+        }
+
+        // Resolves each arg in args_t via the parent chain's get(), then forwards the
+        // resolved pointers to api_t::make() after the metadata argument.
+        template <typename... Args>
+        static T make_current_state(
+            [[maybe_unused]] detail::IState* parent,
+            api_context_t* api_contexts,
+            Metadata metadata,
+            nil::xalt::tlist<Args...> /* args */
+        )
+        {
+            return api_t::make(api_contexts, metadata, resolve_arg<Args>(parent)...);
+        }
+
+        // Matches requested_id against every provide<Member, Ptr> in provides_t, resolving
+        // the member's address directly through its pointer-to-member when one matches.
+        template <typename... Provides>
+        void* match_provides(
+            [[maybe_unused]] const void* requested_id,
+            nil::xalt::tlist<Provides...> /* provides */
+        )
+        {
+            void* result = nullptr;
+            (void)((requested_id == nil::xalt::type_id<typename Provides::type>
+                        ? (result
+                           = static_cast<void*>(std::addressof(current_state.*Provides::ptr)),
+                           true)
+                        : false)
+                   || ...);
+            return result;
+        }
+
     public:
-        template <typename Parent>
         explicit State(
-            Parent* init_parent,
+            detail::IState* init_parent,
             detail::Queues* init_queues,
-            detail::Contexts* init_contexts,
+            api_context_t* init_api_contexts,
             metadata_t init_metadata
         )
-            : detail::IState(init_metadata)
-            , current_state(api_t::make(
+            : detail::IState(init_parent, init_metadata)
+            , current_state(make_current_state(
                   init_parent,
-                  static_cast<state_context_t*>(init_contexts->state),
-                  static_cast<api_context_t*>(init_contexts->api),
-                  this->metadata
+                  static_cast<api_context_t*>(init_api_contexts),
+                  this->metadata,
+                  args_t()
               ))
             , queues(init_queues)
-            , contexts(init_contexts)
+            , api_contexts(init_api_contexts)
             , regions(init_regions(
                   this,
                   queues,
-                  contexts,
+                  api_contexts,
                   regions_t(),
                   std::make_index_sequence<regions_t::size>()
               ))
         {
+        }
+
+        void* get(const void* requested_id) override
+        {
+            if (requested_id == nil::xalt::type_id<detail::direct_parent_marker>)
+            {
+                return static_cast<void*>(std::addressof(current_state));
+            }
+
+            if (auto* found = match_provides(requested_id, provides_t()))
+            {
+                return found;
+            }
+
+            return parent != nullptr ? parent->get(requested_id) : nullptr;
         }
 
         State(State&&) = delete;
@@ -149,11 +214,7 @@ namespace nil::sm
                 }
             }
 
-            auto capture_result = capture_dispatch_t::dispatch(
-                e,
-                current_state,
-                static_cast<api_context_t*>(contexts->api)
-            );
+            auto capture_result = capture_dispatch_t::dispatch(e, current_state, api_contexts);
             if (!std::holds_alternative<Unhandled>(capture_result)
                 && !std::holds_alternative<Forward>(capture_result))
             {
@@ -164,11 +225,7 @@ namespace nil::sm
 
             if (sub_state.handle)
             {
-                auto this_result = event_dispatch_t::dispatch(
-                    e,
-                    current_state,
-                    static_cast<api_context_t*>(contexts->api)
-                );
+                auto this_result = event_dispatch_t::dispatch(e, current_state, api_contexts);
                 if (std::holds_alternative<Unhandled>(this_result))
                 {
                     commit_region_results(e, sub_state.results);
@@ -201,20 +258,20 @@ namespace nil::sm
         }
 
     private:
-        state_t current_state;
+        T current_state;
         detail::Queues* queues;
-        detail::Contexts* contexts;
+        api_context_t* api_contexts;
         std::array<detail::Region, regions_t::size> regions;
         bool finalized = false;
 
         static void on_enter(
-            state_t& state,
+            T& state,
             detail::Queues* init_queues,
-            detail::Contexts* init_contexts
+            api_context_t* init_api_contexts
         )
         {
             const auto on_enter_result = detail::to_runtime_action_as<detail::on_enter_t>(
-                api_t::on_enter(state, static_cast<api_context_t*>(init_contexts->api))
+                api_t::on_enter(state, init_api_contexts)
             );
 
             if (std::holds_alternative<detail::Event>(on_enter_result))
@@ -226,7 +283,7 @@ namespace nil::sm
         void on_exit()
         {
             const auto on_exit_result = detail::to_runtime_action_as<detail::on_exit_t>(
-                api_t::on_exit(current_state, static_cast<api_context_t*>(contexts->api))
+                api_t::on_exit(current_state, api_contexts)
             );
 
             if (std::holds_alternative<detail::Event>(on_exit_result))
@@ -238,10 +295,7 @@ namespace nil::sm
         detail::on_regions_finalized_t on_regions_finalized()
         {
             return detail::to_runtime_action_as<detail::on_regions_finalized_t>(
-                api_t::on_regions_finalized(
-                    current_state,
-                    static_cast<api_context_t*>(contexts->api)
-                )
+                api_t::on_regions_finalized(current_state, api_contexts)
             );
         }
 
@@ -335,31 +389,40 @@ namespace nil::sm
         virtual action_t post_impl(detail::Event event) = 0;
     };
 
-    template <template <typename> typename API, typename T>
+    template <template <typename> typename API, typename T, typename... RootArgs>
     class SM final: public ISM
     {
         using api_t = API<T>;
-        using state_context_t = typename api_t::state_context_t;
         using api_context_t = typename api_t::api_context_t;
-        using region_dispatcher_t = detail::region_dispatcher<API, Root, nil::xalt::tlist<T>>;
+        using region_dispatcher_t = detail::region_dispatcher<API, nil::xalt::tlist<T>>;
 
-    public:
+        struct construct_tag final
+        {
+        };
+
         explicit SM(
-            state_context_t* init_state_contexts = nullptr,
-            api_context_t* init_api_contexts = nullptr,
-            const Metadata* init_parent_metadata = nullptr
+            construct_tag /* tag */,
+            api_context_t* init_api_contexts,
+            RootArgs*... init_root_args
         )
-            : contexts{.state = init_state_contexts, .api = init_api_contexts}
-            , region(
-                  detail::Region::tag<API, T>{},
-                  0,
-                  &root,
-                  &queues,
-                  &contexts,
-                  init_parent_metadata
-              )
+            : api_contexts(init_api_contexts)
+            , root(init_root_args...)
+            , region(detail::Region::tag<API, T>{}, 0, &root, &queues, api_contexts, nullptr)
         {
             flush();
+        }
+
+    public:
+        explicit SM(api_context_t* init_api_contexts, RootArgs*... init_root_args)
+            requires(!std::is_void_v<api_context_t>)
+            : SM(construct_tag{}, init_api_contexts, init_root_args...)
+        {
+        }
+
+        explicit SM(RootArgs*... init_root_args)
+            requires std::is_void_v<api_context_t>
+            : SM(construct_tag{}, nullptr, init_root_args...)
+        {
         }
 
         ~SM() noexcept override = default;
@@ -376,9 +439,9 @@ namespace nil::sm
         }
 
     private:
-        typename API<Root>::state_t root{};
         detail::Queues queues;
-        detail::Contexts contexts;
+        api_context_t* api_contexts;
+        detail::RootState<RootArgs...> root;
         detail::Region region;
 
         action_t dispatch(const detail::Event& event)
@@ -400,9 +463,9 @@ namespace nil::sm
         }
     };
 
-    template <typename T>
-    using DefaultSM = SM<api::Default<>::template type, T>;
+    template <typename T, typename... RootArgs>
+    using DefaultSM = SM<api::Default<>::template type, T, RootArgs...>;
 
-    template <template <typename> typename API, typename T>
-    using CoalescedSM = SM<api::Coalesce<API>::template type, T>;
+    template <template <typename> typename API, typename T, typename... RootArgs>
+    using CoalescedSM = SM<api::Coalesce<API>::template type, T, RootArgs...>;
 }

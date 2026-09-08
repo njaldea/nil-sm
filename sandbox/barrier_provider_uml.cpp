@@ -45,7 +45,7 @@ namespace demo
 
 int main()
 {
-    using machine = nil::sm::SM<nil::sm::api::Default<>::template type, demo::root>;
+    using machine = nil::sm::DefaultSM<demo::root>;
     nil::sm::puml<machine> diagram;
 
     std::cout << diagram.root;

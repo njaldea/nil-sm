@@ -35,7 +35,7 @@ TEST(sm_feature_parent_bubbling, parent_handles_forwarded_event)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // Child forwards → Parent handles and discards (stops bubbling here)
     {
@@ -92,7 +92,7 @@ TEST(sm_feature_parent_bubbling, parent_forwards_forwarded_event)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Grandparent> sm(nullptr, &mock);
+    TestSM<Grandparent> sm(&mock);
 
     // Child forwards → Parent forwards → Grandparent handles
     {
@@ -138,7 +138,7 @@ TEST(sm_feature_parent_bubbling, parent_skips_discarded_child_event)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     {
         EXPECT_CALL(mock, on_event_called(type_id<Child>, type_id<e1>)).Times(1);
@@ -176,7 +176,7 @@ TEST(sm_feature_parent_bubbling, parent_handles_unhandled_child_event)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // Child has no e1 handler (Unhandled) → Parent handles e1 directly (no Child on_event call)
     {
@@ -220,7 +220,7 @@ TEST(sm_feature_parent_bubbling, child_terminate_does_not_bubble_to_parent)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     {
         EXPECT_CALL(mock, on_event_called(type_id<Child>, type_id<e1>)).Times(1);
@@ -255,7 +255,7 @@ TEST(sm_feature_parent_bubbling, no_parent_handler_on_unhandled_event)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // No on_event_called for either state
     {
@@ -303,7 +303,7 @@ TEST(sm_feature_parent_bubbling, parent_transits_after_child_forward)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // Child forwards → Parent transits → Child+Parent destroyed, NewState created
     {
@@ -351,7 +351,7 @@ TEST(sm_feature_parent_bubbling, parent_terminates_after_child_forward)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // Child forwards → Parent terminates → Child destroyed inside Parent's destructor
     {
@@ -401,7 +401,7 @@ TEST(sm_feature_parent_bubbling, parent_emits_after_child_forward)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // e1: Child forwards → Parent emits e2 (enqueued, returns Discard)
     // e2: Child has no e2 handler (Unhandled) → Parent handles e2 directly
@@ -447,7 +447,7 @@ TEST(sm_feature_parent_bubbling, parent_handles_event_unregistered_in_child)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // e1 is not in Child's events list → Unhandled → Parent handles directly (no Child on_event
     // call)
@@ -497,7 +497,7 @@ TEST(sm_feature_parent_bubbling, child_transit_does_not_bubble_to_parent)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // Child transits → Parent on_event NOT called (TransitTo does not forward)
     {

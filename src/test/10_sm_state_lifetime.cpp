@@ -22,7 +22,7 @@ TEST(sm_feature_state_lifetime, state_constructor_called_once)
 
     EXPECT_CALL(mock, on_make_called(type_id<LeafDiscard>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<LeafDiscard>)).Times(1);
-    TestSM<LeafDiscard> sm(nullptr, &mock);
+    TestSM<LeafDiscard> sm(&mock);
 
     {
         EXPECT_CALL(mock, on_event_called(type_id<LeafDiscard>, type_id<e1>)).Times(1);
@@ -60,7 +60,7 @@ TEST(sm_feature_state_lifetime, transition_destroys_previous_and_creates_new_ins
 
     EXPECT_CALL(mock, on_make_called(type_id<Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Source>)).Times(1);
-    TestSM<Source> sm(nullptr, &mock);
+    TestSM<Source> sm(&mock);
 
     // Transition: source processes event, exits; target is created
     {
@@ -107,7 +107,7 @@ TEST(sm_feature_state_lifetime, orthogonal_region_destruction)
     EXPECT_CALL(mock, on_enter_called(type_id<R1>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     EXPECT_CALL(mock, on_exit_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_exit_called(type_id<R1>)).Times(1);
@@ -141,7 +141,7 @@ TEST(sm_feature_state_lifetime, parent_destruction_destroys_all_children)
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<GrandChild>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<GrandChild>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     EXPECT_CALL(mock, on_exit_called(type_id<GrandChild>)).Times(1);
     EXPECT_CALL(mock, on_exit_called(type_id<Child>)).Times(1);

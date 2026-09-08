@@ -35,7 +35,7 @@ TEST(sm_feature_capture_handling, capture_discards_without_dispatching_to_region
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // Capture handles the event → Child::on_event is never called
     {
@@ -79,7 +79,7 @@ TEST(sm_feature_capture_handling, undeclared_capture_falls_through_to_region)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // e1 isn't in Parent's captures list → on_capture is skipped, Child::on_event runs
     {
@@ -123,7 +123,7 @@ TEST(sm_feature_capture_handling, capture_forward_dispatches_to_region_instead_o
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // Capture forwards → reaches Child (not bubbled up, Parent has no events list)
     {
@@ -171,7 +171,7 @@ TEST(sm_feature_capture_handling, capture_transit_replaces_state_without_region_
     EXPECT_CALL(mock, on_enter_called(type_id<Source>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Source> sm(nullptr, &mock);
+    TestSM<Source> sm(&mock);
 
     // Capture transits Source → Target; Child::on_event never runs
     {
@@ -217,7 +217,7 @@ TEST(sm_feature_capture_handling, parent_capture_preempts_nested_child_capture)
     EXPECT_CALL(mock, on_enter_called(type_id<Parent>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Child>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Child>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // Parent's capture handles the event → Child::on_capture is never invoked
     {

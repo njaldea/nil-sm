@@ -36,6 +36,25 @@ namespace nil::sm
         using type = void;
     };
 
+    // Declares a member a state exposes via get(): `using provides = tlist<provide<Member,
+    // &State::member>>;`. State::get() matches on `Member`'s type id, then resolves the address
+    // directly through the stored pointer-to-member.
+    template <typename Member, auto MemberPtr>
+    struct provide final
+    {
+        using type = Member;
+        static constexpr auto ptr = MemberPtr;
+    };
+
+    // Opt-in escape hatch: `using args = tlist<direct_parent<ParentType>>;` resolves to the
+    // immediate parent's own state address, cast to `ParentType*` (you assert what type it
+    // actually is - no provide<> needed on the parent's side).
+    template <typename T>
+    struct direct_parent final
+    {
+        using type = T;
+    };
+
     struct Metadata final
     {
         std::size_t state = 0;
@@ -77,7 +96,6 @@ namespace nil::sm::detail
     }
 
     class Queues;
-    struct Contexts;
     struct IState;
 
     struct EvRegionsFinalized final
@@ -116,15 +134,14 @@ namespace nil::sm
 {
     struct Fin final
     {
+        // NOLINTNEXTLINE
+        Fin(const auto&...)
+        {
+        }
+
         static constexpr auto name = reserved::termination_node;
         // Reserved Metadata::state value; never a real reachable-state index.
         static constexpr std::size_t state_index = std::numeric_limits<std::size_t>::max();
-    };
-
-    struct Root final
-    {
-        // Synthetic top-level parent for all states; always default-constructed, even under a
-        // custom API whose state_t wraps it (e.g. a null shared_ptr<Root>).
     };
 
     struct Unhandled final

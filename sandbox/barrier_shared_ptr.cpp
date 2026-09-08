@@ -30,22 +30,15 @@ namespace
         }
     };
 
-    struct child_context
-    {
-        int value = 0;
-    };
-
     template <typename T>
-    using parent_api = nil::sm::api::Default<std::shared_ptr<parent_context>, void>::type<T>;
-
-    template <typename T>
-    using child_api = nil::sm::api::Default<std::shared_ptr<base_context>, void>::type<T>;
+    using child_api = nil::sm::api::Default<>::type<T>;
 
     struct child
     {
         using events = nil::xalt::tlist<finish>;
+        using args = nil::xalt::tlist<std::shared_ptr<base_context>>;
 
-        explicit child(auto* /* parent */, std::shared_ptr<base_context>* context_value)
+        explicit child(std::shared_ptr<base_context>* context_value)
             : context(*context_value)
         {
             assert(context->value == 31);
@@ -66,16 +59,30 @@ namespace
 
     using barrier = nil::sm::barrier::State<nil::sm::Terminate, provider>;
 
+    // Upcasts the shared_ptr<parent_context> root arg once, exposing it to descendants
+    // (including the barrier-wrapped child) as shared_ptr<base_context> via get().
     struct root
     {
         using regions = nil::xalt::tlist<barrier>;
+        using args = nil::xalt::tlist<std::shared_ptr<parent_context>>;
+
+        std::shared_ptr<base_context> base_ctx;
+
+        explicit root(std::shared_ptr<parent_context>* ctx)
+            : base_ctx(*ctx)
+        {
+        }
+
+        static constexpr auto base_ctx_ptr = &root::base_ctx;
+        using provides
+            = nil::xalt::tlist<nil::sm::provide<std::shared_ptr<base_context>, base_ctx_ptr>>;
     };
 }
 
 int main()
 {
     auto context = std::make_shared<parent_context>();
-    nil::sm::SM<parent_api, root> machine{&context, nullptr};
+    nil::sm::DefaultSM<root, std::shared_ptr<parent_context>> machine{&context};
 
     machine.post(finish{});
 

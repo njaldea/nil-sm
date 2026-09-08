@@ -174,8 +174,9 @@ namespace toll::generic
 
         booth_context* ctx = nullptr;
 
-        template <typename Parent>
-        explicit step(Parent* /* parent */, booth_context* context)
+        using args = nil::xalt::tlist<booth_context>;
+
+        explicit step(booth_context* context)
             : ctx(context)
         {
         }
@@ -208,8 +209,9 @@ namespace toll::generic
 
         booth_context* ctx = nullptr;
 
-        template <typename Parent>
-        explicit waiting(Parent* /* parent */, booth_context* context)
+        using args = nil::xalt::tlist<booth_context>;
+
+        explicit waiting(booth_context* context)
             : ctx(context)
         {
         }
@@ -242,8 +244,9 @@ namespace toll::generic
 
         booth_context* ctx = nullptr;
 
-        template <typename Parent>
-        explicit choosing(Parent* /* parent */, booth_context* context)
+        using args = nil::xalt::tlist<booth_context>;
+
+        explicit choosing(booth_context* context)
             : ctx(context)
         {
         }
@@ -278,8 +281,9 @@ namespace toll::generic
         booth_context* ctx = nullptr;
         int seen = 0;
 
-        template <typename Parent>
-        explicit counting(Parent* /* parent */, booth_context* context)
+        using args = nil::xalt::tlist<booth_context>;
+
+        explicit counting(booth_context* context)
             : ctx(context)
         {
         }
@@ -315,8 +319,9 @@ namespace toll::generic
 
         booth_context* ctx = nullptr;
 
-        template <typename Parent>
-        explicit parking(Parent* /* parent */, booth_context* context)
+        using args = nil::xalt::tlist<booth_context>;
+
+        explicit parking(booth_context* context)
             : ctx(context)
         {
         }
@@ -356,8 +361,9 @@ namespace toll::generic
 
         booth_context* ctx = nullptr;
 
-        template <typename Parent>
-        explicit screening(Parent* /* parent */, booth_context* context)
+        using args = nil::xalt::tlist<booth_context>;
+
+        explicit screening(booth_context* context)
             : ctx(context)
         {
         }
@@ -394,8 +400,9 @@ namespace toll::generic
 
         booth_context* ctx = nullptr;
 
-        template <typename Parent>
-        explicit announcing(Parent* /* parent */, booth_context* context)
+        using args = nil::xalt::tlist<booth_context>;
+
+        explicit announcing(booth_context* context)
             : ctx(context)
         {
         }
@@ -421,8 +428,9 @@ namespace toll::generic
 
         booth_context* ctx = nullptr;
 
-        template <typename Parent>
-        explicit escaping(Parent* /* parent */, booth_context* context)
+        using args = nil::xalt::tlist<booth_context>;
+
+        explicit escaping(booth_context* context)
             : ctx(context)
         {
         }
@@ -456,8 +464,9 @@ namespace toll::generic
 
         booth_context* ctx = nullptr;
 
-        template <typename Parent>
-        explicit workflow(Parent* /* parent */, booth_context* context)
+        using args = nil::xalt::tlist<booth_context>;
+
+        explicit workflow(booth_context* context)
             : ctx(context)
         {
         }
@@ -504,8 +513,9 @@ namespace toll::generic
 
         booth_context* ctx = nullptr;
 
-        template <typename Parent>
-        explicit session(Parent* /* parent */, booth_context* context)
+        using args = nil::xalt::tlist<booth_context>;
+
+        explicit session(booth_context* context)
             : ctx(context)
         {
         }
@@ -530,16 +540,10 @@ namespace toll
     template <typename T>
     struct tracing_api
     {
-        using state_context_t = booth_context;
         using api_context_t = trace_context;
 
-        template <typename Parent>
-        static T make(
-            Parent* parent,
-            booth_context* state_contexts,
-            trace_context* api_contexts,
-            const nil::sm::Metadata& metadata
-        )
+        template <typename... Args>
+        static T make(api_context_t* api_contexts, const nil::sm::Metadata& metadata, Args*... args)
         {
             if (api_contexts != nullptr)
             {
@@ -551,11 +555,10 @@ namespace toll
                     std::cout << '\n';
                 }
             }
-            return nil::sm::api::Default<booth_context, trace_context>::type<T>::make(
-                parent,
-                state_contexts,
+            return nil::sm::api::Default<trace_context>::type<T>::make(
                 api_contexts,
-                metadata
+                metadata,
+                args...
             );
         }
 
@@ -566,7 +569,7 @@ namespace toll
             {
                 api_contexts->events++;
             }
-            return nil::sm::api::Default<booth_context, trace_context>::type<T>::on_event(
+            return nil::sm::api::Default<trace_context>::type<T>::on_event(
                 state,
                 event,
                 api_contexts
@@ -579,10 +582,7 @@ namespace toll
             {
                 api_contexts->entered++;
             }
-            return nil::sm::api::Default<booth_context, trace_context>::type<T>::on_enter(
-                state,
-                api_contexts
-            );
+            return nil::sm::api::Default<trace_context>::type<T>::on_enter(state, api_contexts);
         }
 
         static auto on_exit(T& state, trace_context* api_contexts)
@@ -591,10 +591,7 @@ namespace toll
             {
                 api_contexts->exited++;
             }
-            return nil::sm::api::Default<booth_context, trace_context>::type<T>::on_exit(
-                state,
-                api_contexts
-            );
+            return nil::sm::api::Default<trace_context>::type<T>::on_exit(state, api_contexts);
         }
     };
 }
@@ -780,9 +777,9 @@ namespace toll::repl
         booth_context state_context;
         trace_context api_context;
 
-        nil::sm::SM<nil::sm::api::Coalesce<tracing_api>::type, Top> machine{
-            &state_context,
-            &api_context
+        nil::sm::SM<nil::sm::api::Coalesce<tracing_api>::type, Top, booth_context> machine{
+            &api_context,
+            &state_context
         };
 
         return loop(

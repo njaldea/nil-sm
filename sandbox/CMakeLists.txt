@@ -58,6 +58,11 @@ project(sandbox_barrier_shared_ptr)
 add_executable(${PROJECT_NAME} barrier_shared_ptr.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 
+project(sandbox_legacy_style_api)
+
+add_executable(${PROJECT_NAME} legacy_style_api.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE sm)
+
 project(sandbox_barrier_provider_uml)
 
 add_executable(${PROJECT_NAME} barrier_provider_uml.cpp)

@@ -37,7 +37,9 @@ namespace
 
         DeferObserver* obs;
 
-        explicit SaveReceiver(auto* /* parent */, DeferObserver* o)
+        using args = nil::xalt::tlist<DeferObserver>;
+
+        explicit SaveReceiver(DeferObserver* o)
             : obs(o)
         {
         }
@@ -71,10 +73,10 @@ namespace
     };
 
     template <typename T>
-    using DeferTestAPI = nil::sm::api::Default<DeferObserver, void>::template type<T>;
+    using DeferTestAPI = nil::sm::api::Default<void>::template type<T>;
 
-    template <typename... Regions>
-    using DeferTestSM = nil::sm::SM<DeferTestAPI, Regions...>;
+    template <typename T, typename... RootArgs>
+    using DeferTestSM = nil::sm::SM<DeferTestAPI, T, RootArgs...>;
 
     // ---- States for payload preservation test ----
 
@@ -85,7 +87,9 @@ namespace
 
         DeferObserver* obs;
 
-        explicit DataReceiver(auto* /* parent */, DeferObserver* o)
+        using args = nil::xalt::tlist<DeferObserver>;
+
+        explicit DataReceiver(DeferObserver* o)
             : obs(o)
         {
         }
@@ -129,7 +133,9 @@ namespace
 
         DeferObserver* obs;
 
-        explicit DataReceiver2(auto* /* parent */, DeferObserver* o)
+        using args = nil::xalt::tlist<DeferObserver>;
+
+        explicit DataReceiver2(DeferObserver* o)
             : obs(o)
         {
         }
@@ -167,7 +173,7 @@ namespace
         testing::StrictMock<DeferObserver> obs;
         testing::InSequence sequence;
 
-        DeferTestSM<DeferTransitRoot> sm(&obs, {});
+        DeferTestSM<DeferTransitRoot, DeferObserver> sm(&obs);
 
         // DeferState defers e_save
         {
@@ -187,7 +193,7 @@ namespace
         testing::StrictMock<DeferObserver> obs;
         testing::InSequence sequence;
 
-        DeferTestSM<DataDeferTransitRoot> sm(&obs, {});
+        DeferTestSM<DataDeferTransitRoot, DeferObserver> sm(&obs);
 
         {
             sm.post(e_data{42});
@@ -205,7 +211,7 @@ namespace
         testing::StrictMock<DeferObserver> obs;
         testing::InSequence sequence;
 
-        DeferTestSM<DeferTransitRoot> sm(&obs, {});
+        DeferTestSM<DeferTransitRoot, DeferObserver> sm(&obs);
 
         {
             sm.post(e_save{});
@@ -230,7 +236,7 @@ namespace
         testing::StrictMock<DeferObserver> obs;
         testing::InSequence sequence;
 
-        DeferTestSM<OrthogonalDeferRoot> sm(&obs, {});
+        DeferTestSM<OrthogonalDeferRoot, DeferObserver> sm(&obs);
 
         // Region 1 defers e_save, Region 2 defers e_data
         {

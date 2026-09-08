@@ -8,28 +8,29 @@
 
 // Not `final`: to override `name` (or add other properties, e.g. payload()),
 // inherit from the declared struct and declare it in the derived class.
-#define NIL_SM_BARRIER_DECLARE(NAME, API)                                                          \
-    struct NAME                                                                                    \
-    {                                                                                              \
-        using api_t = API<nil::sm::Root>;                                                          \
-        using state_context_t = api_t::state_context_t;                                            \
-        using api_context_t = api_t::api_context_t;                                                \
-        [[maybe_unused]] static constexpr auto id = nil::xalt::type_id<NAME>;                      \
-        static std::unique_ptr<nil::sm::ISM>                                                       \
-            make(nil::sm::detail::Queues*, nil::sm::detail::Contexts*, const nil::sm::Metadata*);  \
-        static nil::sm::ir::Model ir(const nil::sm::Metadata*);                                    \
+#define NIL_SM_BARRIER_DECLARE(NAME, API)                                                                       \
+    struct NAME                                                                                                 \
+    {                                                                                                           \
+        using api_t = API<nil::sm::detail::api_tag>;                                                            \
+        using api_context_t = api_t::api_context_t;                                                             \
+        [[maybe_unused]] static constexpr auto id = nil::xalt::type_id<NAME>;                                   \
+        static std::unique_ptr<nil::sm::ISM>                                                                    \
+            make(nil::sm::detail::IState*, nil::sm::detail::Queues*, api_context_t*, const nil::sm::Metadata*); \
+        static nil::sm::ir::Model ir(const nil::sm::Metadata*);                                                 \
     }
 
 #define NIL_SM_BARRIER_DEFINE(NAME, API, STATE)                                                    \
     [[maybe_unused]] std::unique_ptr<nil::sm::ISM> NAME::make(                                     \
+        nil::sm::detail::IState* parent,                                                           \
         nil::sm::detail::Queues* queues,                                                           \
-        nil::sm::detail::Contexts* contexts,                                                       \
+        api_context_t* api_contexts,                                                               \
         const nil::sm::Metadata* parent_metadata                                                   \
     )                                                                                              \
     {                                                                                              \
         return std::make_unique<nil::sm::barrier::SM<API, STATE>>(                                 \
+            parent,                                                                                \
             queues,                                                                                \
-            contexts,                                                                              \
+            api_contexts,                                                                          \
             parent_metadata                                                                        \
         );                                                                                         \
     }                                                                                              \
@@ -38,7 +39,7 @@
         return nil::sm::ir::build<API, STATE>(parent_metadata);                                    \
     }                                                                                              \
     static_assert(                                                                                 \
-        std::is_same_v<typename NAME::api_t, API<nil::sm::Root>>,                                  \
+        std::is_same_v<typename NAME::api_t, API<nil::sm::detail::api_tag>>,                       \
         "NIL_SM_BARRIER_DEFINE: "                                                                  \
         "API must match the API passed to NIL_SM_BARRIER_DECLARE(" #NAME ")"                       \
     )
@@ -131,22 +132,23 @@ namespace nil::sm::barrier
     template <template <typename> typename API, typename T>
     class SM final: public ISM
     {
-        using region_dispatcher_t = detail::region_dispatcher<API, Root, nil::xalt::tlist<T>>;
+        using region_dispatcher_t = detail::region_dispatcher<API, nil::xalt::tlist<T>>;
 
     public:
         explicit SM(
+            detail::IState* init_parent,
             detail::Queues* init_queues,
-            detail::Contexts* init_contexts,
+            void* init_api_contexts,
             const Metadata* init_parent_metadata = nullptr
         )
             : queues(init_queues)
-            , contexts(init_contexts)
+            , api_contexts(init_api_contexts)
             , region(
                   detail::Region::tag<API, T>{},
                   0,
-                  &root,
+                  init_parent,
                   queues,
-                  contexts,
+                  api_contexts,
                   init_parent_metadata
               )
         {
@@ -165,9 +167,8 @@ namespace nil::sm::barrier
         }
 
     private:
-        typename API<Root>::state_t root{};
         detail::Queues* queues;
-        detail::Contexts* contexts;
+        void* api_contexts;
         detail::Region region;
 
         action_t post_impl(detail::Event event) override
@@ -184,24 +185,32 @@ namespace nil::sm
     template <template <typename> typename API, typename FinalizeAction, typename Provider>
     class State<API, barrier::State<FinalizeAction, Provider>> final: public detail::IState
     {
+        using parent_api_context_t = detail::api_context_t<API>;
+        using child_api_context_t = typename Provider::api_context_t;
+
+        using api_adapter_t = barrier::context_adapter<parent_api_context_t, child_api_context_t>;
+
     public:
-        template <typename Parent>
         explicit State(
-            Parent* /* parent */,
+            detail::IState* init_parent,
             detail::Queues* init_queues,
-            detail::Contexts* init_contexts,
+            parent_api_context_t* init_api_contexts,
             Metadata init_metadata
         )
-            : detail::IState(init_metadata)
-            , state_adapter(static_cast<parent_state_context_t*>(init_contexts->state))
-            , api_adapter(static_cast<parent_api_context_t*>(init_contexts->api))
-            , child_contexts{.state = state_adapter.context(), .api = api_adapter.context()}
-            , child(Provider::make(init_queues, &child_contexts, std::addressof(this->metadata)))
+            : detail::IState(init_parent, init_metadata)
+            , api_adapter(init_api_contexts)
+            , child(Provider::make(
+                  this,
+                  init_queues,
+                  api_adapter.context(),
+                  std::addressof(this->metadata)
+              ))
         {
-            if constexpr (requires() { Provider::payload(state_adapter.context()); })
-            {
-                child->post(barrier::EvPayload{Provider::payload(state_adapter.context())});
-            }
+        }
+
+        void* get(const void* requested_id) override
+        {
+            return parent != nullptr ? parent->get(requested_id) : nullptr;
         }
 
         detail::on_event_t on_event(const detail::Event& e) override
@@ -223,18 +232,7 @@ namespace nil::sm
         }
 
     private:
-        using parent_state_context_t = typename API<Root>::state_context_t;
-        using parent_api_context_t = typename API<Root>::api_context_t;
-        using child_state_context_t = typename Provider::state_context_t;
-        using child_api_context_t = typename Provider::api_context_t;
-
-        using state_adapter_t
-            = barrier::context_adapter<parent_state_context_t, child_state_context_t>;
-        using api_adapter_t = barrier::context_adapter<parent_api_context_t, child_api_context_t>;
-
-        state_adapter_t state_adapter;
         api_adapter_t api_adapter;
-        detail::Contexts child_contexts;
         std::unique_ptr<ISM> child;
         bool finalized = false;
     };

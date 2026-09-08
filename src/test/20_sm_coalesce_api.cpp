@@ -62,27 +62,20 @@ namespace
     template <typename T>
     struct MakeOnlyAPI
     {
-        using state_context_t = void;
         using api_context_t = MakeObserver;
 
-        template <typename Parent>
-        static T make(
-            Parent* parent,
-            state_context_t* state_contexts,
-            api_context_t* api_contexts,
-            const nil::sm::Metadata& metadata
-        )
+        template <typename... Args>
+        static T make(api_context_t* api_contexts, const nil::sm::Metadata& metadata, Args*... args)
         {
             if constexpr (!std::is_same_v<T, nil::sm::Fin>)
             {
                 api_contexts->on_construct();
             }
             // Delegate construction to api::Default
-            return nil::sm::api::Default<state_context_t, api_context_t>::type<T>::make(
-                parent,
-                state_contexts,
+            return nil::sm::api::Default<api_context_t>::type<T>::make(
                 api_contexts,
-                metadata
+                metadata,
+                args...
             );
         }
 
@@ -102,7 +95,6 @@ namespace
     template <typename T>
     struct EnterOnlyAPI
     {
-        using state_context_t = void;
         using api_context_t = EnterObserver;
 
         static auto on_enter(T& state, api_context_t* api_contexts)
@@ -112,10 +104,7 @@ namespace
                 api_contexts->on_enter_intercepted();
             }
             // Delegate to api::Default for actual state hook dispatch
-            return nil::sm::api::Default<state_context_t, api_context_t>::type<T>::on_enter(
-                state,
-                api_contexts
-            );
+            return nil::sm::api::Default<api_context_t>::type<T>::on_enter(state, api_contexts);
         }
 
         // make, on_event, on_exit, on_regions_finalized — not defined here
@@ -143,7 +132,7 @@ namespace
             {
                 api_contexts->on_event_intercepted();
             }
-            return nil::sm::api::Default<void, EventObserver>::type<T>::template on_event<E>(
+            return nil::sm::api::Default<EventObserver>::type<T>::template on_event<E>(
                 state,
                 event,
                 api_contexts
@@ -153,7 +142,7 @@ namespace
         // make, on_enter, on_exit, on_regions_finalized — not defined here
     };
 
-    // ---- Test 4: custom make that spreads a tuple context via std::apply ----
+    // ---- Test 4: state declares `args` for multi-arg constructor injection ----
 
     struct CtxA
     {
@@ -165,14 +154,15 @@ namespace
         int b = 0;
     };
 
-    // State that receives two context pointers as individual constructor args
+    // State that receives two root-provided contexts as individual constructor args
     struct spread_leaf
     {
         using events = nil::xalt::tlist<e_tick>;
+        using args = nil::xalt::tlist<CtxA, CtxB>;
 
         int sum = 0;
 
-        explicit spread_leaf(auto* /* parent */, CtxA* a, CtxB* b)
+        explicit spread_leaf(CtxA* a, CtxB* b)
             : sum(a->a + b->b)
         {
         }
@@ -181,38 +171,6 @@ namespace
         {
             return Discard{};
         }
-    };
-
-    // Custom API: make spreads a std::tuple state context into individual args.
-    // All other hooks use defaults via api::Coalesce.
-    template <typename T>
-    struct SpreadMakeAPI
-    {
-        using state_context_t = std::tuple<CtxA*, CtxB*>;
-        using api_context_t = void;
-
-        template <typename Parent>
-        static T make(
-            Parent* parent,
-            state_context_t* state_contexts,
-            api_context_t* /* api_contexts */,
-            const nil::sm::Metadata& /* metadata */
-        )
-        {
-            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
-            {
-                return std::apply(
-                    [parent](auto*... args) -> T { return T(parent, args...); },
-                    *state_contexts
-                );
-            }
-            else
-            {
-                return T{};
-            }
-        }
-
-        // on_event, on_enter, on_exit, on_regions_finalized — not defined here
     };
 }
 
@@ -224,7 +182,7 @@ TEST(sm_feature_coalesce_api, make_intercepted_construction_observer_called)
     testing::InSequence seq;
 
     EXPECT_CALL(obs, on_construct()).Times(1);
-    nil::sm::SM<nil::sm::api::Coalesce<MakeOnlyAPI>::type, counting_leaf> sm{nullptr, &obs};
+    nil::sm::SM<nil::sm::api::Coalesce<MakeOnlyAPI>::type, counting_leaf> sm{&obs};
 
     // on_event falls through to api::Default — counting_leaf handles e_tick
     {
@@ -245,7 +203,7 @@ TEST(sm_feature_coalesce_api, on_enter_intercepted_enter_observer_called)
 
     // lifecycle_leaf has on_enter — our interceptor fires, then calls default
     EXPECT_CALL(obs, on_enter_intercepted()).Times(1);
-    nil::sm::SM<nil::sm::api::Coalesce<EnterOnlyAPI>::type, lifecycle_leaf> sm{nullptr, &obs};
+    nil::sm::SM<nil::sm::api::Coalesce<EnterOnlyAPI>::type, lifecycle_leaf> sm{&obs};
 
     {
         sm.post(e_tick{}); // on_event falls through to default; state discards
@@ -259,7 +217,7 @@ TEST(sm_feature_coalesce_api, on_event_intercepted_event_observer_called)
     testing::StrictMock<EventObserver> obs;
     testing::InSequence sequence;
 
-    nil::sm::SM<nil::sm::api::Coalesce<EventOnlyAPI>::type, lifecycle_leaf> sm{{}, &obs};
+    nil::sm::SM<nil::sm::api::Coalesce<EventOnlyAPI>::type, lifecycle_leaf> sm{&obs};
 
     {
         EXPECT_CALL(obs, on_event_intercepted()).Times(1);
@@ -271,15 +229,14 @@ TEST(sm_feature_coalesce_api, on_event_intercepted_event_observer_called)
     }
 }
 
-// Test: custom API make spreads a std::tuple state context into individual
-// constructor args via std::apply; all other hooks fall through to defaults.
+// Test: state declares `args` to receive two root-provided contexts as individual
+// constructor parameters; no custom API::make() override is needed.
 TEST(sm_feature_coalesce_api, custom_make_spreads_tuple_context_to_state_args)
 {
     CtxA a{.a = 10};
     CtxB b{.b = 32};
-    auto ctx = std::tuple<CtxA*, CtxB*>(&a, &b);
 
-    nil::sm::SM<nil::sm::api::Coalesce<SpreadMakeAPI>::type, spread_leaf> sm{&ctx, nullptr};
+    nil::sm::DefaultSM<spread_leaf, CtxA, CtxB> sm(&a, &b);
 
     // spread_leaf was constructed with sum = a.a + b.b = 42
     // (verified implicitly — SM would not compile if construction failed)

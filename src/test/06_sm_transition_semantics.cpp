@@ -38,7 +38,7 @@ TEST(sm_feature_transition_semantics, self_transition_reconstructs_state)
     // First instance
     EXPECT_CALL(mock, on_make_called(type_id<SelfTransitState>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<SelfTransitState>)).Times(1);
-    TestSM<SelfTransitState> sm(nullptr, &mock);
+    TestSM<SelfTransitState> sm(&mock);
 
     // Self-transit: exits and re-creates
     {
@@ -94,7 +94,7 @@ TEST(sm_feature_transition_semantics, transition_to_sibling_state)
     EXPECT_CALL(mock, on_enter_called(type_id<Root>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Source>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // Source transits to Sibling
     {
@@ -158,7 +158,7 @@ TEST(sm_feature_transition_semantics, transition_to_parents_child)
     EXPECT_CALL(mock, on_enter_called(type_id<Mid>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<SourceChild>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<SourceChild>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // SourceChild transits to SiblingChild
     {
@@ -202,7 +202,7 @@ TEST(sm_feature_transition_semantics, transition_destroys_previous_state)
 
     EXPECT_CALL(mock, on_make_called(type_id<Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Source>)).Times(1);
-    TestSM<Source> sm(nullptr, &mock);
+    TestSM<Source> sm(&mock);
 
     // Source transits to Target; Target has no events so lives until destruction
     {
@@ -254,7 +254,7 @@ TEST(sm_feature_transition_semantics, multiple_consecutive_transitions)
 
     EXPECT_CALL(mock, on_make_called(type_id<A>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<A>)).Times(1);
-    TestSM<A> sm(nullptr, &mock);
+    TestSM<A> sm(&mock);
 
     // A → B
     {
@@ -334,7 +334,7 @@ TEST(sm_feature_transition_semantics, transition_after_forwarded_event)
     EXPECT_CALL(mock, on_enter_called(type_id<Root>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Source>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // forward=true: source forwards → root handles
     {
@@ -414,7 +414,7 @@ TEST(sm_feature_transition_semantics, transition_after_discarded_event)
     EXPECT_CALL(mock, on_enter_called(type_id<Root>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Source>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // discard=true: source discards → root NOT called
     {

@@ -52,7 +52,7 @@ TEST(sm_feature_orthogonal_transition_ordering, child_transition_plus_parent_dis
     EXPECT_CALL(mock, on_enter_called(type_id<R1Source>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // R1 transits, R2 forwards → parent called
     {
@@ -132,7 +132,7 @@ TEST(sm_feature_orthogonal_transition_ordering, child_transition_plus_parent_for
     EXPECT_CALL(mock, on_enter_called(type_id<R1Source>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2>)).Times(1);
-    TestSM<Grandparent> sm(nullptr, &mock);
+    TestSM<Grandparent> sm(&mock);
 
     {
         // R1Source transits, R2 forwards → Parent called → Parent forwards
@@ -208,7 +208,7 @@ TEST(sm_feature_orthogonal_transition_ordering, child_transition_plus_parent_tra
     EXPECT_CALL(mock, on_enter_called(type_id<R1Source>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     {
         EXPECT_CALL(mock, on_event_called(type_id<R1Source>, type_id<e1>)).Times(1);
@@ -284,7 +284,7 @@ TEST(sm_feature_orthogonal_transition_ordering, multiple_child_transitions)
     EXPECT_CALL(mock, on_enter_called(type_id<R1Source>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2Source>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // e1: both transit
     {
@@ -366,7 +366,7 @@ TEST(sm_feature_orthogonal_transition_ordering, nested_child_transitions)
     EXPECT_CALL(mock, on_enter_called(type_id<LeafSource>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Sibling>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Sibling>)).Times(1);
-    TestSM<Top> sm(nullptr, &mock);
+    TestSM<Top> sm(&mock);
 
     // e1: leaf transits, sibling discards
     {
@@ -448,7 +448,7 @@ TEST(sm_feature_orthogonal_transition_ordering, sibling_transitions_independent)
     EXPECT_CALL(mock, on_enter_called(type_id<R1Source>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<R2Source>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<R2Source>)).Times(1);
-    TestSM<Root> sm(nullptr, &mock);
+    TestSM<Root> sm(&mock);
 
     // e1: both transit
     {
@@ -545,7 +545,7 @@ TEST(sm_feature_orthogonal_transition_ordering, parent_transition_cancels_pendin
     EXPECT_CALL(mock, on_enter_called(type_id<T2Source>)).Times(1);
     EXPECT_CALL(mock, on_make_called(type_id<Fwd>)).Times(1);
     EXPECT_CALL(mock, on_enter_called(type_id<Fwd>)).Times(1);
-    TestSM<Parent> sm(nullptr, &mock);
+    TestSM<Parent> sm(&mock);
 
     // e1: t1 transits, t2 transits, fwd forwards → parent transits
     {

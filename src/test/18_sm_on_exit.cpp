@@ -18,7 +18,9 @@ namespace
     {
         ExitObserver* obs;
 
-        explicit exit_only_state(auto* /* parent */, ExitObserver* o)
+        using args = nil::xalt::tlist<ExitObserver>;
+
+        explicit exit_only_state(ExitObserver* o)
             : obs(o)
         {
         }
@@ -34,7 +36,9 @@ namespace
     {
         ExitObserver* obs;
 
-        explicit child_exit_state(auto* /* parent */, ExitObserver* o)
+        using args = nil::xalt::tlist<ExitObserver>;
+
+        explicit child_exit_state(ExitObserver* o)
             : obs(o)
         {
         }
@@ -52,7 +56,9 @@ namespace
 
         ExitObserver* obs;
 
-        explicit parent_exit_state(auto* /* parent */, ExitObserver* o)
+        using args = nil::xalt::tlist<ExitObserver>;
+
+        explicit parent_exit_state(ExitObserver* o)
             : obs(o)
         {
         }
@@ -68,7 +74,9 @@ namespace
     {
         ExitObserver* obs;
 
-        explicit r1_exit_state(auto* /* parent */, ExitObserver* o)
+        using args = nil::xalt::tlist<ExitObserver>;
+
+        explicit r1_exit_state(ExitObserver* o)
             : obs(o)
         {
         }
@@ -84,7 +92,9 @@ namespace
     {
         ExitObserver* obs;
 
-        explicit r2_exit_state(auto* /* parent */, ExitObserver* o)
+        using args = nil::xalt::tlist<ExitObserver>;
+
+        explicit r2_exit_state(ExitObserver* o)
             : obs(o)
         {
         }
@@ -110,7 +120,9 @@ namespace
     {
         ExitObserver* obs;
 
-        explicit exit_emit_state(auto* /* parent */, ExitObserver* o)
+        using args = nil::xalt::tlist<ExitObserver>;
+
+        explicit exit_emit_state(ExitObserver* o)
             : obs(o)
         {
         }
@@ -122,10 +134,10 @@ namespace
     };
 
     template <typename T>
-    using ExitTestAPI = nil::sm::api::Default<ExitObserver, void>::template type<T>;
+    using ExitTestAPI = nil::sm::api::Default<void>::template type<T>;
 
-    template <typename... Regions>
-    using ExitTestSM = nil::sm::SM<ExitTestAPI, Regions...>;
+    template <typename T, typename... RootArgs>
+    using ExitTestSM = nil::sm::SM<ExitTestAPI, T, RootArgs...>;
 }
 
 TEST(sm_feature_on_exit, invokes_on_exit_on_state_destruction)
@@ -134,7 +146,7 @@ TEST(sm_feature_on_exit, invokes_on_exit_on_state_destruction)
     testing::InSequence sequence;
 
     {
-        ExitTestSM<exit_only_state> sm(&obs, {});
+        ExitTestSM<exit_only_state, ExitObserver> sm(&obs);
         EXPECT_CALL(obs, on_exit_called()).Times(1);
     }
 }
@@ -145,7 +157,7 @@ TEST(sm_feature_on_exit, destroys_child_before_parent_on_exit)
     testing::InSequence sequence;
 
     {
-        ExitTestSM<parent_exit_state> sm(&obs, {});
+        ExitTestSM<parent_exit_state, ExitObserver> sm(&obs);
         EXPECT_CALL(obs, on_exit_from_state(1)).Times(1);
         EXPECT_CALL(obs, on_exit_from_state(2)).Times(1);
     }
@@ -162,7 +174,7 @@ TEST(sm_feature_on_exit, destroys_regions_in_reverse_order)
     };
 
     {
-        ExitTestSM<Root> sm(&obs, {});
+        ExitTestSM<Root, ExitObserver> sm(&obs);
         EXPECT_CALL(obs, on_exit_from_state(2)).Times(1);
         EXPECT_CALL(obs, on_exit_from_state(1)).Times(1);
     }
@@ -173,7 +185,7 @@ TEST(sm_feature_on_exit, supports_emit_action_on_exit)
     testing::StrictMock<ExitObserver> obs;
 
     {
-        ExitTestSM<exit_emit_state> sm(&obs, {});
+        ExitTestSM<exit_emit_state, ExitObserver> sm(&obs);
 
         // Destruction is the trigger; strict mock verification covers unexpected observer calls.
     }

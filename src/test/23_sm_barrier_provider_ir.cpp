@@ -36,7 +36,7 @@ namespace
         using regions = nil::xalt::tlist<parent_a, parent_b>;
     };
 
-    using machine = nil::sm::SM<nil::sm::api::Default<>::template type, root>;
+    using machine = nil::sm::DefaultSM<root>;
 
     std::size_t count_provider_references(
         const std::vector<nil::sm::ir::Node>& nodes,

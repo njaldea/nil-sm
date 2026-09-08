@@ -7,21 +7,21 @@
 namespace
 {
     template <typename T>
-    using EdgeCaseTestAPI
-        = nil::sm::api::Default<testing::StrictMock<StateMock>, void>::template type<T>;
+    using EdgeCaseTestAPI = nil::sm::api::Default<void>::template type<T>;
 
     // Wrapper to create SM with StateMock context
-    template <typename... Regions>
-    using EdgeCaseSM = nil::sm::SM<EdgeCaseTestAPI, Regions...>;
+    template <typename T, typename... RootArgs>
+    using EdgeCaseSM = nil::sm::SM<EdgeCaseTestAPI, T, RootArgs...>;
 
     template <typename Tag>
     struct discard_on_e1
     {
         using events = nil::xalt::tlist<e1>;
+        using args = nil::xalt::tlist<testing::StrictMock<StateMock>>;
 
         StateMock* mock = nullptr;
 
-        explicit discard_on_e1(auto* /* parent */, testing::StrictMock<StateMock>* m)
+        explicit discard_on_e1(testing::StrictMock<StateMock>* m)
             : mock(m)
         {
         }
@@ -43,10 +43,11 @@ namespace
     {
         using regions = nil::xalt::tlist<>;
         using events = nil::xalt::tlist<e1>;
+        using args = nil::xalt::tlist<testing::StrictMock<StateMock>>;
 
         StateMock* mock = nullptr;
 
-        explicit empty_regions_root(auto* /* parent */, testing::StrictMock<StateMock>* m)
+        explicit empty_regions_root(testing::StrictMock<StateMock>* m)
             : mock(m)
         {
         }
@@ -74,10 +75,11 @@ namespace
     struct reentrant_state
     {
         using events = nil::xalt::tlist<e1, e2>;
+        using args = nil::xalt::tlist<testing::StrictMock<StateMock>>;
 
         StateMock* mock = nullptr;
 
-        explicit reentrant_state(auto* /* parent */, testing::StrictMock<StateMock>* m)
+        explicit reentrant_state(testing::StrictMock<StateMock>* m)
             : mock(m)
         {
         }
@@ -99,10 +101,11 @@ namespace
     struct reentrant_chain_state
     {
         using events = nil::xalt::tlist<e1, e2, e3>;
+        using args = nil::xalt::tlist<testing::StrictMock<StateMock>>;
 
         StateMock* mock = nullptr;
 
-        explicit reentrant_chain_state(auto* /* parent */, testing::StrictMock<StateMock>* m)
+        explicit reentrant_chain_state(testing::StrictMock<StateMock>* m)
             : mock(m)
         {
         }
@@ -130,10 +133,11 @@ namespace
     struct terminate_on_e1
     {
         using events = nil::xalt::tlist<e1, e2>;
+        using args = nil::xalt::tlist<testing::StrictMock<StateMock>>;
 
         StateMock* mock = nullptr;
 
-        explicit terminate_on_e1(auto* /* parent */, testing::StrictMock<StateMock>* m)
+        explicit terminate_on_e1(testing::StrictMock<StateMock>* m)
             : mock(m)
         {
         }
@@ -156,13 +160,11 @@ namespace
     {
         using regions = nil::xalt::tlist<Child>;
         using events = nil::xalt::tlist<e1, e2>;
+        using args = nil::xalt::tlist<testing::StrictMock<StateMock>>;
 
         StateMock* mock = nullptr;
 
-        explicit parent_with_child_termination(
-            auto* /* parent */,
-            testing::StrictMock<StateMock>* m
-        )
+        explicit parent_with_child_termination(testing::StrictMock<StateMock>* m)
             : mock(m)
         {
         }
@@ -194,7 +196,7 @@ TEST(sm_feature_edge_cases, state_with_no_regions)
     const void* root_id = type_id<root>;
     const void* e1_id = type_id<e1>;
 
-    EdgeCaseSM<root> sm(&mock, {});
+    EdgeCaseSM<root, testing::StrictMock<StateMock>> sm(&mock);
     {
         EXPECT_CALL(mock, on_state_event(root_id, e1_id)).Times(1);
         sm.post(e1{});
@@ -219,7 +221,7 @@ TEST(sm_feature_edge_cases, state_with_no_events)
     const void* child_id = type_id<child>;
     const void* e1_id = type_id<e1>;
 
-    EdgeCaseSM<root> sm(&mock, {});
+    EdgeCaseSM<root, testing::StrictMock<StateMock>> sm(&mock);
     {
         EXPECT_CALL(mock, on_state_event(child_id, e1_id)).Times(1);
         sm.post(e1{});
@@ -239,7 +241,7 @@ TEST(sm_feature_edge_cases, composite_with_empty_regions)
     const void* root_id = type_id<root>;
     const void* e1_id = type_id<e1>;
 
-    EdgeCaseSM<root> sm(&mock, {});
+    EdgeCaseSM<root, testing::StrictMock<StateMock>> sm(&mock);
     {
         EXPECT_CALL(mock, on_state_event(root_id, e1_id)).Times(1);
         sm.post(e1{});
@@ -269,7 +271,7 @@ TEST(sm_feature_edge_cases, deep_hierarchy_ten_plus_levels)
     const void* leaf_id = type_id<leaf>;
     const void* e1_id = type_id<e1>;
 
-    EdgeCaseSM<n1> sm(&mock, {});
+    EdgeCaseSM<n1, testing::StrictMock<StateMock>> sm(&mock);
     {
         EXPECT_CALL(mock, on_state_event(leaf_id, e1_id)).Times(1);
         sm.post(e1{});
@@ -296,7 +298,7 @@ TEST(sm_feature_edge_cases, many_orthogonal_regions)
         using regions = nil::xalt::tlist<r0, r1, r2, r3, r4, r5, r6, r7>;
     };
 
-    EdgeCaseSM<Root> sm(&mock, {});
+    EdgeCaseSM<Root, testing::StrictMock<StateMock>> sm(&mock);
     {
         EXPECT_CALL(mock, on_state_event(testing::_, e1_id)).Times(8);
         sm.post(e1{});
@@ -310,7 +312,7 @@ TEST(sm_feature_edge_cases, event_not_present_anywhere)
     testing::StrictMock<StateMock> mock;
     testing::InSequence sequence;
 
-    EdgeCaseSM<root> sm(&mock, {});
+    EdgeCaseSM<root, testing::StrictMock<StateMock>> sm(&mock);
     {
         sm.post(e1{});
     }
@@ -331,7 +333,7 @@ TEST(sm_feature_edge_cases, reentrant_event_emission)
     const void* e1_id = type_id<e1>;
     const void* e2_id = type_id<e2>;
 
-    EdgeCaseSM<state> sm(&mock, {});
+    EdgeCaseSM<state, testing::StrictMock<StateMock>> sm(&mock);
     {
         EXPECT_CALL(mock, on_state_event(state_id, e1_id)).Times(1);
         EXPECT_CALL(mock, on_state_event(state_id, e2_id)).Times(1);
@@ -350,7 +352,7 @@ TEST(sm_feature_edge_cases, reentrant_event_emission_chain)
     const void* e2_id = type_id<e2>;
     const void* e3_id = type_id<e3>;
 
-    EdgeCaseSM<state> sm(&mock, {});
+    EdgeCaseSM<state, testing::StrictMock<StateMock>> sm(&mock);
     {
         EXPECT_CALL(mock, on_state_event(state_id, e1_id)).Times(1);
         EXPECT_CALL(mock, on_state_event(state_id, e2_id)).Times(1);
@@ -372,7 +374,7 @@ TEST(sm_feature_edge_cases, terminate_stops_region)
     const void* state_id = type_id<state>;
     const void* e1_id = type_id<e1>;
 
-    EdgeCaseSM<state> sm(&mock, {});
+    EdgeCaseSM<state, testing::StrictMock<StateMock>> sm(&mock);
     {
         EXPECT_CALL(mock, on_state_event(state_id, e1_id)).Times(1);
         // After terminate, e2 is not processed
@@ -403,7 +405,7 @@ TEST(sm_feature_edge_cases, terminate_in_child_stops_only_child)
     const void* e1_id = type_id<e1>;
     const void* e2_id = type_id<e2>;
 
-    EdgeCaseSM<parent> sm(&mock, {});
+    EdgeCaseSM<parent, testing::StrictMock<StateMock>> sm(&mock);
     {
         EXPECT_CALL(mock, on_state_event(child_id, e1_id)).Times(1);
         sm.post(e1{});
