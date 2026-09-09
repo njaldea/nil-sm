@@ -15,16 +15,15 @@
 
 namespace nil::sm::barrier
 {
-    template <typename FinalizeAction, typename Provider>
+    template <typename Action, typename T>
     struct State final
     {
-        // Provider name is only surfaced in IR (see ir.hpp's node_builder); the runtime
+        // Barrier state name is only surfaced in IR (see ir.hpp's node_builder); the runtime
         // metadata name stays the reserved barrier token.
         static constexpr auto name = reserved::barrier;
 
-        // Used by compile-time reachability analysis; the nil::sm::State
-        // specialization applies the action when the child finalizes.
-        static auto on_regions_finalized() -> FinalizeAction;
+        // Structural completion is handled by the runtime barrier wrapper.
+        static auto on_regions_finalized() -> Action;
     };
 }
 
@@ -46,7 +45,7 @@ namespace nil::sm
         using event_dispatch_t = detail::event_dispatcher<self_t, T, events_t>;
         using capture_dispatch_t = detail::capture_dispatcher<self_t, T, captures_t>;
         using args_t = typename api_t::args_t;
-        using provides_t = typename api_t::provides_t;
+        using props_t = typename api_t::props_t;
         using on_event_results_t = std::array<detail::on_event_t, regions_t::size>;
 
         using region_dispatcher_t = detail::region_dispatcher<API, regions_t>;
@@ -87,10 +86,6 @@ namespace nil::sm
         {
             if constexpr (nil::xalt::is_of_template_v<Arg, direct_parent>)
             {
-                static_assert(
-                    std::is_convertible_v<T*, typename Arg::type*>,
-                    "incompatible parent type"
-                );
                 return static_cast<typename Arg::type*>(
                     parent->get(nil::xalt::type_id<detail::direct_parent_marker>)
                 );
@@ -114,18 +109,17 @@ namespace nil::sm
             return api_t::make(api_contexts, metadata, resolve_arg<Args>(parent)...);
         }
 
-        // Matches requested_id against every provide<Member, Ptr> in provides_t, resolving
+        // Matches requested_id against every prop<Member, Ptr> in props_t, resolving
         // the member's address directly through its pointer-to-member when one matches.
-        template <typename... Provides>
-        void* match_provides(
+        template <typename... Props>
+        void* match_props(
             [[maybe_unused]] const void* requested_id,
-            nil::xalt::tlist<Provides...> /* provides */
+            nil::xalt::tlist<Props...> /* props */
         )
         {
             void* result = nullptr;
-            (void)((requested_id == nil::xalt::type_id<typename Provides::type>
-                        ? (result
-                           = static_cast<void*>(std::addressof(current_state.*Provides::ptr)),
+            (void)((requested_id == nil::xalt::type_id<typename Props::type>
+                        ? (result = static_cast<void*>(std::addressof(current_state.*Props::ptr)),
                            true)
                         : false)
                    || ...);
@@ -165,7 +159,7 @@ namespace nil::sm
                 return static_cast<void*>(std::addressof(current_state));
             }
 
-            if (auto* found = match_provides(requested_id, provides_t()))
+            if (auto* found = match_props(requested_id, props_t()))
             {
                 return found;
             }

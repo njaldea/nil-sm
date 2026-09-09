@@ -8,8 +8,8 @@
 // Test 20: api::Coalesce — partial API composition
 // Test 20: api::Coalesce — partial API composition
 // Demonstrates that a custom API can define only the hooks it cares about.
-// api::Coalesce provides default behavior for any method not present in the
-// api::Coalesce provides default behavior for any method not present in the
+// api::Coalesce supplies default behavior for any method not present in the
+// partial API, delegating to api::Default<T>.
 // partial API, delegating to api::Default<T>.
 namespace
 {
@@ -110,6 +110,38 @@ namespace
         // make, on_event, on_exit, on_regions_finalized — not defined here
     };
 
+    class CombinedObserver
+    {
+    public:
+        MOCK_METHOD(void, on_construct, (), ());
+        MOCK_METHOD(void, on_enter_intercepted, (), ());
+    };
+
+    template <typename T>
+    struct MakeAndEnterAPI
+    {
+        using api_context_t = CombinedObserver;
+
+        template <typename... Args>
+        static T make(api_context_t* context, const nil::sm::Metadata& metadata, Args*... args)
+        {
+            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+            {
+                context->on_construct();
+            }
+            return nil::sm::api::Default<api_context_t>::type<T>::make(context, metadata, args...);
+        }
+
+        static auto on_enter(T& state, api_context_t* context)
+        {
+            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+            {
+                context->on_enter_intercepted();
+            }
+            return nil::sm::api::Default<api_context_t>::type<T>::on_enter(state, context);
+        }
+    };
+
     // ---- Test 3: partial API that intercepts only `on_event` ----
 
     class EventObserver
@@ -208,6 +240,18 @@ TEST(sm_feature_coalesce_api, on_enter_intercepted_enter_observer_called)
     {
         sm.post(e_tick{}); // on_event falls through to default; state discards
     }
+}
+
+TEST(sm_feature_coalesce_api, multiple_partial_hooks_compose)
+{
+    testing::StrictMock<CombinedObserver> obs;
+    testing::InSequence sequence;
+
+    EXPECT_CALL(obs, on_construct()).Times(1);
+    EXPECT_CALL(obs, on_enter_intercepted()).Times(1);
+    nil::sm::SM<nil::sm::api::Coalesce<MakeAndEnterAPI>::type, lifecycle_leaf> sm{&obs};
+
+    sm.post(e_tick{});
 }
 
 // Test: partial API that only defines `on_event` intercepts every dispatched

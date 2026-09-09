@@ -4,9 +4,5 @@
 
 namespace toll::bslot
 {
-    NIL_SM_BARRIER_DEFINE(
-        collection_provider,
-        nil::sm::api::Coalesce<tracing_api>::type,
-        job::collection_job
-    );
+    NIL_SM_BARRIER_DEFINE(collection_barrier_state, job::collection_job);
 }

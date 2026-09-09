@@ -125,6 +125,41 @@ namespace
         }
     };
 
+    struct root_emit_event
+    {
+    };
+
+    struct root_emit_source_child
+    {
+        using events = nil::xalt::tlist<e1>;
+
+        static auto on_event(const e1& /* event */)
+        {
+            return Emit<root_emit_event>{};
+        }
+    };
+
+    struct root_emit_target
+    {
+        using events = nil::xalt::tlist<e2>;
+
+        static auto on_event(const e2& /* event */)
+        {
+            return Terminate{};
+        }
+    };
+
+    struct root_emit_source
+    {
+        using regions = nil::xalt::tlist<root_emit_source_child>;
+        using events = nil::xalt::tlist<root_emit_event>;
+
+        static auto on_event(const root_emit_event& /* event */)
+        {
+            return TransitTo<root_emit_target>{};
+        }
+    };
+
     template <typename T>
     using EmitTestAPI = nil::sm::api::Default<void>::template type<T>;
 
@@ -273,4 +308,15 @@ TEST(sm_feature_emit_handling, multiple_emit_events_preserve_order)
         EXPECT_CALL(obs, received_a(31)).Times(1);
         sm.post(e1{});
     }
+}
+
+TEST(sm_feature_emit_handling, emitted_event_can_transition_root_state)
+{
+    EmitTestSM<root_emit_source> sm;
+
+    sm.post(e1{});
+    EXPECT_FALSE(sm.is_finalized());
+
+    sm.post(e2{});
+    EXPECT_TRUE(sm.is_finalized());
 }

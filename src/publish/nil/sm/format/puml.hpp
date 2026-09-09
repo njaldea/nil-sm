@@ -91,7 +91,7 @@ namespace nil::sm::format::puml
             return;
         }
 
-        if (node.provider_id != nullptr)
+        if (node.barrier_id != nullptr)
         {
             indent(os, depth) << "state " << node.id << " as \"" << node.display_name
                               << "\" <<barrier>>\n";

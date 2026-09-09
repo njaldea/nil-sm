@@ -377,12 +377,13 @@ TEST(sm_feature_edge_cases, terminate_stops_region)
     EdgeCaseSM<state, testing::StrictMock<StateMock>> sm(&mock);
     {
         EXPECT_CALL(mock, on_state_event(state_id, e1_id)).Times(1);
-        // After terminate, e2 is not processed
         sm.post(e1{});
     }
+    EXPECT_TRUE(sm.is_finalized());
     {
         sm.post(e2{});
     }
+    EXPECT_TRUE(sm.is_finalized());
 }
 
 TEST(sm_feature_edge_cases, terminate_in_child_stops_only_child)

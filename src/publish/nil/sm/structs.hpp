@@ -26,7 +26,7 @@ namespace nil::sm
 
     namespace barrier
     {
-        template <typename FinalizeAction, typename Provider>
+        template <typename Action, typename T>
         struct State;
     }
 
@@ -36,11 +36,11 @@ namespace nil::sm
         using type = void;
     };
 
-    // Declares a member a state exposes via get(): `using provides = tlist<provide<Member,
+    // Declares a member a state exposes via get(): `using props = tlist<prop<Member,
     // &State::member>>;`. State::get() matches on `Member`'s type id, then resolves the address
     // directly through the stored pointer-to-member.
     template <typename Member, auto MemberPtr>
-    struct provide final
+    struct prop final
     {
         using type = Member;
         static constexpr auto ptr = MemberPtr;
@@ -48,7 +48,7 @@ namespace nil::sm
 
     // Opt-in escape hatch: `using args = tlist<direct_parent<ParentType>>;` resolves to the
     // immediate parent's own state address, cast to `ParentType*` (you assert what type it
-    // actually is - no provide<> needed on the parent's side).
+    // actually is - no prop<> needed on the parent's side).
     template <typename T>
     struct direct_parent final
     {

@@ -30,47 +30,50 @@ namespace nil::sm::format
         render_function render;
     };
 
-    struct provider_view
+    struct barrier_view
     {
-        explicit provider_view(const ir::Provider* init_provider, render_function init_render)
-            : provider(init_provider)
+        explicit barrier_view(
+            const ir::BarrierDefinition* init_barrier,
+            render_function init_render
+        )
+            : barrier(init_barrier)
             , render(init_render)
         {
         }
 
         const void* id() const
         {
-            return provider->id;
+            return barrier->id;
         }
 
         std::string_view name() const
         {
-            return provider->name;
+            return barrier->name;
         }
 
-        friend std::ostream& operator<<(std::ostream& os, const provider_view& view)
+        friend std::ostream& operator<<(std::ostream& os, const barrier_view& view)
         {
-            view.render(os, view.provider->roots);
+            view.render(os, view.barrier->roots);
             return os;
         }
 
     private:
-        const ir::Provider* provider;
+        const ir::BarrierDefinition* barrier;
         render_function render;
     };
 
-    class provider_range
+    class barrier_range
     {
         class iterator
         {
         public:
             using difference_type = std::ptrdiff_t;
-            using value_type = provider_view;
+            using value_type = barrier_view;
             using iterator_category = std::forward_iterator_tag;
 
             value_type operator*() const
             {
-                return value_type{&model->providers[index], render};
+                return value_type{&model->barriers[index], render};
             }
 
             iterator& operator++()
@@ -85,7 +88,7 @@ namespace nil::sm::format
             }
 
         private:
-            friend class provider_range;
+            friend class barrier_range;
 
             iterator(
                 const ir::Model* init_model,
@@ -104,7 +107,7 @@ namespace nil::sm::format
         };
 
     public:
-        explicit provider_range(const ir::Model* init_model, render_function init_render)
+        explicit barrier_range(const ir::Model* init_model, render_function init_render)
             : model(init_model)
             , render(init_render)
         {
@@ -117,7 +120,7 @@ namespace nil::sm::format
 
         iterator end() const
         {
-            return iterator{model, model->providers.size(), render};
+            return iterator{model, model->barriers.size(), render};
         }
 
     private:
@@ -138,7 +141,7 @@ namespace nil::sm::format
         explicit diagram()
             : model(ir::build<API, T>())
             , root{&model, Render}
-            , providers{&model, Render}
+            , barriers{&model, Render}
         {
         }
 
@@ -151,6 +154,6 @@ namespace nil::sm::format
 
         const ir::Model model;
         root_view root;
-        provider_range providers;
+        barrier_range barriers;
     };
 }

@@ -17,7 +17,7 @@ namespace nil::sm::api
             using events_t = nil::xalt::coalesce_t<T, detail::events_tag>;
             using captures_t = nil::xalt::coalesce_t<T, detail::captures_tag>;
             using args_t = nil::xalt::coalesce_t<T, detail::args_tag>;
-            using provides_t = nil::xalt::coalesce_t<T, detail::provides_tag>;
+            using props_t = nil::xalt::coalesce_t<T, detail::props_tag>;
 
             template <typename... Args>
             static T make(api_context_t* /* api_contexts */, Metadata /* metadata */, Args*... args)
@@ -93,13 +93,13 @@ namespace nil::sm::api
             NIL_XALT_COALESCE_TAG(regions_t, defaulter_t::regions_t);
             NIL_XALT_COALESCE_TAG(captures_t, defaulter_t::captures_t);
             NIL_XALT_COALESCE_TAG(args_t, defaulter_t::args_t);
-            NIL_XALT_COALESCE_TAG(provides_t, defaulter_t::provides_t);
+            NIL_XALT_COALESCE_TAG(props_t, defaulter_t::props_t);
 
             using regions_t = nil::xalt::coalesce_t<T, regions_t_tag>;
             using events_t = nil::xalt::coalesce_t<T, events_t_tag>;
             using captures_t = nil::xalt::coalesce_t<T, captures_t_tag>;
             using args_t = nil::xalt::coalesce_t<T, args_t_tag>;
-            using provides_t = nil::xalt::coalesce_t<T, provides_t_tag>;
+            using props_t = nil::xalt::coalesce_t<T, props_t_tag>;
 
             static T make(api_context_t* api_contexts, const Metadata& metadata, auto*... args)
             {

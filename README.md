@@ -1,10 +1,10 @@
 # nil/sm
 
-`nil/sm` is a small C++20 header-only library for typed hierarchical state
-machines. States are ordinary C++ types, events are ordinary types, and the
-compiler checks handlers and transition targets.
+`nil/sm` is a C++20, header-only library for typed hierarchical and orthogonal
+state machines. States and events are ordinary C++ types; invalid handlers and
+transition targets fail at compile time.
 
-## Quick start
+## Start here
 
 ```cpp
 #include <nil/sm.hpp>
@@ -41,29 +41,19 @@ int main()
 }
 ```
 
-`post()` is synchronous. The machine does not create threads or perform
-locking; call it from one owner thread or add synchronization around it.
+`post()` is synchronous. The library does not create threads or lock the
+machine; use one owner thread or synchronize at the application boundary.
 
-## The model
+## Documentation
 
-1. A state describes the current mode.
-2. An event describes something that happened.
-3. An action decides how the machine responds.
-
-Common actions are `TransitTo<T>`, `Terminate`, `Discard`, `Forward`, `Defer`,
-and `Emit<E>`. States can contain one or more child regions. Multiple regions
-are active together.
-
-## Documentation map
-
-| Document | Use it for |
+| Read | For |
 | --- | --- |
-| [Guide](docs/01_GUIDE.md) | States, events, regions, and actions |
-| [Patterns](docs/03_PATTERNS.md) | Short reusable designs |
-| [Extensibility](docs/02_EXTENSIBILITY.md) | Contexts, observers, timers, and threading |
-| [Advanced API](docs/05_ADVANCED.md) | Complete API customization reference |
-| [Formatters](docs/06_FORMAT.md) | Diagram output |
-| [Barriers](docs/07_BARRIER.md) | Splitting a machine across translation units |
+| [Core Guide](docs/01_GUIDE.md) | States, actions, regions, and dispatch |
+| [Patterns](docs/03_PATTERNS.md) | Short, reusable designs |
+| [Extensibility](docs/02_EXTENSIBILITY.md) | Contexts, hooks, and type erasure |
+| [Barriers](docs/07_BARRIER.md) | Structural child-machine boundaries |
+| [Formatters](docs/06_FORMAT.md) | PlantUML, Mermaid, DOT, SCXML, and XState |
+| [Advanced API](docs/05_ADVANCED.md) | Custom API and compile-time extensions |
 
 ## Build
 
@@ -74,7 +64,7 @@ ninja -C .build
 ctest --test-dir .build --output-on-failure
 ```
 
-See [AGENTS.md](AGENTS.md) for configure and test commands.
+See [AGENTS.md](AGENTS.md) for configuration commands.
 
 ## License
 

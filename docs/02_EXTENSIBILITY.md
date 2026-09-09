@@ -1,12 +1,13 @@
 # Extensibility
 
-Use a custom API when states need application services, or to observe
-construction and lifecycle calls.
+Most applications need only a state type, `DefaultSM`, and `post()`. Use this
+page when states need application objects or when the machine must be observed
+or type-erased.
 
-## Contexts
+## Contexts and state arguments
 
-Context types are object types. `SM` is non-owning and receives their addresses.
-Use `void` when a context is not needed.
+State dependencies are non-owning. List their types in `args`; pass root
+arguments as pointers when constructing the machine:
 
 ```cpp
 struct AppContext
@@ -16,26 +17,58 @@ struct AppContext
 
 struct logged_in
 {
-    explicit logged_in(auto*, AppContext* context)
-        : user_id(context->user_id) {}
+    using args = nil::xalt::tlist<AppContext>;
+
+    explicit logged_in(AppContext* app)
+        : user_id(app->user_id) {}
 
     int user_id;
 };
 
-AppContext context{42};
-nil::sm::SM<nil::sm::api::Default<AppContext>::template type, logged_in> machine{
-    &context,
-    nullptr
+AppContext app{42};
+nil::sm::DefaultSM<logged_in, AppContext> machine{&app};
+```
+
+The machine stores addresses. Keep context and root-argument objects alive until
+it is destroyed.
+
+Use `props` when a parent deliberately exposes a member to descendants:
+
+```cpp
+struct parent
+{
+    AppContext app;
+    using props = nil::xalt::tlist<
+        nil::sm::prop<AppContext, &parent::app>>;
+    using regions = nil::xalt::tlist<child>;
 };
 ```
 
-Keep both context objects alive until after the machine is destroyed. The
-machine does not copy or delete them.
+`direct_parent<T>` is an explicit escape hatch for the immediate parent. It is
+not available across a barrier boundary.
+
+## Type erasure
+
+Use `ISM` when callers should not know the concrete root state or API:
+
+```cpp
+std::unique_ptr<nil::sm::ISM> make_machine(AppContext* app)
+{
+    return std::make_unique<nil::sm::DefaultSM<logged_in, AppContext>>(app);
+}
+
+AppContext app{42};
+auto machine = make_machine(&app);
+machine->post(start{});
+```
+
+`ISM` is non-copyable and has a virtual destructor. The machine owns its state
+objects; context and root arguments remain borrowed.
 
 ## Custom hooks
 
-An API is a template supplying `API<State>`. `Coalesce` fills in everything else
-from the default API when only one hook needs to change:
+A custom API is a template `API<State>`. Use `Coalesce` when only selected hooks
+need to change:
 
 ```cpp
 struct Observer
@@ -52,34 +85,25 @@ struct LoggingAPI
     {
         if constexpr (!std::is_same_v<State, nil::sm::Fin>)
             observer->entered(nil::xalt::type_id<State>);
-        return nil::sm::api::Default<void, Observer>::type<State>::on_enter(
+        return nil::sm::api::Default<Observer>::type<State>::on_enter(
             state,
             observer
         );
     }
 };
 
+AppContext app{42};
 Observer observer;
-nil::sm::CoalescedSM<LoggingAPI, logged_in> machine{nullptr, &observer};
+nil::sm::CoalescedSM<LoggingAPI, logged_in, AppContext> machine{&observer, &app};
 ```
 
-Use `Default` directly when only context types are needed. Use `Coalesce` when
-only selected hooks are overridden. The complete hook contract is in
-[Advanced API](05_ADVANCED.md).
+`Coalesce` supplies missing aliases and hooks from `api::Default`. Delegate to
+`Default` when the normal state behavior should remain active. The complete
+hook contract is in [Advanced API](05_ADVANCED.md).
 
-## Timers and threads
+## Threading and services
 
-Timers are application services. Schedule a callback that posts a typed timeout
-event, and cancel it before the state is destroyed.
-
-The state machine is synchronous and not thread-safe. A common integration is:
-
-1. Other threads enqueue application events.
-2. One owner thread drains that queue.
-3. Only that thread calls `post()`.
-
-## Allocation and other services
-
-Custom APIs can replace construction or add logging, profiling, timers, and
-allocators — keep changes small and delegate the rest to `api::Default`.
-See [Advanced API](05_ADVANCED.md) for signatures and coalescing rules.
+`post()` is synchronous and the library is not thread-safe. A common integration
+is an application queue drained by one owner thread. Custom APIs can also add
+logging, profiling, timers, allocation, or other services through `api_context_t`
+and `make()`.

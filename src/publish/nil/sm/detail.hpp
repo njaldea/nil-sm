@@ -39,7 +39,7 @@ namespace nil::sm::detail
     NIL_XALT_COALESCE_TAG(events, nil::xalt::tlist<>);
     NIL_XALT_COALESCE_TAG(captures, nil::xalt::tlist<>);
     NIL_XALT_COALESCE_TAG(args, nil::xalt::tlist<>);
-    NIL_XALT_COALESCE_TAG(provides, nil::xalt::tlist<>);
+    NIL_XALT_COALESCE_TAG(props, nil::xalt::tlist<>);
 
     using on_event_t = std::variant<Forward, Discard, Unhandled, Defer, TransitTo, Event>;
     using on_enter_t = std::variant<Unhandled, NOOP, Event>;
@@ -114,11 +114,10 @@ namespace nil::sm::detail
         void* get(const void* requested_id) override
         {
             return std::apply(
-                [&](auto*... ptrs) -> void*
+                [&]<typename... U>(U*... ptrs) -> void*
                 {
                     void* result = nullptr;
-                    (void)((requested_id
-                                    == nil::xalt::type_id<std::remove_pointer_t<decltype(ptrs)>>
+                    (void)((requested_id == nil::xalt::type_id<U>
                                 ? (result = static_cast<void*>(ptrs), true)
                                 : false)
                            || ...);

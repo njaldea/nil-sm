@@ -41,11 +41,11 @@ namespace demo
         child_context* context;
     };
 
-    NIL_SM_BARRIER_DECLARE(provider, child_api);
+    NIL_SM_BARRIER_DECLARE(barrier_state, child_api);
 
-    NIL_SM_BARRIER_DEFINE(provider, child_api, child);
+    NIL_SM_BARRIER_DEFINE(barrier_state, child);
 
-    using barrier = nil::sm::barrier::State<nil::sm::Terminate, provider>;
+    using barrier = nil::sm::barrier::State<nil::sm::Terminate, barrier_state>;
 
     // Exposes child_context to descendants (including the barrier-wrapped child) via get().
     struct root
@@ -61,7 +61,7 @@ namespace demo
         }
 
         static constexpr auto child_ptr = &root::child;
-        using provides = nil::xalt::tlist<nil::sm::provide<child_context, child_ptr>>;
+        using props = nil::xalt::tlist<nil::sm::prop<child_context, child_ptr>>;
     };
 }
 

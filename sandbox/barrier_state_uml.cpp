@@ -22,10 +22,11 @@ namespace demo
     template <typename T>
     using child_api = nil::sm::api::Default<>::type<T>;
 
-    NIL_SM_BARRIER_DECLARE(shared_provider, child_api);
-    NIL_SM_BARRIER_DEFINE(shared_provider, child_api, child_idle);
+    NIL_SM_BARRIER_DECLARE(shared_barrier_state, child_api);
 
-    using shared_barrier = nil::sm::barrier::State<nil::sm::Terminate, shared_provider>;
+    NIL_SM_BARRIER_DEFINE(shared_barrier_state, child_idle);
+
+    using shared_barrier = nil::sm::barrier::State<nil::sm::Terminate, shared_barrier_state>;
 
     struct first_parent
     {
@@ -49,10 +50,10 @@ int main()
     nil::sm::puml<machine> diagram;
 
     std::cout << diagram.root;
-    for (const auto& provider : diagram.providers)
+    for (const auto& barrier : diagram.barriers)
     {
-        std::cout << "\n' ===== " << provider.name() << " =====\n";
-        std::cout << provider;
+        std::cout << "\n' ===== " << barrier.name() << " =====\n";
+        std::cout << barrier;
     }
     std::cout << std::flush;
     return 0;

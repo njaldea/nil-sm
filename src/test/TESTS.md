@@ -1,5 +1,7 @@
 # Test Coverage
 
+## Core Dispatch
+
 | Test | Description |
 |------|-------------|
 | [leaf_event_forwarded](01_sm_basic_dispatch.cpp#L83) | Leaf returns `Forward`; event dispatched and state exits on SM destroy |
@@ -74,6 +76,8 @@
 | [terminate_in_child_stops_only_child](12_sm_edge_cases.cpp#L393) | Child terminates in a multi-region parent; only the child's region is nulled, others continue |
 | [static_checks_compile](13_sm_compile_time_diagnostics.cpp#L112) | `static_assert` checks for missing handler, bad return types, and overload legality |
 | [orthogonal_two_region_reaction_matrix](14_sm_regression_matrix.cpp#L191) | Matrix of all Forward/Discard/Unhandled/TransitTo combinations across two orthogonal regions |
+## Construction and Lifecycle
+
 | [state_constructs_with_parent_and_context_args](15_sm_state_construction_contexts.cpp#L124) | State constructor receives one arg resolved via `args` |
 | [state_can_still_default_construct_when_it_expects_nothing](15_sm_state_construction_contexts.cpp#L144) | State with default constructor works even when root args are present in the SM |
 | [state_constructs_with_parent_and_two_contexts](15_sm_state_construction_contexts.cpp#L161) | State constructor receives two args resolved via `args` |
@@ -93,6 +97,8 @@
 | [multiple_defers_all_flushed](19_sm_defer_handling.cpp#L204) | Multiple deferred events all flushed in order when transit occurs |
 | [orthogonal_regions_defer_independently](19_sm_defer_handling.cpp#L228) | Two orthogonal regions each defer different event types independently; both flush on transit |
 | [make_intercepted_construction_observer_called](20_sm_coalesce_api.cpp#L157) | Partial API defines only `make`; construction observer fires, on_event falls through to default |
+## API Customization and Captures
+
 | [capture_discards_without_dispatching_to_region](22_sm_capture_handling.cpp#L8) | `on_capture` returns `Discard`; region's `on_event` never runs |
 | [undeclared_capture_falls_through_to_region](22_sm_capture_handling.cpp#L52) | Event not in `captures` list skips `on_capture`; region handles it normally |
 | [capture_forward_dispatches_to_region_instead_of_bubbling](22_sm_capture_handling.cpp#L96) | `on_capture` returns `Forward`; propagates down to region instead of bubbling up (opposite of `on_event` `Forward`) |
@@ -102,3 +108,10 @@
 | [on_event_intercepted_event_observer_called](20_sm_coalesce_api.cpp#L183) | Partial API defines only `on_event`; event observer fires per dispatch, all other hooks use defaults |
 | [custom_make_spreads_tuple_context_to_state_args](20_sm_coalesce_api.cpp#L202) | Custom API `make` uses `std::apply` to spread a tuple state context into individual state constructor args |
 | [type_checks_compile](21_transit_dispatch_state_type_checks.cpp#L133) | Compile-time check of region transit target closure and dispatch target membership |
+## Barrier Runtime and IR
+
+| [completion_action_chains_to_next_barrier](24_sm_barrier_runtime.cpp#L73) | Barrier completion can transition directly to another barrier without a wrapper state |
+| [child_exit_emission_reaches_shared_queue](24_sm_barrier_runtime.cpp#L150) | Child `on_exit` emission reaches a sibling through the shared queue |
+| [owner_handles_child_finalization](24_sm_barrier_runtime.cpp#L299) | Ordinary owner handles barrier completion through `on_regions_finalized` |
+| [owner_capture_preempts_barrier_child](24_sm_barrier_runtime.cpp#L310) | Owner capture handles an event before the barrier child sees it |
+| [child_forward_bubbles_to_owner](24_sm_barrier_runtime.cpp#L321) | Child `Forward` crosses the barrier and reaches the owner |

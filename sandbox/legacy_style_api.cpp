@@ -21,13 +21,13 @@ namespace legacy
             using regions_t = nil::xalt::coalesce_t<T, nil::sm::detail::regions_tag>;
             using events_t = nil::xalt::coalesce_t<T, nil::sm::detail::events_tag>;
             using captures_t = nil::xalt::coalesce_t<T, nil::sm::detail::captures_tag>;
-            using provides_t = nil::xalt::tlist<>;
+            using props_t = nil::xalt::tlist<>;
 
             static constexpr auto args_f()
             {
                 if constexpr (requires() { typename T::parent; })
                 {
-                    return nil::xalt::tlist<typename T::parent, Context>{};
+                    return nil::xalt::tlist<nil::sm::direct_parent<typename T::parent>, Context>{};
                 }
                 else
                 {
@@ -43,6 +43,7 @@ namespace legacy
                 auto*... args
             )
             {
+                assert((args != nullptr && ...));
                 return T(args...);
             }
 

@@ -4,9 +4,5 @@
 
 namespace toll::bslot
 {
-    NIL_SM_BARRIER_DEFINE(
-        maintenance_provider,
-        nil::sm::api::Coalesce<tracing_api>::type,
-        job::maintenance_job
-    );
+    NIL_SM_BARRIER_DEFINE(maintenance_barrier_state, job::maintenance_job);
 }

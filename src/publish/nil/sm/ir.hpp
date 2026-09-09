@@ -98,7 +98,7 @@ namespace nil::sm::ir
 {
     struct Node
     {
-        // Stable occurrence ID. Provider definition nodes use provider-local metadata;
+        // Stable occurrence ID. Barrier definition nodes use barrier-local metadata;
         // barrier occurrences retain their host ancestry so repeated occurrences stay distinct.
         std::string id;
 
@@ -114,10 +114,10 @@ namespace nil::sm::ir
         std::vector<transit::Info> transitions;
         // event/capture transitions (no entry/exit/regions-finalized transitions)
         std::vector<std::vector<Node>> regions; // empty regions => leaf state
-        const void* provider_id = nullptr; // non-null when this node references a provider model
+        const void* barrier_id = nullptr; // non-null when this node references a barrier model
     };
 
-    struct Provider
+    struct BarrierDefinition
     {
         const void* id = nullptr;
         std::string_view name;
@@ -127,7 +127,7 @@ namespace nil::sm::ir
     struct Model
     {
         std::vector<Node> roots;
-        std::vector<Provider> providers;
+        std::vector<BarrierDefinition> barriers;
     };
 }
 
@@ -159,29 +159,30 @@ namespace nil::sm::ir::detail
 {
     struct BuildContext
     {
-        std::vector<ir::Provider> providers;
-        std::unordered_map<const void*, std::size_t> provider_indices;
+        std::vector<ir::BarrierDefinition> barriers;
+        std::unordered_map<const void*, std::size_t> barrier_indices;
 
-        bool contains(const void* provider_id) const
+        bool contains(const void* barrier_id) const
         {
-            return provider_indices.contains(provider_id);
+            return barrier_indices.contains(barrier_id);
         }
 
-        void add(const void* provider_id, std::string_view provider_name, ir::Model model)
+        void add(const void* barrier_id, std::string_view barrier_name, ir::Model model)
         {
-            if (!contains(provider_id))
+            if (!contains(barrier_id))
             {
-                provider_indices.emplace(provider_id, providers.size());
-                providers.push_back(ir::Provider{provider_id, provider_name, std::move(model.roots)}
+                barrier_indices.emplace(barrier_id, barriers.size());
+                barriers.push_back(
+                    ir::BarrierDefinition{barrier_id, barrier_name, std::move(model.roots)}
                 );
             }
 
-            for (auto& provider : model.providers)
+            for (auto& barrier : model.barriers)
             {
-                if (!contains(provider.id))
+                if (!contains(barrier.id))
                 {
-                    provider_indices.emplace(provider.id, providers.size());
-                    providers.push_back(std::move(provider));
+                    barrier_indices.emplace(barrier.id, barriers.size());
+                    barriers.push_back(std::move(barrier));
                 }
             }
         }
@@ -506,7 +507,7 @@ namespace nil::sm::ir::detail
                 .transitions = {},
                 .regions = [metadata, &context]<typename... R>(nil::xalt::tlist<R...>)
                 { return build_regions<API, R...>(metadata, context); }(regions_t{}),
-                .provider_id = nullptr
+                .barrier_id = nullptr
             };
 
             emit_node_annotations<API, T, RegionInitial>(*metadata, node);
@@ -514,37 +515,30 @@ namespace nil::sm::ir::detail
         }
     };
 
-    template <template <typename> typename API, typename FinalizeAction, typename Provider>
-    struct node_builder<API, barrier::State<FinalizeAction, Provider>>
+    template <template <typename> typename API, typename Action, typename T>
+    struct node_builder<API, barrier::State<Action, T>>
     {
         template <typename RegionInitial>
         static ir::Node node(const Metadata* metadata, std::size_t state, BuildContext& context)
         {
-            if (!context.contains(Provider::id))
+            if (!context.contains(T::id))
             {
-                context.add(
-                    Provider::id,
-                    nil::sm::detail::type_name<Provider>(),
-                    Provider::ir(nullptr)
-                );
+                context.add(T::id, nil::sm::detail::type_name<T>(), T::ir(nullptr));
             }
 
             auto node = ir::Node{
                 .id = format_stable_id(nil::sm::id::stable_id(*metadata)),
-                .display_name = nil::sm::detail::type_name<Provider>(),
+                .display_name = nil::sm::detail::type_name<T>(),
                 .is_initial = state == 0,
                 .is_final = metadata->is_final,
                 .is_barrier = metadata->is_barrier,
                 .actions = {},
                 .transitions = {},
                 .regions = {},
-                .provider_id = Provider::id,
+                .barrier_id = T::id,
             };
 
-            emit_node_annotations<API, barrier::State<FinalizeAction, Provider>, RegionInitial>(
-                *metadata,
-                node
-            );
+            emit_node_annotations<API, barrier::State<Action, T>, RegionInitial>(*metadata, node);
             return node;
         }
     };
@@ -571,34 +565,34 @@ namespace nil::sm::ir
         auto context = detail::BuildContext{};
         return Model{
             .roots = detail::build_region<API, T>(parent, 0, context),
-            .providers = std::move(context.providers),
+            .barriers = std::move(context.barriers),
         };
     }
 
-    inline const Provider* find_provider(const Model& model, const void* provider_id)
+    inline const BarrierDefinition* find_barrier(const Model& model, const void* barrier_id)
     {
-        for (const auto& provider : model.providers)
+        for (const auto& barrier : model.barriers)
         {
-            if (provider.id == provider_id)
+            if (barrier.id == barrier_id)
             {
-                return &provider;
+                return &barrier;
             }
         }
         return nullptr;
     }
 
-    template <typename ProviderT>
-    const Provider* find_provider(const Model& model)
+    template <typename T>
+    const BarrierDefinition* find_barrier(const Model& model)
     {
-        return find_provider(model, ProviderT::id);
+        return find_barrier(model, T::id);
     }
 
     template <typename Function>
-    void for_each_provider(const Model& model, Function&& function)
+    void for_each_barrier(const Model& model, Function&& function)
     {
-        for (const auto& provider : model.providers)
+        for (const auto& barrier : model.barriers)
         {
-            function(provider);
+            function(barrier);
         }
     }
 }

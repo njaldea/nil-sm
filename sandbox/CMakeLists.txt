@@ -63,9 +63,9 @@ project(sandbox_legacy_style_api)
 add_executable(${PROJECT_NAME} legacy_style_api.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 
-project(sandbox_barrier_provider_uml)
+project(sandbox_barrier_state_uml)
 
-add_executable(${PROJECT_NAME} barrier_provider_uml.cpp)
+add_executable(${PROJECT_NAME} barrier_state_uml.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 
 project(sandbox_tollbooth_barrier_uml)

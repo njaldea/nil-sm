@@ -4,8 +4,6 @@
 
 #include <gmock/gmock.h>
 
-#include <tuple>
-
 // Convenience using declarations for common template types
 using nil::sm::Defer;
 using nil::sm::Discard;
@@ -59,7 +57,7 @@ struct TestAPI
     using events_t = nil::xalt::coalesce_t<State, nil::sm::detail::events_tag>;
     using captures_t = nil::xalt::coalesce_t<State, nil::sm::detail::captures_tag>;
     using args_t = nil::xalt::coalesce_t<State, nil::sm::detail::args_tag>;
-    using provides_t = nil::xalt::coalesce_t<State, nil::sm::detail::provides_tag>;
+    using props_t = nil::xalt::coalesce_t<State, nil::sm::detail::props_tag>;
 
     // Make the state - delegate to api::Default
     template <typename... Args>

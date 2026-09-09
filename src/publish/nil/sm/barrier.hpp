@@ -6,20 +6,25 @@
 #include <memory>
 #include <type_traits>
 
-// Not `final`: to override `name` (or add other properties, e.g. payload()),
-// inherit from the declared struct and declare it in the derived class.
+// Not `final`: to override `name` or add other state properties, inherit from the
+// generated struct and declare them in the derived class.
 #define NIL_SM_BARRIER_DECLARE(NAME, API)                                                                       \
     struct NAME                                                                                                 \
     {                                                                                                           \
         using api_t = API<nil::sm::detail::api_tag>;                                                            \
-        using api_context_t = api_t::api_context_t;                                                             \
-        [[maybe_unused]] static constexpr auto id = nil::xalt::type_id<NAME>;                                   \
+        template <typename T>                                                                                   \
+        using api = API<T>;                                                                                     \
+        using api_context_t = typename api_t::api_context_t;                                                    \
+        struct id_tag final                                                                                     \
+        {                                                                                                       \
+        };                                                                                                      \
+        [[maybe_unused]] static constexpr auto id = nil::xalt::type_id<id_tag>;                                 \
         static std::unique_ptr<nil::sm::ISM>                                                                    \
             make(nil::sm::detail::IState*, nil::sm::detail::Queues*, api_context_t*, const nil::sm::Metadata*); \
         static nil::sm::ir::Model ir(const nil::sm::Metadata*);                                                 \
     }
 
-#define NIL_SM_BARRIER_DEFINE(NAME, API, STATE)                                                    \
+#define NIL_SM_BARRIER_DEFINE(NAME, STATE)                                                         \
     [[maybe_unused]] std::unique_ptr<nil::sm::ISM> NAME::make(                                     \
         nil::sm::detail::IState* parent,                                                           \
         nil::sm::detail::Queues* queues,                                                           \
@@ -27,7 +32,7 @@
         const nil::sm::Metadata* parent_metadata                                                   \
     )                                                                                              \
     {                                                                                              \
-        return std::make_unique<nil::sm::barrier::SM<API, STATE>>(                                 \
+        return std::make_unique<nil::sm::barrier::SM<NAME::template api, STATE>>(                  \
             parent,                                                                                \
             queues,                                                                                \
             api_contexts,                                                                          \
@@ -36,13 +41,8 @@
     }                                                                                              \
     [[maybe_unused]] nil::sm::ir::Model NAME::ir(const nil::sm::Metadata* parent_metadata)         \
     {                                                                                              \
-        return nil::sm::ir::build<API, STATE>(parent_metadata);                                    \
-    }                                                                                              \
-    static_assert(                                                                                 \
-        std::is_same_v<typename NAME::api_t, API<nil::sm::detail::api_tag>>,                       \
-        "NIL_SM_BARRIER_DEFINE: "                                                                  \
-        "API must match the API passed to NIL_SM_BARRIER_DECLARE(" #NAME ")"                       \
-    )
+        return nil::sm::ir::build<NAME::template api, STATE>(parent_metadata);                     \
+    }
 
 namespace nil::sm::barrier
 {
@@ -106,28 +106,6 @@ namespace nil::sm::barrier
         ChildContext child_context;
     };
 
-    // Auto-posted right after construction when Provider defines
-    // static T payload(state_context_t*); T is deduced via aggregate CTAD.
-    template <typename T>
-    struct EvPayload final
-    {
-        T value;
-    };
-
-    // Reusable gate state: waits for EvPayload<T> then transits to Next.
-    // A composite ancestor can capture EvPayload<T> and Forward it here unchanged
-    // after processing it, so no separate "received" signal is needed.
-    template <typename Next, typename T>
-    struct WaitForPayload final
-    {
-        using events = nil::xalt::tlist<EvPayload<T>>;
-
-        static auto on_event(const EvPayload<T>& /* event */)
-        {
-            return Next{};
-        }
-    };
-
     // Borrows the host queues and contexts; the host remains responsible for flushing queues.
     template <template <typename> typename API, typename T>
     class SM final: public ISM
@@ -182,13 +160,23 @@ namespace nil::sm::barrier
 
 namespace nil::sm
 {
-    template <template <typename> typename API, typename FinalizeAction, typename Provider>
-    class State<API, barrier::State<FinalizeAction, Provider>> final: public detail::IState
+    template <template <typename> typename API, typename Action, typename T>
+    class State<API, barrier::State<Action, T>> final: public detail::IState
     {
         using parent_api_context_t = detail::api_context_t<API>;
-        using child_api_context_t = typename Provider::api_context_t;
+        using barrier_api_t = typename T::template api<T>;
+        using child_api_context_t = typename barrier_api_t::api_context_t;
 
         using api_adapter_t = barrier::context_adapter<parent_api_context_t, child_api_context_t>;
+
+        static std::unique_ptr<ISM> make_child(
+            State* self,
+            detail::Queues* init_queues,
+            const Metadata* parent_metadata
+        )
+        {
+            return T::make(self, init_queues, self->api_adapter.context(), parent_metadata);
+        }
 
     public:
         explicit State(
@@ -199,17 +187,28 @@ namespace nil::sm
         )
             : detail::IState(init_parent, init_metadata)
             , api_adapter(init_api_contexts)
-            , child(Provider::make(
-                  this,
-                  init_queues,
-                  api_adapter.context(),
-                  std::addressof(this->metadata)
-              ))
+            , queues(init_queues)
+            , child(make_child(this, init_queues, std::addressof(this->metadata)))
         {
+        }
+
+        State(State&&) = delete;
+        State(const State&) = delete;
+        State& operator=(State&&) = delete;
+        State& operator=(const State&) = delete;
+
+        ~State() override
+        {
+            child.reset();
         }
 
         void* get(const void* requested_id) override
         {
+            if (requested_id == nil::xalt::type_id<detail::direct_parent_marker>)
+            {
+                return nullptr;
+            }
+
             return parent != nullptr ? parent->get(requested_id) : nullptr;
         }
 
@@ -225,7 +224,7 @@ namespace nil::sm
             if (child->is_finalized())
             {
                 finalized = true;
-                return detail::to_runtime_action_as<detail::on_event_t>(FinalizeAction{});
+                return detail::to_runtime_action_as<detail::on_event_t>(Action{});
             }
 
             return detail::to_runtime_action_as<detail::on_event_t>(result);
@@ -233,6 +232,7 @@ namespace nil::sm
 
     private:
         api_adapter_t api_adapter;
+        detail::Queues* queues;
         std::unique_ptr<ISM> child;
         bool finalized = false;
     };

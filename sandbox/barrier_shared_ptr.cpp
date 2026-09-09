@@ -54,10 +54,11 @@ namespace
         std::shared_ptr<base_context> context;
     };
 
-    NIL_SM_BARRIER_DECLARE(provider, child_api);
-    NIL_SM_BARRIER_DEFINE(provider, child_api, child);
+    NIL_SM_BARRIER_DECLARE(barrier_state, child_api);
 
-    using barrier = nil::sm::barrier::State<nil::sm::Terminate, provider>;
+    NIL_SM_BARRIER_DEFINE(barrier_state, child);
+
+    using barrier = nil::sm::barrier::State<nil::sm::Terminate, barrier_state>;
 
     // Upcasts the shared_ptr<parent_context> root arg once, exposing it to descendants
     // (including the barrier-wrapped child) as shared_ptr<base_context> via get().
@@ -74,8 +75,7 @@ namespace
         }
 
         static constexpr auto base_ctx_ptr = &root::base_ctx;
-        using provides
-            = nil::xalt::tlist<nil::sm::provide<std::shared_ptr<base_context>, base_ctx_ptr>>;
+        using props = nil::xalt::tlist<nil::sm::prop<std::shared_ptr<base_context>, base_ctx_ptr>>;
     };
 }
 

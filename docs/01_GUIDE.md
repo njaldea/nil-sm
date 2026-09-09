@@ -1,11 +1,11 @@
 # Core Guide
 
-The shortest path to a working state machine. See [Extensibility](02_EXTENSIBILITY.md)
-for contexts and custom hooks.
+This page explains the runtime model. For contexts and custom hooks, see
+[Extensibility](02_EXTENSIBILITY.md).
 
-## States and events
+## 1. States and events
 
-States and events are ordinary C++ types. A state lists the events it handles.
+A state is an ordinary C++ type. It lists the events it handles:
 
 ```cpp
 struct start {};
@@ -22,30 +22,26 @@ struct stopped
 };
 ```
 
-## Start a machine
+Start the machine with `DefaultSM`:
 
 ```cpp
 nil::sm::DefaultSM<stopped> machine;
 machine.post(start{});
 ```
 
-The default machine has no context; see [Extensibility](02_EXTENSIBILITY.md) for
-context-enabled construction.
+## 2. Actions
 
-## Actions
-
-| Action | Meaning |
+| Action | Effect |
 | --- | --- |
 | `Discard{}` | Consume the event. |
 | `Forward{}` | Let the parent handle the event. |
 | `TransitTo<T>{}` | Replace the current state with `T`. |
-| `DeferTo<T>{}` | Defer the event, then replace the current state with `T`. |
 | `Terminate{}` | Finish the current region. |
 | `Defer{}` | Save the event until this region transitions. |
+| `DeferTo<T>{}` | Save the event and transition to `T`. |
 | `Emit<E>{}` | Queue a typed follow-up event. |
 
-One handler has one return type. Use `std::variant` when branches return
-different actions:
+Use `std::variant` when a handler has multiple possible actions:
 
 ```cpp
 auto on_event(const start& event)
@@ -57,52 +53,21 @@ auto on_event(const start& event)
 }
 ```
 
-`Unhandled` is produced by the library; user handlers should not return it.
+`Unhandled` is an internal result. User handlers do not return it.
 
-`Defer{}` keeps the current state and saves the event until this region
-transitions. `DeferTo<T>{}` combines deferral with a transition: the event is
-saved for the new state. Use `TransitTo<T>{}` when the event should not be
-replayed.
+## 3. Regions
 
-```cpp
-struct starting
-{
-    using events = nil::xalt::tlist<data, ready>;
-
-    static auto on_event(const data&) { return nil::sm::Defer{}; }
-    static auto on_event(const ready&)
-    {
-        return nil::sm::DeferTo<running>{};
-    }
-};
-```
-
-Deferred events are replayed after the transition and are kept per region. If
-the region terminates, its deferred events are discarded.
-
-## Dispatch order
-
-For one `post(event)` call:
-
-1. Captures are checked.
-2. Child regions process the event.
-3. The parent may process it if it was not consumed.
-4. Transitions and terminations are applied.
-5. Deferred events are replayed after a transition.
-6. Emitted events are delivered from the queue.
-
-The sections below build on this order: captures run first, child regions
-before their parent, and lifecycle hooks around transitions.
-
-## Child regions
-
-A state can contain child regions:
+A state can contain one or more child regions:
 
 ```cpp
 struct worker
 {
     using events = nil::xalt::tlist<work>;
-    static auto on_event(const work&) { return nil::sm::Discard{}; }
+
+    static auto on_event(const work&)
+    {
+        return nil::sm::Discard{};
+    }
 };
 
 struct application
@@ -111,13 +76,21 @@ struct application
 };
 ```
 
-`Forward` asks the parent
-to handle it. Multiple entries in `regions` create orthogonal regions; each is
-active and processes events in declaration order.
+One region is hierarchical. Multiple regions are orthogonal and process an
+event in declaration order.
 
-## Captures
+## 4. Dispatch
 
-Use `captures` for events that must run before the child regions see them:
+For one `post(event)` call:
+
+1. The current state checks captures.
+2. Child regions receive the event.
+3. The state handles it if it was not consumed.
+4. Region actions are applied.
+5. Deferred events are replayed after a transition.
+6. Emitted events are drained from the queue.
+
+A capture runs before child regions:
 
 ```cpp
 struct shutdown {};
@@ -134,12 +107,12 @@ struct controller
 };
 ```
 
-Returning `Forward` from a capture continues normal child dispatch. Other
-actions handle the event at the capturing state.
+A capture returning `Forward` continues into child regions. An event handler
+returning `Forward` bubbles to the parent.
 
-## Lifecycle
+## 5. Lifecycle
 
-Optional hooks run with state lifetime:
+Optional hooks are called around state lifetime:
 
 ```cpp
 struct connected
@@ -158,16 +131,13 @@ struct connected
 };
 ```
 
-`on_regions_finalized()` runs after all direct child regions terminate. It can
-return `NOOP`, `Emit`, `TransitTo`, or `Terminate` as appropriate.
+`on_regions_finalized()` runs after all direct child regions terminate. It may
+return `NOOP`, `Emit`, `TransitTo`, or `Terminate`.
 
 ## Compile-time checks
 
-The compiler checks event handlers, action types, and reachable transition
-targets. A target used by `TransitTo<T>` must belong to the machine's reachable
-state graph.
+The compiler checks handler return types and reachable transition targets. A
+`TransitTo<T>` target must belong to the machine's reachable graph.
 
-## Next steps
-
-See [Patterns](03_PATTERNS.md) for compact designs, or
-[Extensibility](02_EXTENSIBILITY.md) for contexts and custom hooks.
+Continue with [Patterns](03_PATTERNS.md), or go to
+[Extensibility](02_EXTENSIBILITY.md).

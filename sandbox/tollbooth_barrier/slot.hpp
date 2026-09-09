@@ -14,10 +14,10 @@
 
 namespace toll::bslot
 {
-    using startup = nil::sm::barrier::State<nil::sm::Terminate, startup_provider>;
-    using collection = nil::sm::barrier::State<nil::sm::Terminate, collection_provider>;
-    using shift = nil::sm::barrier::State<nil::sm::Terminate, shift_provider>;
-    using maintenance = nil::sm::barrier::State<nil::sm::Terminate, maintenance_provider>;
+    using startup = nil::sm::barrier::State<nil::sm::Terminate, startup_barrier_state>;
+    using collection = nil::sm::barrier::State<nil::sm::Terminate, collection_barrier_state>;
+    using shift = nil::sm::barrier::State<nil::sm::Terminate, shift_barrier_state>;
+    using maintenance = nil::sm::barrier::State<nil::sm::Terminate, maintenance_barrier_state>;
 
     struct waiting final
     {
