@@ -10,6 +10,7 @@ set(
         publish/nil/sm/detail.hpp
         publish/nil/sm/state.hpp
         publish/nil/sm/structs.hpp
+        publish/nil/sm/tags.hpp
 )
 
 add_library(${PROJECT_NAME} INTERFACE ${HEADERS})

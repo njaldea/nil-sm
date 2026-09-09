@@ -9,6 +9,7 @@
 #include <array>
 #include <cstddef>
 #include <memory>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -378,8 +379,17 @@ namespace nil::sm
         }
 
         // Posts an already type-erased event and returns its normalized action.
+        // Invariants: id, deleter, cloner, and data must all be non-null and refer to a
+        // compatible event payload instance.
         action_t post(detail::Event event)
         {
+            if (event.id == nullptr || event.deleter == nullptr || event.cloner == nullptr
+                || event.data == nullptr)
+            {
+                throw std::invalid_argument(
+                    "nil::sm: post(detail::Event) requires non-null id/deleter/cloner/data"
+                );
+            }
             return post_impl(event);
         }
 

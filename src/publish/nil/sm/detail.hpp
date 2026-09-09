@@ -11,8 +11,8 @@
 
 #include "concepts.hpp"
 #include "structs.hpp"
+#include "tags.hpp"
 
-#include <nil/xalt/coalesce.hpp>
 #include <nil/xalt/tlist.hpp>
 #include <nil/xalt/typed.hpp>
 
@@ -20,8 +20,10 @@
 #include <cstddef>
 #include <memory>
 #include <queue>
+#include <stdexcept>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -34,12 +36,6 @@ namespace nil::sm::detail
 
     template <template <typename> typename API>
     using api_context_t = typename API<api_tag>::api_context_t;
-
-    NIL_XALT_COALESCE_TAG(regions, nil::xalt::tlist<>);
-    NIL_XALT_COALESCE_TAG(events, nil::xalt::tlist<>);
-    NIL_XALT_COALESCE_TAG(captures, nil::xalt::tlist<>);
-    NIL_XALT_COALESCE_TAG(args, nil::xalt::tlist<>);
-    NIL_XALT_COALESCE_TAG(provides, nil::xalt::tlist<>);
 
     using on_event_t = std::variant<Forward, Discard, Unhandled, Defer, TransitTo, Event>;
     using on_enter_t = std::variant<Unhandled, NOOP, Event>;
@@ -282,6 +278,12 @@ namespace nil::sm::detail
                             parent_metadata,
                             r.target
                         );
+                        if (active_state == nullptr)
+                        {
+                            throw std::logic_error(
+                                "nil::sm: transition target is not reachable in this region"
+                            );
+                        }
 
                         if (r.target == nil::xalt::type_id<Fin>)
                         {
@@ -367,8 +369,8 @@ namespace nil::sm::detail
         template <typename... E>
         struct collect_targets<nil::xalt::tlist<E...>>
         {
-            using type = nil::xalt::tlist_join_t<
-                typename transit_targets_from_action<event_result_t<E>>::type...>;
+            using type = nil::xalt::tlist_dedupe_t<nil::xalt::tlist_join_t<
+                typename transit_targets_from_action<event_result_t<E>>::type...>>;
         };
 
         template <typename CaptureList>
@@ -377,8 +379,8 @@ namespace nil::sm::detail
         template <typename... E>
         struct collect_capture_targets<nil::xalt::tlist<E...>>
         {
-            using type = nil::xalt::tlist_join_t<
-                typename transit_targets_from_action<capture_result_t<E>>::type...>;
+            using type = nil::xalt::tlist_dedupe_t<nil::xalt::tlist_join_t<
+                typename transit_targets_from_action<capture_result_t<E>>::type...>>;
         };
 
     public:
@@ -442,9 +444,9 @@ namespace nil::sm::detail
         nil::xalt::tlist<Tail...>,
         nil::xalt::tlist<Seen...>>
     {
-        using next_pending = nil::xalt::tlist_join_t<
+        using next_pending = nil::xalt::tlist_dedupe_t<nil::xalt::tlist_join_t<
             nil::xalt::tlist<Tail...>,
-            typename state_transit_targets<API<Head>>::type>;
+            typename state_transit_targets<API<Head>>::type>>;
         using next_seen = nil::xalt::tlist<Seen..., Head>;
     };
 
@@ -762,8 +764,7 @@ namespace nil::sm::detail
             event_handler{.id = nil::xalt::type_id<E>, .invoke = &call<E>}...
         };
 
-    public:
-        static on_event_t dispatch(const Event& event, T& state, api_context_t* api_contexts)
+        static on_event_t dispatch_linear(const Event& event, T& state, api_context_t* api_contexts)
         {
             for (const auto& handler : handlers)
             {
@@ -771,6 +772,32 @@ namespace nil::sm::detail
                 {
                     return handler.invoke(state, event.data, api_contexts);
                 }
+            }
+            return Unhandled();
+        }
+
+    public:
+        static on_event_t dispatch(const Event& event, T& state, api_context_t* api_contexts)
+        {
+            if constexpr (sizeof...(E) <= 8)
+            {
+                return dispatch_linear(event, state, api_contexts);
+            }
+
+            using handler_fn = on_event_t (*)(T&, const void*, void*);
+            static const auto handler_map = [] {
+                auto map = std::unordered_map<const void*, handler_fn>{};
+                map.reserve(sizeof...(E));
+                for (const auto& handler : handlers)
+                {
+                    map.emplace(handler.id, handler.invoke);
+                }
+                return map;
+            }();
+
+            if (const auto it = handler_map.find(event.id); it != handler_map.end())
+            {
+                return it->second(state, event.data, api_contexts);
             }
 
             return Unhandled();

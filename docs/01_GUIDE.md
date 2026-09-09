@@ -167,6 +167,10 @@ The compiler checks event handlers, action types, and reachable transition
 targets. A target used by `TransitTo<T>` must belong to the machine's reachable
 state graph.
 
+For large regions with a known fixed state set, define
+`template <> struct nil::sm::siblings<Initial> { using type = nil::xalt::tlist<...>; };`
+to bypass recursive transition-target discovery.
+
 ## Next steps
 
 See [Patterns](03_PATTERNS.md) for compact designs, or

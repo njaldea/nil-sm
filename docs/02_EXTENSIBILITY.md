@@ -16,17 +16,16 @@ struct AppContext
 
 struct logged_in
 {
-    explicit logged_in(auto*, AppContext* context)
+    using args = nil::xalt::tlist<AppContext>;
+
+    explicit logged_in(AppContext* context)
         : user_id(context->user_id) {}
 
     int user_id;
 };
 
 AppContext context{42};
-nil::sm::SM<nil::sm::api::Default<AppContext>::template type, logged_in> machine{
-    &context,
-    nullptr
-};
+nil::sm::SM<nil::sm::api::Default<>::template type, logged_in, AppContext> machine{&context};
 ```
 
 Keep both context objects alive until after the machine is destroyed. The
@@ -52,7 +51,7 @@ struct LoggingAPI
     {
         if constexpr (!std::is_same_v<State, nil::sm::Fin>)
             observer->entered(nil::xalt::type_id<State>);
-        return nil::sm::api::Default<void, Observer>::type<State>::on_enter(
+        return nil::sm::api::Default<Observer>::template type<State>::on_enter(
             state,
             observer
         );
@@ -60,7 +59,7 @@ struct LoggingAPI
 };
 
 Observer observer;
-nil::sm::CoalescedSM<LoggingAPI, logged_in> machine{nullptr, &observer};
+nil::sm::CoalescedSM<LoggingAPI, logged_in> machine{&observer};
 ```
 
 Use `Default` directly when only context types are needed. Use `Coalesce` when

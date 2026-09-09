@@ -116,20 +116,20 @@ subsequent events are unhandled.
 ## Payload injection
 
 A provider can define a `payload()` hook to hand the child machine data
-computed from the parent's own state context, without changing `make()`'s
+computed from the parent's API context, without changing `make()`'s
 signature or the `NIL_SM_BARRIER_DECLARE`/`DEFINE` macros:
 
 ```cpp
 struct MyProvider : /* the declared provider */
 {
-    static MyPayload payload(state_context_t* ctx)
+    static MyPayload payload(api_context_t* ctx)
     {
         return MyPayload{ /* built from *ctx */ };
     }
 };
 ```
 
-If `Provider::payload(state_context_t*)` is defined, the barrier state calls it
+If `Provider::payload(api_context_t*)` is defined, the barrier state calls it
 right after the child machine is constructed and posts the result as
 `nil::sm::barrier::EvPayload<MyPayload>{ value }` (aggregate CTAD deduces
 `MyPayload`). If `payload()` isn't defined, nothing is posted.
@@ -181,6 +181,13 @@ Ordering: the payload always arrives strictly after the child's own initial
 `on_enter` chain has already run (construction and entry happen atomically
 inside `Provider::make()`), so it can influence event handling but never the
 child's initial `on_enter` or which initial region/state gets entered.
+
+## Compile-time scaling guidance
+
+For large machines, barriers are the primary mechanism to reduce peak compile
+memory by splitting independent subgraphs into separate translation units.
+This generally lowers per-TU RSS and improves build parallelism, while total
+wall clock can rise due to repeated header parsing and extra link work.
 
 ## Diagrams
 

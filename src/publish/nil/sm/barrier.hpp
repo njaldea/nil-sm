@@ -5,6 +5,7 @@
 
 #include <memory>
 #include <type_traits>
+#include <utility>
 
 // Not `final`: to override `name` (or add other properties, e.g. payload()),
 // inherit from the declared struct and declare it in the derived class.
@@ -206,6 +207,7 @@ namespace nil::sm
                   std::addressof(this->metadata)
               ))
         {
+            post_payload_if_defined(init_api_contexts);
         }
 
         void* get(const void* requested_id) override
@@ -232,6 +234,17 @@ namespace nil::sm
         }
 
     private:
+        void post_payload_if_defined(parent_api_context_t* parent_api_context)
+        {
+            if constexpr (requires(parent_api_context_t* context) { Provider::payload(context); })
+            {
+                auto payload = Provider::payload(parent_api_context);
+                using payload_t = std::decay_t<decltype(payload)>;
+                auto event = Emit<barrier::EvPayload<payload_t>>(std::move(payload));
+                (void)child->post(detail::Event(std::move(event)));
+            }
+        }
+
         api_adapter_t api_adapter;
         std::unique_ptr<ISM> child;
         bool finalized = false;

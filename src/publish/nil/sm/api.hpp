@@ -1,6 +1,7 @@
 #pragma once
 
-#include "detail.hpp"
+#include "concepts.hpp"
+#include "tags.hpp"
 
 #include <nil/xalt/coalesce.hpp>
 
