@@ -1,3 +1,6 @@
+// Copyright (c) 2026, Neil Aldea <njaldea@gmail.com>
+// SPDX-License-Identifier: BSL-1.0
+
 // See sandbox/README.md. One CLI-driven machine, but each job is a nil::sm::barrier::State
 // wrapping a nil::sm::barrier::SM built in its own library, so the job's own template
 // instantiation cost is paid once by that library instead of by every consumer - while the

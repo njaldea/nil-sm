@@ -8,7 +8,7 @@ version = "@CMAKE_PROJECT_VERSION@"
 description = "Python binding for @CMAKE_PROJECT_NAME@: @CMAKE_PROJECT_DESCRIPTION@"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
-license = { text = "CC BY-NC-ND 4.0" }
+license = { text = "Boost Software License 1.0" }
 keywords = [
     "nil",
     "gate",

@@ -1,3 +1,6 @@
+// Copyright (c) 2026, Neil Aldea <njaldea@gmail.com>
+// SPDX-License-Identifier: BSL-1.0
+
 // Demonstrates a custom API policy that reproduces the old T(Parent*, Context*)
 // construction convention (pre-args_t/get() redesign), minus direct typed-parent access:
 // the API always resolves a fixed (direct_parent, Context*) pair for every state's
