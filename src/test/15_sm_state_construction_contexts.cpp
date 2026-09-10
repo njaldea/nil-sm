@@ -113,6 +113,65 @@ namespace
         using regions = nil::xalt::tlist<parent_identity_child>;
     };
 
+    struct data_member_prop
+    {
+    };
+
+    struct member_function_prop
+    {
+    };
+
+    struct free_function_prop
+    {
+    };
+
+    struct prop_parent;
+    free_function_prop* get_free_function_prop(prop_parent& state);
+
+    struct prop_child
+    {
+        using args = nil::xalt::tlist<data_member_prop, member_function_prop, free_function_prop>;
+
+        prop_child(
+            data_member_prop* init_data_member,
+            member_function_prop* init_member_function,
+            free_function_prop* init_free_function
+        )
+        {
+            data_member = init_data_member;
+            member_function = init_member_function;
+            free_function = init_free_function;
+        }
+
+        static inline data_member_prop* data_member = nullptr;
+        static inline member_function_prop* member_function = nullptr;
+        static inline free_function_prop* free_function = nullptr;
+    };
+
+    struct prop_parent
+    {
+        using regions = nil::xalt::tlist<prop_child>;
+
+        data_member_prop data_member_value;
+        member_function_prop member_function_value;
+        free_function_prop free_function_value;
+
+        member_function_prop* get_member_function()
+        {
+            return &member_function_value;
+        }
+
+        using props = nil::xalt::tlist<
+            nil::sm::prop<data_member_prop, &prop_parent::data_member_value>,
+            nil::sm::prop<member_function_prop, &prop_parent::get_member_function>,
+            nil::sm::prop<free_function_prop, &get_free_function_prop>>;
+    };
+
+    free_function_prop* get_free_function_prop(prop_parent& state)
+    {
+        return &state.free_function_value;
+    }
+
     template <typename T>
     struct parent_identity_api
     {
@@ -241,4 +300,14 @@ TEST(sm_feature_state_construction_contexts, child_receives_immediate_parent)
     sm_t sm(&context);
 
     EXPECT_EQ(context.received_parent, context.entered_parent);
+}
+
+TEST(sm_feature_state_construction_contexts, child_receives_values_from_all_prop_accessor_forms)
+{
+    using sm_t = nil::sm::SM<nil::sm::api::Default<void>::type, prop_parent>;
+    sm_t sm;
+
+    EXPECT_NE(prop_child::data_member, nullptr);
+    EXPECT_NE(prop_child::member_function, nullptr);
+    EXPECT_NE(prop_child::free_function, nullptr);
 }

@@ -1,7 +1,10 @@
 #include <nil/sm.hpp>
+#include <nil/sm/diagnostics.hpp>
+#include <nil/sm/format/puml.hpp>
 
 #include <gtest/gtest.h>
 
+#include <sstream>
 #include <type_traits>
 #include <variant>
 
@@ -94,6 +97,62 @@ namespace
         }
     };
 
+    struct dependency
+    {
+    };
+
+    struct dependency_consumer
+    {
+        using args = nil::xalt::tlist<dependency>;
+    };
+
+    struct dependency_provider
+    {
+        dependency value;
+        using props = nil::xalt::tlist<nil::sm::prop<dependency, &dependency_provider::value>>;
+        using regions = nil::xalt::tlist<dependency_consumer>;
+    };
+
+    struct missing_dependency_provider
+    {
+        using regions = nil::xalt::tlist<dependency_consumer>;
+    };
+
+    struct direct_parent_consumer
+    {
+        using args = nil::xalt::tlist<nil::sm::direct_parent<dependency_provider>>;
+    };
+
+    struct direct_parent_provider
+    {
+        using regions = nil::xalt::tlist<direct_parent_consumer>;
+    };
+
+    struct target_dependency_consumer;
+
+    struct transition_to_dependency_consumer
+    {
+        using events = nil::xalt::tlist<e1>;
+
+        static auto on_event(const e1& /* event */)
+        {
+            return nil::sm::TransitTo<target_dependency_consumer>{};
+        }
+    };
+
+    struct target_dependency_consumer
+    {
+        using args = nil::xalt::tlist<dependency>;
+    };
+
+    struct transition_dependency_provider
+    {
+        dependency value;
+        using props
+            = nil::xalt::tlist<nil::sm::prop<dependency, &transition_dependency_provider::value>>;
+        using regions = nil::xalt::tlist<transition_to_dependency_consumer>;
+    };
+
     static_assert(!nil::sm::concepts::has_on_event<missing_react_for_declared_event, e1>);
     static_assert(!nil::sm::concepts::has_on_event<returns_unsupported_type, e1>);
     static_assert(!nil::sm::concepts::has_on_event<returns_variant_with_unsupported_type, e1>);
@@ -107,9 +166,36 @@ namespace
 
     // Overloads are currently legal in this runtime.
     static_assert(nil::sm::concepts::has_on_event<overloads_are_legal, e1>);
+
 }
 
 TEST(sm_feature_compile_time_diagnostics, static_checks_compile)
 {
     SUCCEED();
+}
+
+TEST(sm_feature_compile_time_diagnostics, ir_build_validates_ancestor_properties)
+{
+    auto valid_model = nil::sm::ir::build<nil::sm::api::Default<>::type, dependency_provider>();
+    EXPECT_TRUE(nil::sm::validate(valid_model));
+
+    auto missing_model
+        = nil::sm::ir::build<nil::sm::api::Default<>::type, missing_dependency_provider>();
+    EXPECT_FALSE(nil::sm::validate(missing_model));
+    EXPECT_TRUE(missing_model.has_unsatisfied_args);
+    EXPECT_TRUE(missing_model.roots.front().regions.front().front().has_unsatisfied_args);
+
+    std::ostringstream puml;
+    nil::sm::format::puml::render(puml, missing_model.roots);
+    EXPECT_NE(puml.str().find("<<invalid-args>>"), std::string::npos);
+    EXPECT_EQ(puml.str().find("ERROR:"), std::string::npos);
+    EXPECT_NO_THROW((
+        [] { (void)nil::sm::ir::build<nil::sm::api::Default<>::type, direct_parent_provider>(); }()
+    ));
+    EXPECT_NO_THROW((
+        [] {
+            (void
+            )nil::sm::ir::build<nil::sm::api::Default<>::type, transition_dependency_provider>();
+        }()
+    ));
 }

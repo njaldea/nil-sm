@@ -32,9 +32,21 @@ nil::sm::DefaultSM<logged_in, AppContext> machine{&app};
 The machine stores addresses. Keep context and root-argument objects alive until
 it is destroyed.
 
-Use `props` when a parent deliberately exposes a member to descendants:
+Use `props` when a parent deliberately exposes a non-owning pointer to
+descendants. A child lists the exposed type in `args` and receives `T*` in its
+constructor. A value data member is exposed by address:
 
 ```cpp
+struct child
+{
+    using args = nil::xalt::tlist<AppContext>;
+
+    explicit child(AppContext* app)
+        : user_id(app->user_id) {}
+
+    int user_id;
+};
+
 struct parent
 {
     AppContext app;
@@ -44,8 +56,62 @@ struct parent
 };
 ```
 
+`prop<T, Accessor>` requires a mutable, non-const `T` and exposes `T*`. Its
+accessor may be one of the following forms:
+
+```cpp
+T parent::*member;                  // value member: T C::*, use prop<T, ...>
+T* parent::*member;                 // pointer member: T* C::*, use prop<T*, ...>
+T* parent::get_member();            // non-const member function: T* (C::*)()
+T* get_member(parent&);             // free function: T* (*)(C&)
+```
+
+Data members are always exposed by address. Therefore, a `T C::*` property
+resolves to `T*`, while a `T* C::*` property resolves to `T**`. A child that
+requests the latter uses `args = tlist<T*>` and receives `T**`.
+
+The member function and free function receive mutable state. A `const` member
+function, a free function taking `const C&`, and a `prop<const T, ...>` are not
+valid property accessors.
+
 `direct_parent<T>` is an explicit escape hatch for the immediate parent. It is
 not available across a barrier boundary.
+
+## Argument validation in diagrams
+
+`ir::build()` populates the model structure and dependency requirements. Call
+`nil::sm::validate(model)` to validate non-root construction arguments against
+properties declared by ancestors. Missing requirements set
+`Model::has_unsatisfied_args` and the affected node's `has_unsatisfied_args`:
+
+```cpp
+auto model = nil::sm::ir::build<
+    nil::sm::api::Default<>::type,
+    parent>();
+const bool valid = nil::sm::validate(model);
+
+assert(valid);
+```
+
+For a direct pass/fail check without retaining the model, validate the API and
+root types directly:
+
+```cpp
+const bool valid = nil::sm::validate<
+    nil::sm::api::Default<>::type,
+    parent>();
+```
+
+It examines all states reachable in each child region, including transition
+targets and barrier child states. Root construction arguments are not checked
+because they are provided directly to the machine constructor.
+Each model and barrier definition also exposes `unsatisfied_args`: the
+dependencies it cannot satisfy with properties declared inside that model.
+When a barrier is used, its host checks this list against its own ancestor
+properties. This keeps a shared barrier definition neutral while marking only
+the host occurrence that cannot provide its dependencies.
+PlantUML renders affected states with the `<<invalid-args>>` stereotype and an
+error color while continuing to render the rest of the model.
 
 ## Type erasure
 

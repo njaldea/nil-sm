@@ -250,7 +250,7 @@ namespace
         using regions = nil::xalt::tlist<capture_barrier>;
         using captures = nil::xalt::tlist<shutdown>;
         using args = nil::xalt::tlist<capture_observer>;
-        using props = nil::xalt::tlist<nil::sm::prop<capture_observer, &capture_owner::observer>>;
+        using props = nil::xalt::tlist<nil::sm::prop<capture_observer*, &capture_owner::observer>>;
 
         explicit capture_owner(capture_observer* init_observer)
             : observer(init_observer)

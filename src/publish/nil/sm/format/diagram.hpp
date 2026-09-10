@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../ir.hpp"
+#include "../diagnostics.hpp"
 #include "../state.hpp"
 
 #include <iterator>
@@ -143,6 +143,7 @@ namespace nil::sm::format
             , root{&model, Render}
             , barriers{&model, Render}
         {
+            nil::sm::validate(model);
         }
 
         ~diagram() = default;
@@ -152,7 +153,7 @@ namespace nil::sm::format
         diagram(diagram&&) = delete;
         diagram& operator=(diagram&&) = delete;
 
-        const ir::Model model;
+        ir::Model model;
         root_view root;
         barrier_range barriers;
     };

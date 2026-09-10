@@ -4,6 +4,7 @@
 #include "id.hpp"
 
 #include <format>
+#include <ostream>
 #include <string>
 #include <type_traits>
 #include <unordered_map>
@@ -96,6 +97,26 @@ namespace nil::sm::ir::transit
 
 namespace nil::sm::ir
 {
+    struct Dependency
+    {
+        const void* type_id = nullptr;
+        std::string_view type_name;
+        bool is_direct_parent = false;
+    };
+
+    struct UnsatisfiedArgument
+    {
+        Dependency dependency;
+        std::vector<std::string_view> barrier_path;
+    };
+
+    struct BarrierError
+    {
+        Dependency dependency;
+        std::vector<std::string_view> barrier_path;
+        std::vector<std::string_view> host_path;
+    };
+
     struct Node
     {
         // Stable occurrence ID. Barrier definition nodes use barrier-local metadata;
@@ -110,6 +131,10 @@ namespace nil::sm::ir
         bool is_initial = false;
         bool is_final = false;
         bool is_barrier = false;
+        const void* type_id = nullptr;
+        std::vector<Dependency> required_args;
+        std::vector<Dependency> provided_props;
+        bool has_unsatisfied_args = false;
         std::vector<action::Info> actions; // entry, exit, regions-finalized, event, capture
         std::vector<transit::Info> transitions;
         // event/capture transitions (no entry/exit/regions-finalized transitions)
@@ -122,12 +147,16 @@ namespace nil::sm::ir
         const void* id = nullptr;
         std::string_view name;
         std::vector<Node> roots;
+        std::vector<UnsatisfiedArgument> unsatisfied_args;
     };
 
     struct Model
     {
         std::vector<Node> roots;
         std::vector<BarrierDefinition> barriers;
+        std::vector<UnsatisfiedArgument> unsatisfied_args;
+        std::vector<BarrierError> barrier_errors;
+        bool has_unsatisfied_args = false;
     };
 }
 
@@ -157,6 +186,32 @@ namespace nil::sm::ir
 
 namespace nil::sm::ir::detail
 {
+    void collect_unsatisfied_args(
+        const std::vector<ir::Node>& nodes,
+        const std::vector<ir::Dependency>& ancestor_props,
+        bool has_parent,
+        const ir::Model& model,
+        std::vector<ir::UnsatisfiedArgument>& unsatisfied_args
+    );
+
+    template <typename... Args>
+    std::vector<ir::Dependency> make_required_args(nil::xalt::tlist<Args...>)
+    {
+        return {
+            ir::Dependency{nil::xalt::type_id<Args>, nil::sm::detail::type_name<Args>(), nil::xalt::is_of_template_v<Args, direct_parent>}...
+        };
+    }
+
+    template <typename... Props>
+    std::vector<ir::Dependency> make_provided_props(nil::xalt::tlist<Props...>)
+    {
+        return {ir::Dependency{
+            nil::xalt::type_id<typename Props::type>,
+            nil::sm::detail::type_name<typename Props::type>(),
+            false
+        }...};
+    }
+
     struct BuildContext
     {
         std::vector<ir::BarrierDefinition> barriers;
@@ -171,10 +226,18 @@ namespace nil::sm::ir::detail
         {
             if (!contains(barrier_id))
             {
+                collect_unsatisfied_args(model.roots, {}, false, model, model.unsatisfied_args);
+                for (auto& requirement : model.unsatisfied_args)
+                {
+                    requirement.barrier_path.insert(requirement.barrier_path.begin(), barrier_name);
+                }
                 barrier_indices.emplace(barrier_id, barriers.size());
-                barriers.push_back(
-                    ir::BarrierDefinition{barrier_id, barrier_name, std::move(model.roots)}
-                );
+                barriers.push_back(ir::BarrierDefinition{
+                    barrier_id,
+                    barrier_name,
+                    std::move(model.roots),
+                    std::move(model.unsatisfied_args)
+                });
             }
 
             for (auto& barrier : model.barriers)
@@ -503,6 +566,10 @@ namespace nil::sm::ir::detail
                 .is_initial = state == 0,
                 .is_final = metadata->is_final,
                 .is_barrier = metadata->is_barrier,
+                .type_id = nil::xalt::type_id<T>,
+                .required_args = make_required_args(typename API<T>::args_t{}),
+                .provided_props = make_provided_props(typename API<T>::props_t{}),
+                .has_unsatisfied_args = false,
                 .actions = {},
                 .transitions = {},
                 .regions = [metadata, &context]<typename... R>(nil::xalt::tlist<R...>)
@@ -532,6 +599,10 @@ namespace nil::sm::ir::detail
                 .is_initial = state == 0,
                 .is_final = metadata->is_final,
                 .is_barrier = metadata->is_barrier,
+                .type_id = nil::xalt::type_id<barrier::State<Action, T>>,
+                .required_args = {},
+                .provided_props = {},
+                .has_unsatisfied_args = false,
                 .actions = {},
                 .transitions = {},
                 .regions = {},
@@ -559,14 +630,120 @@ namespace nil::sm::ir::detail
 
 namespace nil::sm::ir
 {
+    namespace detail
+    {
+        inline bool is_satisfied(
+            const Dependency& requirement,
+            const std::vector<Dependency>& ancestor_props,
+            bool has_parent
+        )
+        {
+            return requirement.is_direct_parent
+                ? has_parent
+                : std::any_of(
+                      ancestor_props.begin(),
+                      ancestor_props.end(),
+                      [&](const auto& property) { return property.type_id == requirement.type_id; }
+                  );
+        }
+
+        inline void append_unsatisfied_arg(
+            std::vector<UnsatisfiedArgument>& unsatisfied_args,
+            UnsatisfiedArgument requirement
+        )
+        {
+            if (!std::any_of(
+                    unsatisfied_args.begin(),
+                    unsatisfied_args.end(),
+                    [&](const auto& existing)
+                    {
+                        return existing.dependency.type_id == requirement.dependency.type_id
+                            && existing.dependency.is_direct_parent
+                            == requirement.dependency.is_direct_parent
+                            && existing.barrier_path == requirement.barrier_path;
+                    }
+                ))
+            {
+                unsatisfied_args.push_back(std::move(requirement));
+            }
+        }
+
+        inline void collect_unsatisfied_args(
+            const std::vector<Node>& nodes,
+            const std::vector<Dependency>& ancestor_props,
+            bool has_parent,
+            const Model& model,
+            std::vector<UnsatisfiedArgument>& unsatisfied_args
+        )
+        {
+            for (const auto& node : nodes)
+            {
+                for (const auto& requirement : node.required_args)
+                {
+                    if (!is_satisfied(requirement, ancestor_props, has_parent))
+                    {
+                        append_unsatisfied_arg(
+                            unsatisfied_args,
+                            UnsatisfiedArgument{requirement, {}}
+                        );
+                    }
+                }
+
+                auto descendant_props = ancestor_props;
+                descendant_props.insert(
+                    descendant_props.end(),
+                    node.provided_props.begin(),
+                    node.provided_props.end()
+                );
+                for (const auto& region : node.regions)
+                {
+                    collect_unsatisfied_args(
+                        region,
+                        descendant_props,
+                        true,
+                        model,
+                        unsatisfied_args
+                    );
+                }
+
+                if (node.barrier_id != nullptr)
+                {
+                    for (const auto& barrier : model.barriers)
+                    {
+                        if (barrier.id == node.barrier_id)
+                        {
+                            for (const auto& requirement : barrier.unsatisfied_args)
+                            {
+                                if (!is_satisfied(requirement.dependency, ancestor_props, false))
+                                {
+                                    append_unsatisfied_arg(unsatisfied_args, requirement);
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        template <template <typename> typename API, typename T>
+        Model build_unchecked(const nil::sm::Metadata* parent)
+        {
+            auto context = BuildContext{};
+            return Model{
+                .roots = build_region<API, T>(parent, 0, context),
+                .barriers = std::move(context.barriers),
+                .unsatisfied_args = {},
+                .barrier_errors = {},
+                .has_unsatisfied_args = false,
+            };
+        }
+    }
+
     template <template <typename> typename API, typename T>
     Model build(const nil::sm::Metadata* parent = nullptr)
     {
-        auto context = detail::BuildContext{};
-        return Model{
-            .roots = detail::build_region<API, T>(parent, 0, context),
-            .barriers = std::move(context.barriers),
-        };
+        return detail::build_unchecked<API, T>(parent);
     }
 
     inline const BarrierDefinition* find_barrier(const Model& model, const void* barrier_id)
@@ -594,5 +771,61 @@ namespace nil::sm::ir
         {
             function(barrier);
         }
+    }
+
+    inline void print_barrier_errors(std::ostream& os, const Model& model)
+    {
+        for (const auto& error : model.barrier_errors)
+        {
+            if (error.barrier_path.empty())
+            {
+                continue;
+            }
+
+            os << error.barrier_path.back() << " | " << error.dependency.type_name << " |";
+            auto ancestor_count = error.host_path.size();
+            if (ancestor_count > 0 && error.host_path.back() == error.barrier_path.back())
+            {
+                --ancestor_count;
+            }
+            auto first_ancestor = true;
+            for (auto ancestor_index = std::size_t{0}; ancestor_index < ancestor_count;
+                 ++ancestor_index)
+            {
+                os << (first_ancestor ? " " : " - ") << error.host_path[ancestor_index];
+                first_ancestor = false;
+            }
+            for (auto barrier_index = std::size_t{1}; barrier_index + 1 < error.barrier_path.size();
+                 ++barrier_index)
+            {
+                os << (first_ancestor ? " " : " - ") << error.barrier_path[barrier_index];
+                first_ancestor = false;
+            }
+            os << "\n";
+        }
+    }
+
+    inline void print_errors(std::ostream& os, const Model& model)
+    {
+        if (!model.unsatisfied_args.empty())
+        {
+            const auto first_root_error = std::find_if(
+                model.unsatisfied_args.begin(),
+                model.unsatisfied_args.end(),
+                [](const auto& requirement) { return requirement.barrier_path.empty(); }
+            );
+            if (first_root_error != model.unsatisfied_args.end())
+            {
+                for (const auto& requirement : model.unsatisfied_args)
+                {
+                    if (requirement.barrier_path.empty())
+                    {
+                        os << "root | " << requirement.dependency.type_name << " |\n";
+                    }
+                }
+            }
+        }
+
+        print_barrier_errors(os, model);
     }
 }

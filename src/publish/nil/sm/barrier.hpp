@@ -3,12 +3,14 @@
 #include "ir.hpp" // IWYU pragma: keep
 #include "state.hpp"
 
+#include <nil/xalt/MACROS.h>
+
 #include <memory>
 #include <type_traits>
 
 // Not `final`: to override `name` or add other state properties, inherit from the
 // generated struct and declare them in the derived class.
-#define NIL_SM_BARRIER_DECLARE(NAME, API)                                                                       \
+#define NIL_SM_BARRIER_DECLARE_IMPL(NAME, API, DISPLAY_NAME)                                                    \
     struct NAME                                                                                                 \
     {                                                                                                           \
         using api_t = API<nil::sm::detail::api_tag>;                                                            \
@@ -18,11 +20,18 @@
         struct id_tag final                                                                                     \
         {                                                                                                       \
         };                                                                                                      \
+        static constexpr auto name = DISPLAY_NAME;                                                              \
         [[maybe_unused]] static constexpr auto id = nil::xalt::type_id<id_tag>;                                 \
         static std::unique_ptr<nil::sm::ISM>                                                                    \
             make(nil::sm::detail::IState*, nil::sm::detail::Queues*, api_context_t*, const nil::sm::Metadata*); \
         static nil::sm::ir::Model ir(const nil::sm::Metadata*);                                                 \
     }
+
+#define NIL_SM_BARRIER_DECLARE_1(NAME, API) NIL_SM_BARRIER_DECLARE_IMPL(NAME, API, #NAME)
+#define NIL_SM_BARRIER_DECLARE_2(NAME, API, DISPLAY_NAME)                                          \
+    NIL_SM_BARRIER_DECLARE_IMPL(NAME, API, DISPLAY_NAME)
+#define NIL_SM_BARRIER_DECLARE(...)                                                                \
+    NIL_XALT_CONCAT(NIL_SM_BARRIER_DECLARE_, NIL_XALT_NARG(__VA_ARGS__))(__VA_ARGS__)
 
 #define NIL_SM_BARRIER_DEFINE(NAME, STATE)                                                         \
     [[maybe_unused]] std::unique_ptr<nil::sm::ISM> NAME::make(                                     \
@@ -41,7 +50,7 @@
     }                                                                                              \
     [[maybe_unused]] nil::sm::ir::Model NAME::ir(const nil::sm::Metadata* parent_metadata)         \
     {                                                                                              \
-        return nil::sm::ir::build<NAME::template api, STATE>(parent_metadata);                     \
+        return nil::sm::ir::detail::build_unchecked<NAME::template api, STATE>(parent_metadata);   \
     }
 
 namespace nil::sm::barrier

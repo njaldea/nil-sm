@@ -110,7 +110,7 @@ namespace nil::sm
         }
 
         // Matches requested_id against every prop<Member, Ptr> in props_t, resolving
-        // the member's address directly through its pointer-to-member when one matches.
+        // its value through the descriptor when one matches.
         template <typename... Props>
         void* match_props(
             [[maybe_unused]] const void* requested_id,
@@ -119,8 +119,7 @@ namespace nil::sm
         {
             void* result = nullptr;
             (void)((requested_id == nil::xalt::type_id<typename Props::type>
-                        ? (result = static_cast<void*>(std::addressof(current_state.*Props::ptr)),
-                           true)
+                        ? (result = Props::get(current_state), true)
                         : false)
                    || ...);
             return result;

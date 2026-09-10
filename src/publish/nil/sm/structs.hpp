@@ -36,14 +36,38 @@ namespace nil::sm
         using type = void;
     };
 
-    // Declares a member a state exposes via get(): `using props = tlist<prop<Member,
-    // &State::member>>;`. State::get() matches on `Member`'s type id, then resolves the address
-    // directly through the stored pointer-to-member.
+    // Declares a value a state exposes via get(): `using props = tlist<prop<Member,
+    // &State::member>>;`. The descriptor can store a value or pointer data member, a non-const
+    // member accessor, or a free accessor accepting the state by reference, each returning
+    // Member*.
     template <typename Member, auto MemberPtr>
     struct prop final
     {
+        static_assert(!std::is_const_v<Member>, "Properties must expose a mutable type.");
+
         using type = Member;
         static constexpr auto ptr = MemberPtr;
+
+        template <typename State>
+        static type* get(State& state)
+        {
+            if constexpr (std::is_member_object_pointer_v<decltype(ptr)>)
+            {
+                return std::addressof(state.*ptr);
+            }
+            else if constexpr (std::is_member_function_pointer_v<decltype(ptr)>)
+            {
+                static_assert(
+                    !std::is_invocable_v<decltype(ptr), const State&>,
+                    "Property member functions must not be const."
+                );
+                return (state.*ptr)();
+            }
+            else
+            {
+                return ptr(state);
+            }
+        }
     };
 
     // Opt-in escape hatch: `using args = tlist<direct_parent<ParentType>>;` resolves to the
