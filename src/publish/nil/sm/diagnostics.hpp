@@ -10,7 +10,7 @@
 
 namespace nil::sm::detail
 {
-    inline bool diagnostic_satisfied(
+    constexpr bool diagnostic_satisfied(
         const ir::Dependency& requirement,
         const std::vector<ir::Dependency>& ancestor_props,
         bool has_parent
@@ -25,7 +25,7 @@ namespace nil::sm::detail
               );
     }
 
-    inline void append_diagnostic_requirement(
+    constexpr void append_diagnostic_requirement(
         std::vector<ir::UnsatisfiedArgument>& requirements,
         ir::UnsatisfiedArgument requirement
     )
@@ -46,7 +46,8 @@ namespace nil::sm::detail
         }
     }
 
-    inline void validate_nodes(
+    // NOLINTNEXTLINE
+    constexpr void validate_nodes(
         std::vector<ir::Node>& nodes,
         const std::vector<ir::Dependency>& ancestor_props,
         bool has_parent,
@@ -117,14 +118,14 @@ namespace nil::sm::detail
 
 namespace nil::sm
 {
-    inline bool validate(ir::Model& model)
+    constexpr bool validate(ir::Model& model)
     {
         detail::validate_nodes(model.roots, {}, false, {}, model);
         return !model.has_unsatisfied_args;
     }
 
     template <template <typename> typename API, typename T>
-    bool validate()
+    consteval bool validate()
     {
         auto model = ir::build<API, T>();
         return validate(model);

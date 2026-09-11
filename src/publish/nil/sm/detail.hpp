@@ -12,9 +12,9 @@
 // state-maker tables use that same order, so a state ID can select its maker
 // by index without storing the ID twice.
 
-#include "concepts.hpp"
 #include "structs.hpp"
 
+#include <nil/xalt/checks.hpp>
 #include <nil/xalt/coalesce.hpp>
 #include <nil/xalt/tlist.hpp>
 #include <nil/xalt/typed.hpp>
@@ -27,7 +27,6 @@
 #include <type_traits>
 #include <utility>
 #include <variant>
-#include <vector>
 
 namespace nil::sm::detail
 {
@@ -50,7 +49,7 @@ namespace nil::sm::detail
     using on_regions_finalized_t = std::variant<Unhandled, NOOP, TransitTo, Event>;
 
     template <typename T>
-    Metadata make_metadata(
+    constexpr Metadata make_metadata(
         std::size_t region,
         std::size_t state,
         std::size_t subregions,
@@ -697,13 +696,6 @@ namespace nil::sm::detail
             typename API::api_context_t* context
         )
         {
-            static_assert(
-                requires { API::template on_event<Event>(state, event, context); }
-                    && concepts::is_allowed_to_use_for_on_event_result<
-                        decltype(API::template on_event<Event>(state, event, context))>,
-                "API must expose on_event<Event>(state, event, contexts...) with an allowed "
-                "return type"
-            );
             return to_runtime_action_as<on_event_t>(
                 API::template on_event<Event>(state, event, context)
             );
@@ -721,13 +713,6 @@ namespace nil::sm::detail
             typename API::api_context_t* context
         )
         {
-            static_assert(
-                requires { API::template on_capture<Event>(state, event, context); }
-                    && concepts::is_allowed_to_use_for_on_event_result<
-                        decltype(API::template on_capture<Event>(state, event, context))>,
-                "API must expose on_capture<Event>(state, event, contexts...) with an allowed "
-                "return type"
-            );
             return to_runtime_action_as<on_event_t>(
                 API::template on_capture<Event>(state, event, context)
             );

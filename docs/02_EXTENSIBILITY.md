@@ -94,12 +94,12 @@ assert(valid);
 ```
 
 For a direct pass/fail check without retaining the model, validate the API and
-root types directly:
+root types directly at compile-time or runtime:
 
 ```cpp
-const bool valid = nil::sm::validate<
+static_assert(nil::sm::validate<
     nil::sm::api::Default<>::type,
-    parent>();
+    parent>());
 ```
 
 It examines all states reachable in each child region, including transition

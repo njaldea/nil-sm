@@ -26,6 +26,8 @@ namespace legacy
             using captures_t = nil::xalt::coalesce_t<T, nil::sm::detail::captures_tag>;
             using props_t = nil::xalt::tlist<>;
 
+            using api_t = nil::sm::api::Default<>::type<T>;
+
             static constexpr auto args_f()
             {
                 if constexpr (requires() { typename T::parent; })
@@ -51,55 +53,30 @@ namespace legacy
             }
 
             template <typename E>
-            static auto on_event(state_t& state, const E& event, api_context_t* /* api_contexts */)
+            static auto on_event(state_t& state, const E& event, api_context_t* api_contexts)
             {
-                return state.on_event(event);
+                return api_t::on_event(state, event, api_contexts);
             }
 
             template <typename E>
-            static auto on_capture(
-                state_t& state,
-                const E& event,
-                api_context_t* /* api_contexts */
-            )
+            static auto on_capture(state_t& state, const E& event, api_context_t* api_contexts)
             {
-                return state.on_capture(event);
+                return api_t::on_capture(state, event, api_contexts);
             }
 
-            static auto on_enter(state_t& state, api_context_t* /* api_contexts */)
+            static auto on_enter(state_t& state, api_context_t* api_contexts)
             {
-                if constexpr (nil::sm::concepts::has_on_enter<state_t>)
-                {
-                    return state.on_enter();
-                }
-                else
-                {
-                    return nil::sm::Unhandled();
-                }
+                return api_t::on_enter(state, api_contexts);
             }
 
-            static auto on_exit(state_t& state, api_context_t* /* api_contexts */)
+            static auto on_exit(state_t& state, api_context_t* api_contexts)
             {
-                if constexpr (nil::sm::concepts::has_on_exit<state_t>)
-                {
-                    return state.on_exit();
-                }
-                else
-                {
-                    return nil::sm::Unhandled();
-                }
+                return api_t::on_exit(state, api_contexts);
             }
 
-            static auto on_regions_finalized(state_t& state, api_context_t* /* api_contexts */)
+            static auto on_regions_finalized(state_t& state, api_context_t* api_contexts)
             {
-                if constexpr (nil::sm::concepts::has_on_regions_finalized<state_t>)
-                {
-                    return state.on_regions_finalized();
-                }
-                else
-                {
-                    return nil::sm::Unhandled();
-                }
+                return api_t::on_regions_finalized(state, api_contexts);
             }
         };
     };

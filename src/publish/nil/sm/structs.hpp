@@ -98,7 +98,7 @@ namespace nil::sm
 namespace nil::sm::detail
 {
     template <typename T>
-    std::string_view type_name()
+    constexpr std::string_view type_name()
     {
         if constexpr (requires() { T::name; })
         {

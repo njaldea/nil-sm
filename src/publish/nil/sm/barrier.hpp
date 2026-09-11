@@ -8,7 +8,7 @@
 
 #include <nil/xalt/MACROS.h>
 
-#include <memory>
+#include <memory> // IWYU pragma: keep
 #include <type_traits>
 
 // Not `final`: to override `name` or add other state properties, inherit from the
@@ -16,15 +16,11 @@
 #define NIL_SM_BARRIER_DECLARE_IMPL(NAME, API, DISPLAY_NAME)                                                    \
     struct NAME                                                                                                 \
     {                                                                                                           \
-        using api_t = API<nil::sm::detail::api_tag>;                                                            \
         template <typename T>                                                                                   \
         using api = API<T>;                                                                                     \
-        using api_context_t = typename api_t::api_context_t;                                                    \
-        struct id_tag final                                                                                     \
-        {                                                                                                       \
-        };                                                                                                      \
+        using api_context_t = typename API<nil::sm::detail::api_tag>::api_context_t;                            \
         static constexpr auto name = DISPLAY_NAME;                                                              \
-        [[maybe_unused]] static constexpr auto id = nil::xalt::type_id<id_tag>;                                 \
+        [[maybe_unused]] static constexpr auto id = nil::xalt::type_id<API<NAME>>;                              \
         static std::unique_ptr<nil::sm::ISM>                                                                    \
             make(nil::sm::detail::IState*, nil::sm::detail::Queues*, api_context_t*, const nil::sm::Metadata*); \
         static nil::sm::ir::Model ir(const nil::sm::Metadata*);                                                 \
@@ -163,8 +159,10 @@ namespace nil::sm::barrier
 
         action_t post_impl(detail::Event event) override
         {
-            auto action = region.active_state->on_event(event);
-            return region.template consume_action<region_dispatcher_t>(event, action);
+            return region.template consume_action<region_dispatcher_t>(
+                event,
+                region.active_state->on_event(event)
+            );
         }
     };
 
@@ -175,20 +173,10 @@ namespace nil::sm
     template <template <typename> typename API, typename Action, typename T>
     class State<API, barrier::State<Action, T>> final: public detail::IState
     {
-        using parent_api_context_t = detail::api_context_t<API>;
         using barrier_api_t = typename T::template api<T>;
         using child_api_context_t = typename barrier_api_t::api_context_t;
-
+        using parent_api_context_t = detail::api_context_t<API>;
         using api_adapter_t = barrier::context_adapter<parent_api_context_t, child_api_context_t>;
-
-        static std::unique_ptr<ISM> make_child(
-            State* self,
-            detail::Queues* init_queues,
-            const Metadata* parent_metadata
-        )
-        {
-            return T::make(self, init_queues, self->api_adapter.context(), parent_metadata);
-        }
 
     public:
         explicit State(
@@ -200,7 +188,12 @@ namespace nil::sm
             : detail::IState(init_parent, init_metadata)
             , api_adapter(init_api_contexts)
             , queues(init_queues)
-            , child(make_child(this, init_queues, std::addressof(this->metadata)))
+            , child(T::make(
+                  this,
+                  init_queues,
+                  this->api_adapter.context(),
+                  std::addressof(this->metadata)
+              ))
         {
         }
 
@@ -209,10 +202,7 @@ namespace nil::sm
         State& operator=(State&&) = delete;
         State& operator=(const State&) = delete;
 
-        ~State() override
-        {
-            child.reset();
-        }
+        ~State() override = default;
 
         void* get(const void* requested_id) override
         {

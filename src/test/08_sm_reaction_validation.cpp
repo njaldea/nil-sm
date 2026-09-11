@@ -86,15 +86,15 @@ namespace
         }
     };
 
-    static_assert(nil::sm::concepts::has_on_event<returns_forward, e1>);
-    static_assert(nil::sm::concepts::has_on_event<returns_discard, e1>);
-    static_assert(nil::sm::concepts::has_on_event<returns_transit, e1>);
-    static_assert(nil::sm::concepts::has_on_event<returns_variant_fd, e1>);
-    static_assert(nil::sm::concepts::has_on_event<returns_variant_dt, e1>);
+    static_assert(nil::sm::concepts::has_valid_on_event<returns_forward, e1>);
+    static_assert(nil::sm::concepts::has_valid_on_event<returns_discard, e1>);
+    static_assert(nil::sm::concepts::has_valid_on_event<returns_transit, e1>);
+    static_assert(nil::sm::concepts::has_valid_on_event<returns_variant_fd, e1>);
+    static_assert(nil::sm::concepts::has_valid_on_event<returns_variant_dt, e1>);
 
-    static_assert(!nil::sm::concepts::has_on_event<returns_invalid_int, e1>);
-    static_assert(!nil::sm::concepts::has_on_event<returns_unhandled, e1>);
-    static_assert(!nil::sm::concepts::has_on_event<returns_variant_invalid, e1>);
+    static_assert(!nil::sm::concepts::has_valid_on_event<returns_invalid_int, e1>);
+    static_assert(!nil::sm::concepts::has_valid_on_event<returns_unhandled, e1>);
+    static_assert(!nil::sm::concepts::has_valid_on_event<returns_variant_invalid, e1>);
 }
 
 TEST(sm_feature_reaction_validation, static_concept_checks_compile)

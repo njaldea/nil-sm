@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "concepts.hpp"
 #include "detail.hpp"
 
 #include <nil/xalt/coalesce.hpp>
@@ -31,21 +32,26 @@ namespace nil::sm::api
             template <typename E>
             static auto on_event(T& state, const E& event, api_context_t* /* api_contexts */)
             {
-                static_assert(concepts::has_on_event<T, E>);
+                // will not be called if not in events list
+                static_assert(concepts::has_valid_on_event<T, E>);
                 return state.on_event(event);
             }
 
             template <typename E>
             static auto on_capture(T& state, const E& event, api_context_t* /* api_contexts */)
             {
-                static_assert(concepts::has_on_capture<T, E>);
+                // will not be called if not in captures list
+                static_assert(concepts::has_valid_on_capture<T, E>);
                 return state.on_capture(event);
             }
 
             static auto on_enter(T& state, api_context_t* /* api_contexts */)
             {
+                // need to check for existence first
                 if constexpr (concepts::has_on_enter<T>)
                 {
+                    // then check for validity
+                    static_assert(concepts::has_valid_on_enter<T>);
                     return state.on_enter();
                 }
                 else
@@ -56,8 +62,11 @@ namespace nil::sm::api
 
             static auto on_exit(T& state, api_context_t* /* api_contexts */)
             {
+                // need to check for existence first
                 if constexpr (concepts::has_on_exit<T>)
                 {
+                    // then check for validity
+                    static_assert(concepts::has_valid_on_exit<T>);
                     return state.on_exit();
                 }
                 else
@@ -68,8 +77,11 @@ namespace nil::sm::api
 
             static auto on_regions_finalized(T& state, api_context_t* /* api_contexts */)
             {
+                // need to check for existence first
                 if constexpr (concepts::has_on_regions_finalized<T>)
                 {
+                    // then check for validity
+                    static_assert(concepts::has_valid_on_regions_finalized<T>);
                     return state.on_regions_finalized();
                 }
                 else

@@ -156,20 +156,23 @@ namespace
         using regions = nil::xalt::tlist<transition_to_dependency_consumer>;
     };
 
-    static_assert(!nil::sm::concepts::has_on_event<missing_react_for_declared_event, e1>);
-    static_assert(!nil::sm::concepts::has_on_event<returns_unsupported_type, e1>);
-    static_assert(!nil::sm::concepts::has_on_event<returns_variant_with_unsupported_type, e1>);
-    static_assert(!nil::sm::concepts::has_on_event<returns_unhandled_directly, e1>);
+    static_assert(!nil::sm::concepts::has_valid_on_event<missing_react_for_declared_event, e1>);
+    static_assert(!nil::sm::concepts::has_valid_on_event<returns_unsupported_type, e1>);
+    static_assert(!nil::sm::concepts::
+                      has_valid_on_event<returns_variant_with_unsupported_type, e1>);
+    static_assert(!nil::sm::concepts::has_valid_on_event<returns_unhandled_directly, e1>);
 
     static_assert(!std::is_default_constructible_v<no_default_ctor>);
 
     // TransitTo target validity is not diagnosed by has_on_event; it is validated later in template
     // instantiation paths.
-    static_assert(nil::sm::concepts::has_on_event<transit_to_invalid_target, e1>);
+    static_assert(nil::sm::concepts::has_valid_on_event<transit_to_invalid_target, e1>);
 
     // Overloads are currently legal in this runtime.
-    static_assert(nil::sm::concepts::has_on_event<overloads_are_legal, e1>);
+    static_assert(nil::sm::concepts::has_valid_on_event<overloads_are_legal, e1>);
 
+    static_assert(nil::sm::validate<nil::sm::api::Default<>::type, dependency_provider>());
+    static_assert(!nil::sm::validate<nil::sm::api::Default<>::type, missing_dependency_provider>());
 }
 
 TEST(sm_feature_compile_time_diagnostics, static_checks_compile)

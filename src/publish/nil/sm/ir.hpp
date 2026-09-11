@@ -6,11 +6,9 @@
 #include "detail.hpp"
 #include "id.hpp"
 
-#include <format>
 #include <ostream>
 #include <string>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -189,7 +187,7 @@ namespace nil::sm::ir
 
 namespace nil::sm::ir::detail
 {
-    void collect_unsatisfied_args(
+    constexpr void collect_unsatisfied_args(
         const std::vector<ir::Node>& nodes,
         const std::vector<ir::Dependency>& ancestor_props,
         bool has_parent,
@@ -198,7 +196,7 @@ namespace nil::sm::ir::detail
     );
 
     template <typename... Args>
-    std::vector<ir::Dependency> make_required_args(nil::xalt::tlist<Args...>)
+    constexpr std::vector<ir::Dependency> make_required_args(nil::xalt::tlist<Args...> /* a */)
     {
         return {
             ir::Dependency{nil::xalt::type_id<Args>, nil::sm::detail::type_name<Args>(), nil::xalt::is_of_template_v<Args, direct_parent>}...
@@ -206,7 +204,7 @@ namespace nil::sm::ir::detail
     }
 
     template <typename... Props>
-    std::vector<ir::Dependency> make_provided_props(nil::xalt::tlist<Props...>)
+    constexpr std::vector<ir::Dependency> make_provided_props(nil::xalt::tlist<Props...> /* p */)
     {
         return {ir::Dependency{
             nil::xalt::type_id<typename Props::type>,
@@ -218,14 +216,18 @@ namespace nil::sm::ir::detail
     struct BuildContext
     {
         std::vector<ir::BarrierDefinition> barriers;
-        std::unordered_map<const void*, std::size_t> barrier_indices;
+        std::vector<std::pair<const void*, std::size_t>> barrier_indices;
 
-        bool contains(const void* barrier_id) const
+        constexpr bool contains(const void* barrier_id) const
         {
-            return barrier_indices.contains(barrier_id);
+            return std::any_of(
+                barrier_indices.begin(),
+                barrier_indices.end(),
+                [barrier_id](const auto& pair) { return pair.first == barrier_id; }
+            );
         }
 
-        void add(const void* barrier_id, std::string_view barrier_name, ir::Model model)
+        constexpr void add(const void* barrier_id, std::string_view barrier_name, ir::Model model)
         {
             if (!contains(barrier_id))
             {
@@ -234,7 +236,7 @@ namespace nil::sm::ir::detail
                 {
                     requirement.barrier_path.insert(requirement.barrier_path.begin(), barrier_name);
                 }
-                barrier_indices.emplace(barrier_id, barriers.size());
+                barrier_indices.emplace_back(barrier_id, barriers.size());
                 barriers.push_back(ir::BarrierDefinition{
                     barrier_id,
                     barrier_name,
@@ -247,20 +249,26 @@ namespace nil::sm::ir::detail
             {
                 if (!contains(barrier.id))
                 {
-                    barrier_indices.emplace(barrier.id, barriers.size());
+                    barrier_indices.emplace_back(barrier.id, barriers.size());
                     barriers.push_back(std::move(barrier));
                 }
             }
         }
     };
 
-    inline std::string format_stable_id(std::uint64_t value)
+    constexpr std::string format_stable_id(std::uint64_t value)
     {
-        return std::format("ST_{:016x}", value);
+        constexpr auto hex_digits = "0123456789abcdef";
+        std::string result = "ST_0000000000000000";
+        for (std::size_t i = 0; i < 16; ++i)
+        {
+            result[18 - i] = hex_digits[(value >> (i * 4U)) & 0x0FU];
+        }
+        return result;
     }
 
     template <typename R, typename ActionT, typename ResponseT>
-    void emit_lifecycle_action(std::vector<ir::action::Info>& actions)
+    constexpr void emit_lifecycle_action(std::vector<ir::action::Info>& actions)
     {
         if constexpr (std::is_same_v<R, NOOP>)
         {
@@ -279,7 +287,7 @@ namespace nil::sm::ir::detail
     }
 
     template <template <typename> typename API, typename RegionInitial, typename R>
-    void emit_regions_complete_action(const nil::sm::Metadata& metadata, ir::Node& node)
+    constexpr void emit_regions_complete_action(const nil::sm::Metadata& metadata, ir::Node& node)
     {
         if constexpr (std::is_same_v<R, NOOP>)
         {
@@ -332,7 +340,7 @@ namespace nil::sm::ir::detail
         typename R,
         typename ActionInfoT,
         typename TransitionInfoT>
-    void emit_reaction_action(const nil::sm::Metadata& metadata, ir::Node& node)
+    constexpr void emit_reaction_action(const nil::sm::Metadata& metadata, ir::Node& node)
     {
         const auto event_name = nil::sm::detail::type_name<E>();
 
@@ -412,7 +420,7 @@ namespace nil::sm::ir::detail
         typename T,
         typename RegionInitial,
         typename... E>
-    void emit_events(
+    constexpr void emit_events(
         const nil::sm::Metadata& metadata,
         ir::Node& node,
         nil::xalt::tlist<E...> /* events */
@@ -441,7 +449,7 @@ namespace nil::sm::ir::detail
         typename T,
         typename RegionInitial,
         typename... E>
-    void emit_captures(
+    constexpr void emit_captures(
         const nil::sm::Metadata& metadata,
         ir::Node& node,
         nil::xalt::tlist<E...> /* captures */
@@ -465,7 +473,7 @@ namespace nil::sm::ir::detail
     }
 
     template <template <typename> typename API, typename T, typename RegionInitial>
-    void emit_node_annotations(const nil::sm::Metadata& metadata, ir::Node& node)
+    constexpr void emit_node_annotations(const nil::sm::Metadata& metadata, ir::Node& node)
     {
         using api_t = API<T>;
         using api_context_t = typename api_t::api_context_t;
@@ -492,7 +500,7 @@ namespace nil::sm::ir::detail
     }
 
     template <template <typename> typename API, typename T, typename RegionInitial>
-    ir::Node build_node(
+    constexpr ir::Node build_node(
         const nil::sm::Metadata* parent,
         std::size_t region,
         std::size_t state,
@@ -500,7 +508,7 @@ namespace nil::sm::ir::detail
     );
 
     template <template <typename> typename API, typename T>
-    std::vector<ir::Node> build_region(
+    constexpr std::vector<ir::Node> build_region(
         const nil::sm::Metadata* parent,
         std::size_t index,
         BuildContext& context
@@ -541,7 +549,7 @@ namespace nil::sm::ir::detail
     }
 
     template <template <typename> typename API, typename... R>
-    std::vector<std::vector<ir::Node>> build_regions(
+    constexpr std::vector<std::vector<ir::Node>> build_regions(
         const nil::sm::Metadata* parent,
         BuildContext& context
     )
@@ -556,7 +564,7 @@ namespace nil::sm::ir::detail
     struct node_builder
     {
         template <typename RegionInitial>
-        static ir::Node node(
+        constexpr static ir::Node node(
             const nil::sm::Metadata* metadata,
             std::size_t state,
             BuildContext& context
@@ -589,7 +597,11 @@ namespace nil::sm::ir::detail
     struct node_builder<API, barrier::State<Action, T>>
     {
         template <typename RegionInitial>
-        static ir::Node node(const Metadata* metadata, std::size_t state, BuildContext& context)
+        constexpr static ir::Node node(
+            const Metadata* metadata,
+            std::size_t state,
+            BuildContext& context
+        )
         {
             if (!context.contains(T::id))
             {
@@ -618,7 +630,7 @@ namespace nil::sm::ir::detail
     };
 
     template <template <typename> typename API, typename T, typename RegionInitial>
-    ir::Node build_node(
+    constexpr ir::Node build_node(
         const nil::sm::Metadata* parent,
         std::size_t region,
         std::size_t state,
@@ -635,7 +647,7 @@ namespace nil::sm::ir
 {
     namespace detail
     {
-        inline bool is_satisfied(
+        constexpr bool is_satisfied(
             const Dependency& requirement,
             const std::vector<Dependency>& ancestor_props,
             bool has_parent
@@ -650,7 +662,7 @@ namespace nil::sm::ir
                   );
         }
 
-        inline void append_unsatisfied_arg(
+        constexpr void append_unsatisfied_arg(
             std::vector<UnsatisfiedArgument>& unsatisfied_args,
             UnsatisfiedArgument requirement
         )
@@ -671,7 +683,8 @@ namespace nil::sm::ir
             }
         }
 
-        inline void collect_unsatisfied_args(
+        // NOLINTNEXTLINE
+        constexpr void collect_unsatisfied_args(
             const std::vector<Node>& nodes,
             const std::vector<Dependency>& ancestor_props,
             bool has_parent,
@@ -730,7 +743,7 @@ namespace nil::sm::ir
         }
 
         template <template <typename> typename API, typename T>
-        Model build_unchecked(const nil::sm::Metadata* parent)
+        constexpr Model build_unchecked(const nil::sm::Metadata* parent)
         {
             auto context = BuildContext{};
             return Model{
@@ -744,7 +757,7 @@ namespace nil::sm::ir
     }
 
     template <template <typename> typename API, typename T>
-    Model build(const nil::sm::Metadata* parent = nullptr)
+    constexpr Model build(const nil::sm::Metadata* parent = nullptr)
     {
         return detail::build_unchecked<API, T>(parent);
     }
