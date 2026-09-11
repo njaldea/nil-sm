@@ -1,3 +1,5 @@
 *
 !.gitignore
 !amalgamate.sh
+!benchmark_build.sh
+!COMPILATION_BENCHMARK.md
