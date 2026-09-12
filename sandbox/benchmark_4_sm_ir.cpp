@@ -10,7 +10,7 @@ int main()
     nil::sm::DefaultSM<benchmark::root> sm;
     benchmark::run_benchmark_cycle(sm);
 
-    auto model = nil::sm::ir::build<nil::sm::api::Default<>::type, benchmark::root>();
+    auto model = nil::sm::ir::build<nil::sm::api::Default<>, benchmark::root>();
     (void)model;
     return 0;
 }

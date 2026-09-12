@@ -13,9 +13,8 @@ int main()
     toll::booth_context state_context;
     toll::trace_context api_context;
 
-    nil::sm::
-        SM<nil::sm::api::Coalesce<toll::tracing_api>::type, toll::bslot::booth, toll::booth_context>
-            machine{&api_context, &state_context};
+    nil::sm::SM<nil::sm::api::Coalesce<toll::tracing_api>, toll::bslot::booth, toll::booth_context>
+        machine{&api_context, &state_context};
 
     return toll::repl::loop(
         state_context,

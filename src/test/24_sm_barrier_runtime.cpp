@@ -43,8 +43,7 @@ namespace
         }
     };
 
-    template <typename T>
-    using default_api = nil::sm::api::Default<>::type<T>;
+    using default_api = nil::sm::api::Default<>;
 
     NIL_SM_BARRIER_DECLARE(first_barrier_state, default_api);
     NIL_SM_BARRIER_DECLARE(second_barrier_state, default_api);
@@ -118,8 +117,7 @@ namespace
 
     bool exit_child::exited = false;
 
-    template <typename T>
-    using exit_api = nil::sm::api::Default<>::type<T>;
+    using exit_api = nil::sm::api::Default<>;
 
     NIL_SM_BARRIER_DECLARE(exit_barrier_state, exit_api);
     NIL_SM_BARRIER_DEFINE(exit_barrier_state, exit_child);
@@ -185,8 +183,7 @@ namespace
         }
     };
 
-    template <typename T>
-    using owner_child_api = nil::sm::api::Default<>::type<T>;
+    using owner_child_api = nil::sm::api::Default<>;
 
     NIL_SM_BARRIER_DECLARE(owner_barrier_state, owner_child_api);
     NIL_SM_BARRIER_DEFINE(owner_barrier_state, child_finishing_state);
@@ -240,8 +237,7 @@ namespace
         capture_observer* observer;
     };
 
-    template <typename T>
-    using capture_child_api = nil::sm::api::Default<>::type<T>;
+    using capture_child_api = nil::sm::api::Default<>;
 
     NIL_SM_BARRIER_DECLARE(capture_barrier_state, capture_child_api);
     NIL_SM_BARRIER_DEFINE(capture_barrier_state, capture_child_state);
@@ -280,8 +276,7 @@ namespace
         }
     };
 
-    template <typename T>
-    using bubbling_child_api = nil::sm::api::Default<>::type<T>;
+    using bubbling_child_api = nil::sm::api::Default<>;
 
     NIL_SM_BARRIER_DECLARE(bubbling_barrier_state, bubbling_child_api);
     NIL_SM_BARRIER_DEFINE(bubbling_barrier_state, bubbling_child_state);

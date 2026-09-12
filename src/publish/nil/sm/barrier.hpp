@@ -13,17 +13,16 @@
 
 // Not `final`: to override `name` or add other state properties, inherit from the
 // generated struct and declare them in the derived class.
-#define NIL_SM_BARRIER_DECLARE_IMPL(NAME, API, DISPLAY_NAME)                                                    \
-    struct NAME                                                                                                 \
-    {                                                                                                           \
-        template <typename T>                                                                                   \
-        using api = API<T>;                                                                                     \
-        using api_context_t = typename API<nil::sm::detail::api_tag>::api_context_t;                            \
-        static constexpr auto name = DISPLAY_NAME;                                                              \
-        [[maybe_unused]] static constexpr auto id = nil::xalt::type_id<API<NAME>>;                              \
-        static std::unique_ptr<nil::sm::ISM>                                                                    \
-            make(nil::sm::detail::IState*, nil::sm::detail::Queues*, api_context_t*, const nil::sm::Metadata*); \
-        static nil::sm::ir::Model ir(const nil::sm::Metadata*);                                                 \
+#define NIL_SM_BARRIER_DECLARE_IMPL(NAME, API, DISPLAY_NAME)                                                                  \
+    struct NAME                                                                                                               \
+    {                                                                                                                         \
+        using api = API;                                                                                                      \
+        static constexpr auto name = DISPLAY_NAME;                                                                            \
+        [[maybe_unused]] static constexpr auto id                                                                             \
+            = nil::xalt::type_id<typename API::template api<NAME>>;                                                           \
+        static std::unique_ptr<nil::sm::ISM>                                                                                  \
+            make(nil::sm::detail::IState*, nil::sm::detail::Queues*, typename API::api_context_t*, const nil::sm::Metadata*); \
+        static nil::sm::ir::Model ir(const nil::sm::Metadata*);                                                               \
     }
 
 #define NIL_SM_BARRIER_DECLARE_1(NAME, API) NIL_SM_BARRIER_DECLARE_IMPL(NAME, API, #NAME)
@@ -36,11 +35,11 @@
     [[maybe_unused]] std::unique_ptr<nil::sm::ISM> NAME::make(                                     \
         nil::sm::detail::IState* parent,                                                           \
         nil::sm::detail::Queues* queues,                                                           \
-        api_context_t* api_contexts,                                                               \
+        typename NAME::api::api_context_t* api_contexts,                                           \
         const nil::sm::Metadata* parent_metadata                                                   \
     )                                                                                              \
     {                                                                                              \
-        return std::make_unique<nil::sm::barrier::SM<NAME::template api, STATE>>(                  \
+        return std::make_unique<nil::sm::barrier::SM<NAME::api, STATE>>(                           \
             parent,                                                                                \
             queues,                                                                                \
             api_contexts,                                                                          \
@@ -49,7 +48,7 @@
     }                                                                                              \
     [[maybe_unused]] nil::sm::ir::Model NAME::ir(const nil::sm::Metadata* parent_metadata)         \
     {                                                                                              \
-        return nil::sm::ir::detail::build_unchecked<NAME::template api, STATE>(parent_metadata);   \
+        return nil::sm::ir::detail::build_unchecked<typename NAME::api, STATE>(parent_metadata);   \
     }
 
 namespace nil::sm::barrier
@@ -115,16 +114,17 @@ namespace nil::sm::barrier
     };
 
     // Borrows the host queues and contexts; the host remains responsible for flushing queues.
-    template <template <typename> typename API, typename T>
+    template <typename API, typename T>
     class SM final: public ISM
     {
+        using api_context_t = typename API::api_context_t;
         using region_dispatcher_t = detail::region_dispatcher<API, nil::xalt::tlist<T>>;
 
     public:
         explicit SM(
             detail::IState* init_parent,
             detail::Queues* init_queues,
-            void* init_api_contexts,
+            api_context_t* init_api_contexts,
             const Metadata* init_parent_metadata = nullptr
         )
             : queues(init_queues)
@@ -154,7 +154,7 @@ namespace nil::sm::barrier
 
     private:
         detail::Queues* queues;
-        void* api_contexts;
+        api_context_t* api_contexts;
         detail::Region region;
 
         action_t post_impl(detail::Event event) override
@@ -170,12 +170,11 @@ namespace nil::sm::barrier
 
 namespace nil::sm
 {
-    template <template <typename> typename API, typename Action, typename T>
+    template <typename API, typename Action, typename T>
     class State<API, barrier::State<Action, T>> final: public detail::IState
     {
-        using barrier_api_t = typename T::template api<T>;
-        using child_api_context_t = typename barrier_api_t::api_context_t;
-        using parent_api_context_t = detail::api_context_t<API>;
+        using child_api_context_t = typename T::api::api_context_t;
+        using parent_api_context_t = typename API::api_context_t;
         using api_adapter_t = barrier::context_adapter<parent_api_context_t, child_api_context_t>;
 
     public:

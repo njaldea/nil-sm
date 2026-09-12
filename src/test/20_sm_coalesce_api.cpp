@@ -62,27 +62,34 @@ namespace
 
     // Partial API: only defines `make`. All other methods (on_event, on_enter,
     // on_exit, on_regions_finalized) are absent — api::Coalesce fills them in.
-    template <typename T>
     struct MakeOnlyAPI
     {
         using api_context_t = MakeObserver;
 
-        template <typename... Args>
-        static T make(api_context_t* api_contexts, const nil::sm::Metadata& metadata, Args*... args)
+        template <typename T>
+        struct api
         {
-            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+            template <typename... Args>
+            static T make(
+                api_context_t* api_contexts,
+                const nil::sm::Metadata& metadata,
+                Args*... args
+            )
             {
-                api_contexts->on_construct();
+                if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+                {
+                    api_contexts->on_construct();
+                }
+                // Delegate construction to api::Default
+                return nil::sm::api::Default<api_context_t>::template api<T>::make(
+                    api_contexts,
+                    metadata,
+                    args...
+                );
             }
-            // Delegate construction to api::Default
-            return nil::sm::api::Default<api_context_t>::type<T>::make(
-                api_contexts,
-                metadata,
-                args...
-            );
-        }
 
-        // on_event, on_enter, on_exit, on_regions_finalized — not defined here
+            // on_event, on_enter, on_exit, on_regions_finalized — not defined here
+        };
     };
 
     // ---- Test 2: partial API that intercepts only `on_enter` ----
@@ -95,22 +102,28 @@ namespace
 
     // Partial API: only defines `on_enter`. make, on_event, on_exit,
     // on_regions_finalized — all fall through to defaults via api::Coalesce.
-    template <typename T>
     struct EnterOnlyAPI
     {
         using api_context_t = EnterObserver;
 
-        static auto on_enter(T& state, api_context_t* api_contexts)
+        template <typename T>
+        struct api
         {
-            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+            static auto on_enter(T& state, api_context_t* api_contexts)
             {
-                api_contexts->on_enter_intercepted();
+                if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+                {
+                    api_contexts->on_enter_intercepted();
+                }
+                // Delegate to api::Default for actual state hook dispatch
+                return nil::sm::api::Default<api_context_t>::template api<T>::on_enter(
+                    state,
+                    api_contexts
+                );
             }
-            // Delegate to api::Default for actual state hook dispatch
-            return nil::sm::api::Default<api_context_t>::type<T>::on_enter(state, api_contexts);
-        }
 
-        // make, on_event, on_exit, on_regions_finalized — not defined here
+            // make, on_event, on_exit, on_regions_finalized — not defined here
+        };
     };
 
     class CombinedObserver
@@ -120,29 +133,39 @@ namespace
         MOCK_METHOD(void, on_enter_intercepted, (), ());
     };
 
-    template <typename T>
     struct MakeAndEnterAPI
     {
         using api_context_t = CombinedObserver;
 
-        template <typename... Args>
-        static T make(api_context_t* context, const nil::sm::Metadata& metadata, Args*... args)
+        template <typename T>
+        struct api
         {
-            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+            template <typename... Args>
+            static T make(api_context_t* context, const nil::sm::Metadata& metadata, Args*... args)
             {
-                context->on_construct();
+                if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+                {
+                    context->on_construct();
+                }
+                return nil::sm::api::Default<api_context_t>::template api<T>::make(
+                    context,
+                    metadata,
+                    args...
+                );
             }
-            return nil::sm::api::Default<api_context_t>::type<T>::make(context, metadata, args...);
-        }
 
-        static auto on_enter(T& state, api_context_t* context)
-        {
-            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+            static auto on_enter(T& state, api_context_t* context)
             {
-                context->on_enter_intercepted();
+                if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+                {
+                    context->on_enter_intercepted();
+                }
+                return nil::sm::api::Default<api_context_t>::template api<T>::on_enter(
+                    state,
+                    context
+                );
             }
-            return nil::sm::api::Default<api_context_t>::type<T>::on_enter(state, context);
-        }
+        };
     };
 
     // ---- Test 3: partial API that intercepts only `on_event` ----
@@ -155,26 +178,29 @@ namespace
 
     // Partial API: only defines `on_event`. make, on_enter, on_exit,
     // on_regions_finalized — all fall through to defaults via api::Coalesce.
-    template <typename T>
     struct EventOnlyAPI
     {
         using api_context_t = EventObserver;
 
-        template <typename E>
-        static auto on_event(T& state, const E& event, EventObserver* api_contexts)
+        template <typename T>
+        struct api
         {
-            if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+            template <typename E>
+            static auto on_event(T& state, const E& event, EventObserver* api_contexts)
             {
-                api_contexts->on_event_intercepted();
+                if constexpr (!std::is_same_v<T, nil::sm::Fin>)
+                {
+                    api_contexts->on_event_intercepted();
+                }
+                return nil::sm::api::Default<EventObserver>::template api<T>::template on_event<E>(
+                    state,
+                    event,
+                    api_contexts
+                );
             }
-            return nil::sm::api::Default<EventObserver>::type<T>::template on_event<E>(
-                state,
-                event,
-                api_contexts
-            );
-        }
 
-        // make, on_enter, on_exit, on_regions_finalized — not defined here
+            // make, on_enter, on_exit, on_regions_finalized — not defined here
+        };
     };
 
     // ---- Test 4: state declares `args` for multi-arg constructor injection ----
@@ -217,7 +243,7 @@ TEST(sm_feature_coalesce_api, make_intercepted_construction_observer_called)
     testing::InSequence seq;
 
     EXPECT_CALL(obs, on_construct()).Times(1);
-    nil::sm::SM<nil::sm::api::Coalesce<MakeOnlyAPI>::type, counting_leaf> sm{&obs};
+    nil::sm::SM<nil::sm::api::Coalesce<MakeOnlyAPI>, counting_leaf> sm{&obs};
 
     // on_event falls through to api::Default — counting_leaf handles e_tick
     {
@@ -238,7 +264,7 @@ TEST(sm_feature_coalesce_api, on_enter_intercepted_enter_observer_called)
 
     // lifecycle_leaf has on_enter — our interceptor fires, then calls default
     EXPECT_CALL(obs, on_enter_intercepted()).Times(1);
-    nil::sm::SM<nil::sm::api::Coalesce<EnterOnlyAPI>::type, lifecycle_leaf> sm{&obs};
+    nil::sm::SM<nil::sm::api::Coalesce<EnterOnlyAPI>, lifecycle_leaf> sm{&obs};
 
     {
         sm.post(e_tick{}); // on_event falls through to default; state discards
@@ -252,7 +278,7 @@ TEST(sm_feature_coalesce_api, multiple_partial_hooks_compose)
 
     EXPECT_CALL(obs, on_construct()).Times(1);
     EXPECT_CALL(obs, on_enter_intercepted()).Times(1);
-    nil::sm::SM<nil::sm::api::Coalesce<MakeAndEnterAPI>::type, lifecycle_leaf> sm{&obs};
+    nil::sm::SM<nil::sm::api::Coalesce<MakeAndEnterAPI>, lifecycle_leaf> sm{&obs};
 
     sm.post(e_tick{});
 }
@@ -264,7 +290,7 @@ TEST(sm_feature_coalesce_api, on_event_intercepted_event_observer_called)
     testing::StrictMock<EventObserver> obs;
     testing::InSequence sequence;
 
-    nil::sm::SM<nil::sm::api::Coalesce<EventOnlyAPI>::type, lifecycle_leaf> sm{&obs};
+    nil::sm::SM<nil::sm::api::Coalesce<EventOnlyAPI>, lifecycle_leaf> sm{&obs};
 
     {
         EXPECT_CALL(obs, on_event_intercepted()).Times(1);

@@ -86,7 +86,7 @@ properties declared by ancestors. Missing requirements set
 
 ```cpp
 auto model = nil::sm::ir::build<
-    nil::sm::api::Default<>::type,
+    nil::sm::api::Default<>,
     parent>();
 const bool valid = nil::sm::validate(model);
 
@@ -98,7 +98,7 @@ root types directly at compile-time or runtime:
 
 ```cpp
 static_assert(nil::sm::validate<
-    nil::sm::api::Default<>::type,
+    nil::sm::api::Default<>,
     parent>());
 ```
 
@@ -151,7 +151,7 @@ struct LoggingAPI
     {
         if constexpr (!std::is_same_v<State, nil::sm::Fin>)
             observer->entered(nil::xalt::type_id<State>);
-        return nil::sm::api::Default<Observer>::type<State>::on_enter(
+        return nil::sm::api::Default<Observer>::api<State>::on_enter(
             state,
             observer
         );

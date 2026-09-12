@@ -290,6 +290,6 @@ namespace nil::sm
         void* data = nullptr;
     };
 
-    template <template <typename> typename API, typename T>
+    template <typename API, typename T>
     class State;
 }

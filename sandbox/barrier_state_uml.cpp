@@ -35,8 +35,7 @@ namespace demo
         }
     };
 
-    template <typename T>
-    using child_api = nil::sm::api::Default<>::type<T>;
+        using child_api = nil::sm::api::Default<>;
 
     NIL_SM_BARRIER_DECLARE(second_level_barrier_state, child_api);
     NIL_SM_BARRIER_DEFINE(second_level_barrier_state, second_level_missing);

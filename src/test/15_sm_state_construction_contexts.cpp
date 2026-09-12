@@ -175,61 +175,65 @@ namespace
         return &state.free_function_value;
     }
 
-    template <typename T>
     struct parent_identity_api
     {
         using api_context_t = parent_identity_context;
-        using api_t = nil::sm::api::Default<api_context_t>::template type<T>;
-        using regions_t = typename api_t::regions_t;
-        using events_t = typename api_t::events_t;
-        using captures_t = typename api_t::captures_t;
-        using args_t = typename api_t::args_t;
-        using props_t = typename api_t::props_t;
 
-        template <typename... Args>
-        static T make(api_context_t* context, nil::sm::Metadata metadata, Args*... args)
+        template <typename T>
+        struct api
         {
-            if constexpr (std::is_same_v<T, parent_identity_child>)
+            using api_t = nil::sm::api::Default<api_context_t>::template api<T>;
+            using regions_t = typename api_t::regions_t;
+            using events_t = typename api_t::events_t;
+            using captures_t = typename api_t::captures_t;
+            using args_t = typename api_t::args_t;
+            using props_t = typename api_t::props_t;
+
+            template <typename... Args>
+            static T make(api_context_t* context, nil::sm::Metadata metadata, Args*... args)
             {
-                auto capture_first = []<typename First, typename... Rest>(
-                                         First* first,
-                                         Rest*... /* rest */
-                                     ) { return first; };
-                context->received_parent = capture_first(args...);
+                if constexpr (std::is_same_v<T, parent_identity_child>)
+                {
+                    auto capture_first = []<typename First, typename... Rest>(
+                                             First* first,
+                                             Rest*... /* rest */
+                                         ) { return first; };
+                    context->received_parent = capture_first(args...);
+                }
+                return api_t::make(context, metadata, args...);
             }
-            return api_t::make(context, metadata, args...);
-        }
 
-        static auto on_enter(T& state, api_context_t* context)
-        {
-            if constexpr (std::is_same_v<T, parent_identity_parent>)
+            static auto on_enter(T& state, api_context_t* context)
             {
-                context->entered_parent = static_cast<parent_base*>(&state);
+                if constexpr (std::is_same_v<T, parent_identity_parent>)
+                {
+                    context->entered_parent = static_cast<parent_base*>(&state);
+                }
+                return api_t::on_enter(state, context);
             }
-            return api_t::on_enter(state, context);
-        }
 
-        static auto on_exit(T& state, api_context_t* context)
-        {
-            return api_t::on_exit(state, context);
-        }
+            static auto on_exit(T& state, api_context_t* context)
+            {
+                return api_t::on_exit(state, context);
+            }
 
-        static auto on_regions_finalized(T& state, api_context_t* context)
-        {
-            return api_t::on_regions_finalized(state, context);
-        }
+            static auto on_regions_finalized(T& state, api_context_t* context)
+            {
+                return api_t::on_regions_finalized(state, context);
+            }
 
-        template <typename E>
-        static auto on_event(T& state, const E& event, api_context_t* context)
-        {
-            return api_t::on_event(state, event, context);
-        }
+            template <typename E>
+            static auto on_event(T& state, const E& event, api_context_t* context)
+            {
+                return api_t::on_event(state, event, context);
+            }
 
-        template <typename E>
-        static auto on_capture(T& state, const E& event, api_context_t* context)
-        {
-            return api_t::on_capture(state, event, context);
-        }
+            template <typename E>
+            static auto on_capture(T& state, const E& event, api_context_t* context)
+            {
+                return api_t::on_capture(state, event, context);
+            }
+        };
     };
 }
 
@@ -244,7 +248,7 @@ TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_co
 
     EXPECT_CALL(obs, on_construct(42)).Times(1);
     using sm_t = nil::sm::SM<
-        nil::sm::api::Default<void>::type,
+        nil::sm::api::Default<void>,
         parent_and_context_state,
         custom_context,
         ConstructionObserver>;
@@ -262,8 +266,7 @@ TEST(
 {
     testing::StrictMock<ConstructionObserver> obs;
 
-    using sm_t
-        = nil::sm::SM<nil::sm::api::Default<void>::type, default_only_state, ConstructionObserver>;
+    using sm_t = nil::sm::SM<nil::sm::api::Default<void>, default_only_state, ConstructionObserver>;
     sm_t sm{&obs};
     {
         EXPECT_CALL(obs, on_react()).Times(1);
@@ -282,7 +285,7 @@ TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_tw
 
     EXPECT_CALL(obs, on_construct_two(7, 99)).Times(1);
     using sm_t = nil::sm::SM<
-        nil::sm::api::Default<void>::type,
+        nil::sm::api::Default<void>,
         parent_and_two_contexts_state,
         custom_context,
         custom_context2,
@@ -307,7 +310,7 @@ TEST(sm_feature_state_construction_contexts, child_receives_immediate_parent)
 
 TEST(sm_feature_state_construction_contexts, child_receives_values_from_all_prop_accessor_forms)
 {
-    using sm_t = nil::sm::SM<nil::sm::api::Default<void>::type, prop_parent>;
+    using sm_t = nil::sm::SM<nil::sm::api::Default<void>, prop_parent>;
     sm_t sm;
 
     EXPECT_NE(prop_child::data_member, nullptr);

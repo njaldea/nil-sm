@@ -163,11 +163,8 @@ namespace
         }
     };
 
-    template <typename T>
-    using EmitTestAPI = nil::sm::api::Default<void>::template type<T>;
-
     template <typename T, typename... RootArgs>
-    using EmitTestSM = nil::sm::SM<EmitTestAPI, T, RootArgs...>;
+    using EmitTestSM = nil::sm::DefaultSM<T, RootArgs...>;
 
     struct ForwardParent
     {

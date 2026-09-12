@@ -124,7 +124,7 @@ namespace nil::sm
         return !model.has_unsatisfied_args;
     }
 
-    template <template <typename> typename API, typename T>
+    template <typename API, typename T>
     consteval bool validate()
     {
         auto model = ir::build<API, T>();

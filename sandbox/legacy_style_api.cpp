@@ -7,80 +7,13 @@
 // constructor, regardless of what (if anything) the state itself declares via `args`.
 
 #include <nil/sm.hpp>
+#include <nil/sm/diagnostics.hpp>
+#include <nil/sm/format/puml.hpp>
+
+#include <nil/xalt/fn_make.hpp>
 
 #include <cassert>
 #include <iostream>
-
-namespace legacy
-{
-    template <typename Context>
-    struct api
-    {
-        template <typename T>
-        struct type
-        {
-            using state_t = T;
-            using api_context_t = void;
-            using regions_t = nil::xalt::coalesce_t<T, nil::sm::detail::regions_tag>;
-            using events_t = nil::xalt::coalesce_t<T, nil::sm::detail::events_tag>;
-            using captures_t = nil::xalt::coalesce_t<T, nil::sm::detail::captures_tag>;
-            using props_t = nil::xalt::tlist<>;
-
-            using api_t = nil::sm::api::Default<>::type<T>;
-
-            static constexpr auto args_f()
-            {
-                if constexpr (requires() { typename T::parent; })
-                {
-                    return nil::xalt::tlist<nil::sm::direct_parent<typename T::parent>, Context>{};
-                }
-                else
-                {
-                    return nil::xalt::tlist<Context>{};
-                }
-            }
-
-            using args_t = decltype(args_f());
-
-            static state_t make(
-                api_context_t* /* api_contexts */,
-                nil::sm::Metadata /* metadata */,
-                auto*... args
-            )
-            {
-                assert((args != nullptr && ...));
-                return T(args...);
-            }
-
-            template <typename E>
-            static auto on_event(state_t& state, const E& event, api_context_t* api_contexts)
-            {
-                return api_t::on_event(state, event, api_contexts);
-            }
-
-            template <typename E>
-            static auto on_capture(state_t& state, const E& event, api_context_t* api_contexts)
-            {
-                return api_t::on_capture(state, event, api_contexts);
-            }
-
-            static auto on_enter(state_t& state, api_context_t* api_contexts)
-            {
-                return api_t::on_enter(state, api_contexts);
-            }
-
-            static auto on_exit(state_t& state, api_context_t* api_contexts)
-            {
-                return api_t::on_exit(state, api_contexts);
-            }
-
-            static auto on_regions_finalized(state_t& state, api_context_t* api_contexts)
-            {
-                return api_t::on_regions_finalized(state, api_contexts);
-            }
-        };
-    };
-}
 
 namespace demo
 {
@@ -97,6 +30,122 @@ namespace demo
     {
     };
 
+    template <typename T>
+    struct SEvent
+    {
+        explicit SEvent(auto&&... args)
+            : event(std::make_shared<T>(std::forward<decltype(args)>(args)...))
+        {
+        }
+
+        const T& get() const
+        {
+            return *event;
+        }
+
+        std::shared_ptr<const T> event;
+    };
+
+    template <typename T>
+        requires(std::is_copy_constructible_v<T>)
+    struct SEvent<T>
+    {
+        explicit SEvent(auto&&... args)
+            : event(std::forward<decltype(args)>(args)...)
+        {
+        }
+
+        const T& get() const
+        {
+            return event;
+        }
+
+        T event;
+    };
+
+    template <typename T>
+    using SEmit = nil::sm::Emit<SEvent<T>>;
+}
+
+namespace legacy
+{
+    struct fallback_parent
+    {
+    };
+
+    struct legacy_api
+    {
+        using api_context_t = void;
+
+        template <typename T>
+        struct api
+        {
+            using regions_t = nil::xalt::coalesce_t<T, nil::sm::detail::regions_tag>;
+            using events_t = nil::xalt::coalesce_t<T, nil::sm::detail::events_tag>::template apply<
+                demo::SEvent>;
+            using captures_t = nil::xalt::coalesce_t<T, nil::sm::detail::captures_tag>;
+            using props_t = nil::xalt::tlist<>;
+
+            using api_t = typename nil::sm::api::Default<api_context_t>::template api<T>;
+
+            static constexpr auto args_f()
+            {
+                if constexpr (requires() { typename T::parent; })
+                {
+                    return nil::xalt::tlist<
+                        nil::sm::direct_parent<typename T::parent>,
+                        std::shared_ptr<demo::context>>{};
+                }
+                else
+                {
+                    return nil::xalt::tlist<fallback_parent, std::shared_ptr<demo::context>>{};
+                }
+            }
+
+            using args_t = decltype(args_f());
+
+            static T make(
+                api_context_t* /* api_contexts */,
+                const nil::sm::Metadata& /* metadata */,
+                auto* parent,
+                auto* context
+            )
+            {
+                return nil::xalt::fn_make<T>(*parent, *context);
+            }
+
+            template <typename E>
+            static auto on_event(T& state, const E& event, api_context_t* api_contexts)
+            {
+                return api_t::on_event(state, event.get(), api_contexts);
+            }
+
+            template <typename E>
+            static auto on_capture(T& state, const E& event, api_context_t* api_contexts)
+            {
+                return api_t::on_capture(state, event.get(), api_contexts);
+            }
+
+            static auto on_enter(T& state, api_context_t* api_contexts)
+            {
+                return api_t::on_enter(state, api_contexts);
+            }
+
+            static auto on_exit(T& state, api_context_t* api_contexts)
+            {
+                return api_t::on_exit(state, api_contexts);
+            }
+
+            static auto on_regions_finalized(T& state, api_context_t* api_contexts)
+            {
+                return api_t::on_regions_finalized(state, api_contexts);
+            }
+        };
+    };
+}
+
+namespace demo
+{
     // Old-style two-arg constructor: (parent, context). `parent` is untyped (void*) since
     // the framework no longer knows the concrete parent state type - cast it yourself if
     // you know what it is.
@@ -105,41 +154,48 @@ namespace demo
         using events = nil::xalt::tlist<e1>;
         using parent = base;
 
-        explicit child(base* /* parent */, context* context_value)
-            : ctx(context_value)
+        explicit child(auto& /* parent */, std::shared_ptr<context> context_value)
+            : ctx(std::move(context_value))
         {
         }
 
-        auto on_event(const e1& /* event */) const -> nil::sm::Discard
+        template <typename E>
+        void foo(const E&) const;
+
+        auto on_event(const e1& /* event */) const
         {
             ctx->value++;
-            return {};
+            return nil::sm::Discard();
         }
 
-        context* ctx;
+        std::shared_ptr<context> ctx;
     };
 
     struct root: base
     {
         using regions = nil::xalt::tlist<child>;
 
-        explicit root(context* /* ctx */)
+        explicit root(const std::shared_ptr<context>& /* ctx */)
         {
         }
     };
-
-    template <typename T>
-    using legacy_api_t = legacy::api<context>::template type<T>;
 }
 
 int main()
 {
-    demo::context ctx;
+    std::shared_ptr<demo::context> ctx = std::make_shared<demo::context>();
+    legacy::fallback_parent fp{};
 
-    nil::sm::SM<demo::legacy_api_t, demo::root, demo::context> machine{&ctx};
+    using LegacySM = nil::sm::
+        SM<legacy::legacy_api, demo::root, legacy::fallback_parent, std::shared_ptr<demo::context>>;
 
+    LegacySM machine{&fp, &ctx};
+
+    nil::sm::puml<LegacySM> diagram;
+
+    std::cout << diagram.root;
     machine.post(demo::e1{});
 
-    assert(ctx.value == 1);
+    assert(ctx->value == 1);
     std::cout << "legacy style api: ok\n";
 }

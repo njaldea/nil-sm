@@ -32,14 +32,14 @@ namespace nil::sm::barrier
 
 namespace nil::sm
 {
-    template <template <typename> typename API, typename T>
+    template <typename API, typename T>
     class State final: public detail::IState
     {
     public:
-        using api_t = API<T>;
+        using api_t = API::template api<T>;
         using self_t = State<API, T>;
         using metadata_t = Metadata;
-        using api_context_t = typename api_t::api_context_t;
+        using api_context_t = typename API::api_context_t;
 
     private:
         using regions_t = typename api_t::regions_t;
@@ -385,11 +385,11 @@ namespace nil::sm
         virtual action_t post_impl(detail::Event event) = 0;
     };
 
-    template <template <typename> typename API, typename T, typename... RootArgs>
+    template <typename API, typename T, typename... Props>
     class SM final: public ISM
     {
-        using api_t = API<T>;
-        using api_context_t = typename api_t::api_context_t;
+        using api_t = API::template api<T>;
+        using api_context_t = typename API::api_context_t;
         using region_dispatcher_t = detail::region_dispatcher<API, nil::xalt::tlist<T>>;
 
         struct construct_tag final
@@ -399,7 +399,7 @@ namespace nil::sm
         explicit SM(
             construct_tag /* tag */,
             api_context_t* init_api_contexts,
-            RootArgs*... init_root_args
+            Props*... init_root_args
         )
             : api_contexts(init_api_contexts)
             , root(init_root_args...)
@@ -409,13 +409,13 @@ namespace nil::sm
         }
 
     public:
-        explicit SM(api_context_t* init_api_contexts, RootArgs*... init_root_args)
+        explicit SM(api_context_t* init_api_contexts, Props*... init_root_args)
             requires(!std::is_void_v<api_context_t>)
             : SM(construct_tag{}, init_api_contexts, init_root_args...)
         {
         }
 
-        explicit SM(RootArgs*... init_root_args)
+        explicit SM(Props*... init_root_args)
             requires std::is_void_v<api_context_t>
             : SM(construct_tag{}, nullptr, init_root_args...)
         {
@@ -437,7 +437,7 @@ namespace nil::sm
     private:
         detail::Queues queues;
         api_context_t* api_contexts;
-        detail::RootState<RootArgs...> root;
+        detail::RootState<Props...> root;
         detail::Region region;
 
         action_t dispatch(const detail::Event& event)
@@ -459,9 +459,9 @@ namespace nil::sm
         }
     };
 
-    template <typename T, typename... RootArgs>
-    using DefaultSM = SM<api::Default<>::template type, T, RootArgs...>;
+    template <typename T, typename... Props>
+    using DefaultSM = SM<api::Default<>, T, Props...>;
 
-    template <template <typename> typename API, typename T, typename... RootArgs>
-    using CoalescedSM = SM<api::Coalesce<API>::template type, T, RootArgs...>;
+    template <typename API, typename T, typename... Props>
+    using CoalescedSM = SM<api::Coalesce<API>, T, Props...>;
 }

@@ -30,13 +30,6 @@
 
 namespace nil::sm::detail
 {
-    struct api_tag final
-    {
-    };
-
-    template <template <typename> typename API>
-    using api_context_t = typename API<api_tag>::api_context_t;
-
     NIL_XALT_COALESCE_TAG(regions, nil::xalt::tlist<>);
     NIL_XALT_COALESCE_TAG(events, nil::xalt::tlist<>);
     NIL_XALT_COALESCE_TAG(captures, nil::xalt::tlist<>);
@@ -208,12 +201,12 @@ namespace nil::sm::detail
         std::vector<Event> deferred;
         bool terminated = false;
 
-        template <template <typename> typename API, typename R>
+        template <typename API, typename R>
         struct tag
         {
         };
 
-        template <template <typename> typename API, typename R>
+        template <typename API, typename R>
         Region(
             tag<API, R> /* tag */,
             std::size_t init_index,
@@ -230,8 +223,9 @@ namespace nil::sm::detail
             , active_state(std::make_unique<State<API, R>>(
                   init_parent,
                   init_queues,
-                  static_cast<typename API<R>::api_context_t*>(init_api_contexts),
-                  make_metadata<R>(init_index, 0, API<R>::regions_t::size, parent_metadata)
+                  static_cast<typename API::api_context_t*>(init_api_contexts),
+                  make_metadata<
+                      R>(init_index, 0, API::template api<R>::regions_t::size, parent_metadata)
               ))
         {
         }
@@ -338,15 +332,12 @@ namespace nil::sm::detail
         using type = nil::xalt::tlist_join_t<typename transit_targets_from_action<R>::type...>;
     };
 
-    template <typename APIState>
-    struct state_transit_targets;
-
-    template <template <typename...> typename API, typename StateT, typename... Rest>
-    struct state_transit_targets<API<StateT, Rest...>>
+    template <typename API, typename StateT>
+    struct state_transit_targets
     {
     private:
-        using api_t = API<StateT, Rest...>;
-        using api_context_t = typename api_t::api_context_t;
+        using api_t = typename API::template api<StateT>;
+        using api_context_t = typename API::api_context_t;
 
         template <typename E>
         using event_result_t = decltype(api_t::template on_event<E>(
@@ -392,33 +383,22 @@ namespace nil::sm::detail
             ))>::type>>;
     };
 
-    template <template <typename> typename API, typename Pending, typename Seen>
+    template <typename API, typename Pending, typename Seen>
     struct reachable_state_set_impl;
 
-    template <template <typename> typename API, typename Seen>
+    template <typename API, typename Seen>
     struct reachable_state_set_impl<API, nil::xalt::tlist<>, Seen>
     {
         using type = Seen;
     };
 
-    template <template <typename> typename API, typename InitialState, typename Siblings>
+    template <typename API, typename InitialState, typename Siblings>
     struct region_state_set;
 
-    template <
-        template <typename...>
-        typename API,
-        bool AlreadySeen,
-        typename Head,
-        typename PendingTail,
-        typename Seen>
+    template <typename API, bool AlreadySeen, typename Head, typename PendingTail, typename Seen>
     struct reachable_state_step;
 
-    template <
-        template <typename...>
-        typename API,
-        typename Head,
-        typename... Tail,
-        typename... Seen>
+    template <typename API, typename Head, typename... Tail, typename... Seen>
     struct reachable_state_step<
         API,
         true,
@@ -430,12 +410,7 @@ namespace nil::sm::detail
         using next_seen = nil::xalt::tlist<Seen...>;
     };
 
-    template <
-        template <typename...>
-        typename API,
-        typename Head,
-        typename... Tail,
-        typename... Seen>
+    template <typename API, typename Head, typename... Tail, typename... Seen>
     struct reachable_state_step<
         API,
         false,
@@ -445,11 +420,11 @@ namespace nil::sm::detail
     {
         using next_pending = nil::xalt::tlist_join_t<
             nil::xalt::tlist<Tail...>,
-            typename state_transit_targets<API<Head>>::type>;
+            typename state_transit_targets<API, Head>::type>;
         using next_seen = nil::xalt::tlist<Seen..., Head>;
     };
 
-    template <template <typename> typename API, typename Head, typename... Tail, typename... Seen>
+    template <typename API, typename Head, typename... Tail, typename... Seen>
     struct reachable_state_set_impl<API, nil::xalt::tlist<Head, Tail...>, nil::xalt::tlist<Seen...>>
     {
         static constexpr auto already_seen = nil::xalt::tlist<Seen...>::template contains<Head>;
@@ -467,33 +442,33 @@ namespace nil::sm::detail
             typename step::next_seen>::type;
     };
 
-    template <template <typename> typename API, typename SeedStates>
+    template <typename API, typename SeedStates>
     struct reachable_state_set
     {
         using type = typename reachable_state_set_impl<API, SeedStates, nil::xalt::tlist<>>::type;
     };
 
-    template <template <typename> typename API, typename InitialState, typename... Sibling>
+    template <typename API, typename InitialState, typename... Sibling>
     struct region_state_set<API, InitialState, nil::xalt::tlist<Sibling...>>
     {
         using type = nil::xalt::tlist<InitialState, Sibling...>;
     };
 
-    template <template <typename> typename API, typename InitialState>
+    template <typename API, typename InitialState>
     struct region_state_set<API, InitialState, void>
     {
         using type = typename reachable_state_set<API, nil::xalt::tlist<InitialState>>::type;
     };
 
-    template <template <typename> typename API, typename States>
+    template <typename API, typename States>
     struct state_maker;
 
     // This table is one static instance for each API and reachable state-list
     // combination. Graphs with the same list reuse the table.
-    template <template <typename> typename API, typename... State>
+    template <typename API, typename... State>
     struct state_maker<API, nil::xalt::tlist<State...>>
     {
-        using api_context_t = detail::api_context_t<API>;
+        using api_context_t = typename API::api_context_t;
         using maker_t = std::unique_ptr<
             IState> (*)(IState*, Queues*, api_context_t*, std::size_t, std::size_t, const Metadata*);
 
@@ -514,7 +489,7 @@ namespace nil::sm::detail
                 make_metadata<Candidate>(
                     region,
                     state,
-                    API<Candidate>::regions_t::size,
+                    API::template api<Candidate>::regions_t::size,
                     parent_metadata
                 )
             );
@@ -527,10 +502,10 @@ namespace nil::sm::detail
         }
     };
 
-    template <template <typename> typename API, typename InitialState>
+    template <typename API, typename InitialState>
     struct region_reachability_graph
     {
-        using api_context_t = typename API<InitialState>::api_context_t;
+        using api_context_t = typename API::api_context_t;
         // This graph describes one region. Composite states have one graph per
         // region because each region can have a different reachable state set.
         using states = typename region_state_set<
@@ -586,16 +561,16 @@ namespace nil::sm::detail
         }
     };
 
-    template <template <typename> typename API, typename Regions>
+    template <typename API, typename Regions>
     struct region_dispatcher;
 
     // Merges what used to be a separate region_maker: builds the per-index
     // reachable-state table and adds the Fin fallback in one template.
-    template <template <typename> typename API, typename... Region>
+    template <typename API, typename... Region>
     struct region_dispatcher<API, nil::xalt::tlist<Region...>>
     {
     public:
-        using api_context_t = detail::api_context_t<API>;
+        using api_context_t = typename API::api_context_t;
 
     private:
         using maker_t = std::unique_ptr<
@@ -643,7 +618,7 @@ namespace nil::sm::detail
                     make_metadata<Fin>(
                         region,
                         Fin::state_index,
-                        API<Fin>::regions_t::size,
+                        API::template api<Fin>::regions_t::size,
                         parent_metadata
                     )
                 );
@@ -689,12 +664,8 @@ namespace nil::sm::detail
 
     struct event_dispatch_policy
     {
-        template <typename API, typename StateT, typename Event>
-        static on_event_t invoke(
-            StateT& state,
-            const Event& event,
-            typename API::api_context_t* context
-        )
+        template <typename API, typename StateT, typename Event, typename ApiContext>
+        static on_event_t invoke(StateT& state, const Event& event, ApiContext* context)
         {
             return to_runtime_action_as<on_event_t>(
                 API::template on_event<Event>(state, event, context)
@@ -706,12 +677,8 @@ namespace nil::sm::detail
     // only the API hook selected by the policy differs.
     struct capture_dispatch_policy
     {
-        template <typename API, typename StateT, typename Event>
-        static on_event_t invoke(
-            StateT& state,
-            const Event& event,
-            typename API::api_context_t* context
-        )
+        template <typename API, typename StateT, typename Event, typename ApiContext>
+        static on_event_t invoke(StateT& state, const Event& event, ApiContext* context)
         {
             return to_runtime_action_as<on_event_t>(
                 API::template on_capture<Event>(state, event, context)
@@ -727,7 +694,7 @@ namespace nil::sm::detail
     {
     private:
         using api_t = typename S::api_t;
-        using api_context_t = typename api_t::api_context_t;
+        using api_context_t = typename S::api_context_t;
 
         struct event_handler
         {
@@ -738,7 +705,7 @@ namespace nil::sm::detail
         template <typename EV>
         static on_event_t call(T& state_value, const void* event, void* api_contexts)
         {
-            return Policy::template invoke<api_t, T>(
+            return Policy::template invoke<api_t, T, EV, api_context_t>(
                 state_value,
                 *static_cast<const EV*>(event),
                 static_cast<api_context_t*>(api_contexts)

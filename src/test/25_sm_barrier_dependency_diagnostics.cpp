@@ -42,8 +42,7 @@ namespace
         }
     };
 
-    template <typename T>
-    using barrier_api = nil::sm::api::Default<>::type<T>;
+    using barrier_api = nil::sm::api::Default<>;
 
     struct two_levels_ok_root
     {

@@ -171,8 +171,8 @@ namespace
     // Overloads are currently legal in this runtime.
     static_assert(nil::sm::concepts::has_valid_on_event<overloads_are_legal, e1>);
 
-    static_assert(nil::sm::validate<nil::sm::api::Default<>::type, dependency_provider>());
-    static_assert(!nil::sm::validate<nil::sm::api::Default<>::type, missing_dependency_provider>());
+    static_assert(nil::sm::validate<nil::sm::api::Default<>, dependency_provider>());
+    static_assert(!nil::sm::validate<nil::sm::api::Default<>, missing_dependency_provider>());
 }
 
 TEST(sm_feature_compile_time_diagnostics, static_checks_compile)
@@ -182,11 +182,11 @@ TEST(sm_feature_compile_time_diagnostics, static_checks_compile)
 
 TEST(sm_feature_compile_time_diagnostics, ir_build_validates_ancestor_properties)
 {
-    auto valid_model = nil::sm::ir::build<nil::sm::api::Default<>::type, dependency_provider>();
+    auto valid_model = nil::sm::ir::build<nil::sm::api::Default<>, dependency_provider>();
     EXPECT_TRUE(nil::sm::validate(valid_model));
 
     auto missing_model
-        = nil::sm::ir::build<nil::sm::api::Default<>::type, missing_dependency_provider>();
+        = nil::sm::ir::build<nil::sm::api::Default<>, missing_dependency_provider>();
     EXPECT_FALSE(nil::sm::validate(missing_model));
     EXPECT_TRUE(missing_model.has_unsatisfied_args);
     EXPECT_TRUE(missing_model.roots.front().regions.front().front().has_unsatisfied_args);
@@ -196,12 +196,12 @@ TEST(sm_feature_compile_time_diagnostics, ir_build_validates_ancestor_properties
     EXPECT_NE(puml.str().find("<<invalid-args>>"), std::string::npos);
     EXPECT_EQ(puml.str().find("ERROR:"), std::string::npos);
     EXPECT_NO_THROW((
-        [] { (void)nil::sm::ir::build<nil::sm::api::Default<>::type, direct_parent_provider>(); }()
+        [] { (void)nil::sm::ir::build<nil::sm::api::Default<>, direct_parent_provider>(); }()
     ));
     EXPECT_NO_THROW((
         [] {
             (void
-            )nil::sm::ir::build<nil::sm::api::Default<>::type, transition_dependency_provider>();
+            )nil::sm::ir::build<nil::sm::api::Default<>, transition_dependency_provider>();
         }()
     ));
 }

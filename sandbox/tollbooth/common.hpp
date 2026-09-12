@@ -540,62 +540,69 @@ namespace toll::generic
 
 namespace toll
 {
-    template <typename T>
     struct tracing_api
     {
         using api_context_t = trace_context;
 
-        template <typename... Args>
-        static T make(api_context_t* api_contexts, const nil::sm::Metadata& metadata, Args*... args)
+        template <typename T>
+        struct api
         {
-            if (api_contexts != nullptr)
+            template <typename... Args>
+            static T make(
+                api_context_t* api_contexts,
+                const nil::sm::Metadata& metadata,
+                Args*... args
+            )
             {
-                api_contexts->constructed++;
-                api_contexts->max_depth = std::max(api_contexts->max_depth, metadata.depth);
-                if (metadata.subregions == 0)
+                if (api_contexts != nullptr)
                 {
-                    trace_context::print_path(std::cout, &metadata);
-                    std::cout << '\n';
+                    api_contexts->constructed++;
+                    api_contexts->max_depth = std::max(api_contexts->max_depth, metadata.depth);
+                    if (metadata.subregions == 0)
+                    {
+                        trace_context::print_path(std::cout, &metadata);
+                        std::cout << '\n';
+                    }
                 }
+                return nil::sm::api::Default<trace_context>::api<T>::make(
+                    api_contexts,
+                    metadata,
+                    args...
+                );
             }
-            return nil::sm::api::Default<trace_context>::type<T>::make(
-                api_contexts,
-                metadata,
-                args...
-            );
-        }
 
-        template <typename E>
-        static auto on_event(T& state, const E& event, trace_context* api_contexts)
-        {
-            if (api_contexts != nullptr)
+            template <typename E>
+            static auto on_event(T& state, const E& event, trace_context* api_contexts)
             {
-                api_contexts->events++;
+                if (api_contexts != nullptr)
+                {
+                    api_contexts->events++;
+                }
+                return nil::sm::api::Default<trace_context>::api<T>::on_event(
+                    state,
+                    event,
+                    api_contexts
+                );
             }
-            return nil::sm::api::Default<trace_context>::type<T>::on_event(
-                state,
-                event,
-                api_contexts
-            );
-        }
 
-        static auto on_enter(T& state, trace_context* api_contexts)
-        {
-            if (api_contexts != nullptr)
+            static auto on_enter(T& state, trace_context* api_contexts)
             {
-                api_contexts->entered++;
+                if (api_contexts != nullptr)
+                {
+                    api_contexts->entered++;
+                }
+                return nil::sm::api::Default<trace_context>::api<T>::on_enter(state, api_contexts);
             }
-            return nil::sm::api::Default<trace_context>::type<T>::on_enter(state, api_contexts);
-        }
 
-        static auto on_exit(T& state, trace_context* api_contexts)
-        {
-            if (api_contexts != nullptr)
+            static auto on_exit(T& state, trace_context* api_contexts)
             {
-                api_contexts->exited++;
+                if (api_contexts != nullptr)
+                {
+                    api_contexts->exited++;
+                }
+                return nil::sm::api::Default<trace_context>::api<T>::on_exit(state, api_contexts);
             }
-            return nil::sm::api::Default<trace_context>::type<T>::on_exit(state, api_contexts);
-        }
+        };
     };
 }
 
@@ -780,7 +787,7 @@ namespace toll::repl
         booth_context state_context;
         trace_context api_context;
 
-        nil::sm::SM<nil::sm::api::Coalesce<tracing_api>::type, Top, booth_context> machine{
+        nil::sm::SM<nil::sm::api::Coalesce<tracing_api>, Top, booth_context> machine{
             &api_context,
             &state_context
         };

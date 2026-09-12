@@ -9,12 +9,9 @@
 
 namespace
 {
-    template <typename T>
-    using EdgeCaseTestAPI = nil::sm::api::Default<void>::template type<T>;
-
     // Wrapper to create SM with StateMock context
     template <typename T, typename... RootArgs>
-    using EdgeCaseSM = nil::sm::SM<EdgeCaseTestAPI, T, RootArgs...>;
+    using EdgeCaseSM = nil::sm::DefaultSM<T, RootArgs...>;
 
     template <typename Tag>
     struct discard_on_e1

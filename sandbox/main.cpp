@@ -92,52 +92,55 @@ struct SandboxAPIContext
 {
 };
 
-template <typename T>
 struct SandboxAPI
 {
     using api_context_t = SandboxAPIContext;
 
-    static void print(std::ostream& out, const nil::sm::Metadata* metadata)
+    template <typename T>
+    struct api
     {
-        if (metadata == nullptr)
+        static void print(std::ostream& out, const nil::sm::Metadata* metadata)
         {
-            return;
-        }
+            if (metadata == nullptr)
+            {
+                return;
+            }
 
-        if (metadata->parent == nullptr)
-        {
+            if (metadata->parent == nullptr)
+            {
+                out << metadata->name;
+                return;
+            }
+
+            print(out, metadata->parent);
+
+            out << " --> ";
             out << metadata->name;
-            return;
+
+            if (metadata->parent->subregions > 1)
+            {
+                out << '[' << metadata->region << ']';
+            }
         }
 
-        print(out, metadata->parent);
-
-        out << " --> ";
-        out << metadata->name;
-
-        if (metadata->parent->subregions > 1)
+        static T make(api_context_t* /* api_contexts */, const nil::sm::Metadata& metadata)
         {
-            out << '[' << metadata->region << ']';
+            auto r = nil::sm::api::Default<>::api<T>::make(nullptr, metadata);
+
+            if (metadata.subregions == 0)
+            {
+                print(std::cout, &metadata);
+                std::cout << std::endl;
+            }
+
+            return r;
         }
-    }
 
-    static T make(api_context_t* /* api_contexts */, const nil::sm::Metadata& metadata)
-    {
-        auto r = nil::sm::api::Default<>::type<T>::make(nullptr, metadata);
-
-        if (metadata.subregions == 0)
+        static auto on_enter(T& state, SandboxAPIContext* /* api_contexts */)
         {
-            print(std::cout, &metadata);
-            std::cout << std::endl;
+            return nil::sm::api::Default<>::api<T>::on_enter(state, nullptr);
         }
-
-        return r;
-    }
-
-    static auto on_enter(T& state, SandboxAPIContext* /* api_contexts */)
-    {
-        return nil::sm::api::Default<>::type<T>::on_enter(state, nullptr);
-    }
+    };
 };
 
 int main()
@@ -149,7 +152,7 @@ int main()
     using top_state = demo::states::multi_region<random_flavor>;
 
     SandboxAPIContext api_context;
-    nil::sm::SM<nil::sm::api::Coalesce<SandboxAPI>::type, top_state> ss{&api_context};
+    nil::sm::SM<nil::sm::api::Coalesce<SandboxAPI>, top_state> ss{&api_context};
 
     {
         demo::events::e1 e;

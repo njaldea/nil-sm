@@ -286,7 +286,7 @@ namespace nil::sm::ir::detail
         }
     }
 
-    template <template <typename> typename API, typename RegionInitial, typename R>
+    template <typename API, typename RegionInitial, typename R>
     constexpr void emit_regions_complete_action(const nil::sm::Metadata& metadata, ir::Node& node)
     {
         if constexpr (std::is_same_v<R, NOOP>)
@@ -303,7 +303,7 @@ namespace nil::sm::ir::detail
             const auto target_metadata = nil::sm::detail::make_metadata<typename R::type>(
                 metadata.region,
                 target_state,
-                API<typename R::type>::regions_t::size,
+                API::template api<typename R::type>::regions_t::size,
                 metadata.parent
             );
             node.transitions.emplace_back(ir::transit::Event{
@@ -333,7 +333,6 @@ namespace nil::sm::ir::detail
     }
 
     template <
-        template <typename>
         typename API,
         typename RegionInitial,
         typename E,
@@ -404,7 +403,7 @@ namespace nil::sm::ir::detail
             const auto target_metadata = nil::sm::detail::make_metadata<typename R::type>(
                 metadata.region,
                 target_state,
-                API<typename R::type>::regions_t::size,
+                API::template api<typename R::type>::regions_t::size,
                 metadata.parent
             );
             node.transitions.push_back(TransitionInfoT{
@@ -414,20 +413,15 @@ namespace nil::sm::ir::detail
         }
     }
 
-    template <
-        template <typename...>
-        typename API,
-        typename T,
-        typename RegionInitial,
-        typename... E>
+    template <typename API, typename T, typename RegionInitial, typename... E>
     constexpr void emit_events(
         const nil::sm::Metadata& metadata,
         ir::Node& node,
         nil::xalt::tlist<E...> /* events */
     )
     {
-        using api_t = API<T>;
-        using api_context_t = typename api_t::api_context_t;
+        using api_t = API::template api<T>;
+        using api_context_t = typename API::api_context_t;
 
         (emit_reaction_action<
              API,
@@ -443,20 +437,15 @@ namespace nil::sm::ir::detail
          ...);
     }
 
-    template <
-        template <typename...>
-        typename API,
-        typename T,
-        typename RegionInitial,
-        typename... E>
+    template <typename API, typename T, typename RegionInitial, typename... E>
     constexpr void emit_captures(
         const nil::sm::Metadata& metadata,
         ir::Node& node,
         nil::xalt::tlist<E...> /* captures */
     )
     {
-        using api_t = API<T>;
-        using api_context_t = typename api_t::api_context_t;
+        using api_t = API::template api<T>;
+        using api_context_t = typename API::api_context_t;
 
         (emit_reaction_action<
              API,
@@ -472,11 +461,11 @@ namespace nil::sm::ir::detail
          ...);
     }
 
-    template <template <typename> typename API, typename T, typename RegionInitial>
+    template <typename API, typename T, typename RegionInitial>
     constexpr void emit_node_annotations(const nil::sm::Metadata& metadata, ir::Node& node)
     {
-        using api_t = API<T>;
-        using api_context_t = typename api_t::api_context_t;
+        using api_t = API::template api<T>;
+        using api_context_t = typename API::api_context_t;
         using on_enter_result_t
             = decltype(api_t::on_enter(std::declval<T&>(), static_cast<api_context_t*>(nullptr)));
         using on_exit_result_t
@@ -499,7 +488,7 @@ namespace nil::sm::ir::detail
         );
     }
 
-    template <template <typename> typename API, typename T, typename RegionInitial>
+    template <typename API, typename T, typename RegionInitial>
     constexpr ir::Node build_node(
         const nil::sm::Metadata* parent,
         std::size_t region,
@@ -507,7 +496,7 @@ namespace nil::sm::ir::detail
         BuildContext& context
     );
 
-    template <template <typename> typename API, typename T>
+    template <typename API, typename T>
     constexpr std::vector<ir::Node> build_region(
         const nil::sm::Metadata* parent,
         std::size_t index,
@@ -548,7 +537,7 @@ namespace nil::sm::ir::detail
         return nodes;
     }
 
-    template <template <typename> typename API, typename... R>
+    template <typename API, typename... R>
     constexpr std::vector<std::vector<ir::Node>> build_regions(
         const nil::sm::Metadata* parent,
         BuildContext& context
@@ -559,8 +548,8 @@ namespace nil::sm::ir::detail
         }(std::index_sequence_for<R...>());
     }
 
-    // Primary template builds a node from API<T>::regions_t.
-    template <template <typename> typename API, typename T>
+    // Primary template builds a node from API::template api<T>::regions_t.
+    template <typename API, typename T>
     struct node_builder
     {
         template <typename RegionInitial>
@@ -570,7 +559,7 @@ namespace nil::sm::ir::detail
             BuildContext& context
         )
         {
-            using regions_t = typename API<T>::regions_t;
+            using regions_t = typename API::template api<T>::regions_t;
             auto node = ir::Node{
                 .id = format_stable_id(nil::sm::id::stable_id(*metadata)),
                 .display_name = metadata->name,
@@ -578,8 +567,8 @@ namespace nil::sm::ir::detail
                 .is_final = metadata->is_final,
                 .is_barrier = metadata->is_barrier,
                 .type_id = nil::xalt::type_id<T>,
-                .required_args = make_required_args(typename API<T>::args_t{}),
-                .provided_props = make_provided_props(typename API<T>::props_t{}),
+                .required_args = make_required_args(typename API::template api<T>::args_t{}),
+                .provided_props = make_provided_props(typename API::template api<T>::props_t{}),
                 .has_unsatisfied_args = false,
                 .actions = {},
                 .transitions = {},
@@ -593,7 +582,7 @@ namespace nil::sm::ir::detail
         }
     };
 
-    template <template <typename> typename API, typename Action, typename T>
+    template <typename API, typename Action, typename T>
     struct node_builder<API, barrier::State<Action, T>>
     {
         template <typename RegionInitial>
@@ -629,7 +618,7 @@ namespace nil::sm::ir::detail
         }
     };
 
-    template <template <typename> typename API, typename T, typename RegionInitial>
+    template <typename API, typename T, typename RegionInitial>
     constexpr ir::Node build_node(
         const nil::sm::Metadata* parent,
         std::size_t region,
@@ -637,8 +626,12 @@ namespace nil::sm::ir::detail
         BuildContext& context
     )
     {
-        const auto metadata
-            = nil::sm::detail::make_metadata<T>(region, state, API<T>::regions_t::size, parent);
+        const auto metadata = nil::sm::detail::make_metadata<T>(
+            region,
+            state,
+            API::template api<T>::regions_t::size,
+            parent
+        );
         return node_builder<API, T>::template node<RegionInitial>(&metadata, state, context);
     }
 }
@@ -742,7 +735,7 @@ namespace nil::sm::ir
             }
         }
 
-        template <template <typename> typename API, typename T>
+        template <typename API, typename T>
         constexpr Model build_unchecked(const nil::sm::Metadata* parent)
         {
             auto context = BuildContext{};
@@ -756,7 +749,7 @@ namespace nil::sm::ir
         }
     }
 
-    template <template <typename> typename API, typename T>
+    template <typename API, typename T>
     constexpr Model build(const nil::sm::Metadata* parent = nullptr)
     {
         return detail::build_unchecked<API, T>(parent);

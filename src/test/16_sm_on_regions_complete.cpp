@@ -186,11 +186,8 @@ namespace
         }
     };
 
-    template <typename T>
-    using RegionsTestAPI = nil::sm::api::Default<void>::template type<T>;
-
     template <typename T, typename... RootArgs>
-    using RegionsTestSM = nil::sm::SM<RegionsTestAPI, T, RootArgs...>;
+    using RegionsTestSM = nil::sm::DefaultSM<T, RootArgs...>;
 }
 
 TEST(sm_feature_on_regions_finalized, triggers_only_when_all_regions_terminated)

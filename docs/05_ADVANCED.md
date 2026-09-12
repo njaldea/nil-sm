@@ -120,7 +120,7 @@ struct LoggingAPI
     }
 };
 
-using MySM = nil::sm::SM<nil::sm::api::Coalesce<LoggingAPI>::type, RootState>;
+using MySM = nil::sm::SM<nil::sm::api::Coalesce<LoggingAPI>, RootState>;
 ```
 
 When `api_context_t` is not `void`, the context pointer is passed as the first

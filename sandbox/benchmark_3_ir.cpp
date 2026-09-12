@@ -7,7 +7,7 @@
 
 int main()
 {
-    auto model = nil::sm::ir::build<nil::sm::api::Default<>::type, benchmark::root>();
+    auto model = nil::sm::ir::build<nil::sm::api::Default<>, benchmark::root>();
     (void)model;
     return 0;
 }

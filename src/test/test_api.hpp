@@ -50,80 +50,84 @@ public:
 
 // Custom API template that receives mock through APIContexts
 // This allows lifecycle hooks (on_enter, on_exit, etc.) to call mock methods
-template <typename State>
 struct TestAPI
 {
-    using state_t = State;
     using api_context_t = testing::StrictMock<APIMock>;
-    using api_t = nil::sm::api::Default<api_context_t>::template type<State>;
-    using regions_t = nil::xalt::coalesce_t<State, nil::sm::detail::regions_tag>;
-    using events_t = nil::xalt::coalesce_t<State, nil::sm::detail::events_tag>;
-    using captures_t = nil::xalt::coalesce_t<State, nil::sm::detail::captures_tag>;
-    using args_t = nil::xalt::coalesce_t<State, nil::sm::detail::args_tag>;
-    using props_t = nil::xalt::coalesce_t<State, nil::sm::detail::props_tag>;
 
-    // Make the state - delegate to api::Default
-    template <typename... Args>
-    static state_t make(
-        api_context_t* api_contexts,
-        const nil::sm::Metadata& metadata,
-        Args*... args
-    )
+    template <typename State>
+    struct api
     {
-        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
-        {
-            api_contexts->on_make_called(nil::xalt::type_id<state_t>);
-        }
-        return api_t::make(api_contexts, metadata, args...);
-    }
+        using state_t = State;
+        using api_t = typename nil::sm::api::Default<api_context_t>::template api<State>;
+        using regions_t = nil::xalt::coalesce_t<State, nil::sm::detail::regions_tag>;
+        using events_t = nil::xalt::coalesce_t<State, nil::sm::detail::events_tag>;
+        using captures_t = nil::xalt::coalesce_t<State, nil::sm::detail::captures_tag>;
+        using args_t = nil::xalt::coalesce_t<State, nil::sm::detail::args_tag>;
+        using props_t = nil::xalt::coalesce_t<State, nil::sm::detail::props_tag>;
 
-    // Lifecycle hooks that receive the mock from APIContexts
-    static auto on_enter(state_t& state, api_context_t* api_contexts)
-    {
-        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+        // Make the state - delegate to api::Default
+        template <typename... Args>
+        static state_t make(
+            api_context_t* api_contexts,
+            const nil::sm::Metadata& metadata,
+            Args*... args
+        )
         {
-            api_contexts->on_enter_called(nil::xalt::type_id<state_t>);
+            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            {
+                api_contexts->on_make_called(nil::xalt::type_id<state_t>);
+            }
+            return api_t::make(api_contexts, metadata, args...);
         }
-        return api_t::on_enter(state, api_contexts);
-    }
 
-    static auto on_exit(state_t& state, api_context_t* api_contexts)
-    {
-        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+        // Lifecycle hooks that receive the mock from APIContexts
+        static auto on_enter(state_t& state, api_context_t* api_contexts)
         {
-            api_contexts->on_exit_called(nil::xalt::type_id<state_t>);
+            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            {
+                api_contexts->on_enter_called(nil::xalt::type_id<state_t>);
+            }
+            return api_t::on_enter(state, api_contexts);
         }
-        return api_t::on_exit(state, api_contexts);
-    }
 
-    static auto on_regions_finalized(state_t& state, api_context_t* api_contexts)
-    {
-        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+        static auto on_exit(state_t& state, api_context_t* api_contexts)
         {
-            api_contexts->on_regions_finalized_called(nil::xalt::type_id<state_t>);
+            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            {
+                api_contexts->on_exit_called(nil::xalt::type_id<state_t>);
+            }
+            return api_t::on_exit(state, api_contexts);
         }
-        return api_t::on_regions_finalized(state, api_contexts);
-    }
 
-    template <typename E>
-    static auto on_event(state_t& state, const E& event, api_context_t* api_contexts)
-    {
-        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+        static auto on_regions_finalized(state_t& state, api_context_t* api_contexts)
         {
-            api_contexts->on_event_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
+            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            {
+                api_contexts->on_regions_finalized_called(nil::xalt::type_id<state_t>);
+            }
+            return api_t::on_regions_finalized(state, api_contexts);
         }
-        return api_t::on_event(state, event, api_contexts);
-    }
 
-    template <typename E>
-    static auto on_capture(state_t& state, const E& event, api_context_t* api_contexts)
-    {
-        if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+        template <typename E>
+        static auto on_event(state_t& state, const E& event, api_context_t* api_contexts)
         {
-            api_contexts->on_capture_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
+            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            {
+                api_contexts->on_event_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
+            }
+            return api_t::on_event(state, event, api_contexts);
         }
-        return api_t::on_capture(state, event, api_contexts);
-    }
+
+        template <typename E>
+        static auto on_capture(state_t& state, const E& event, api_context_t* api_contexts)
+        {
+            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            {
+                api_contexts->on_capture_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
+            }
+            return api_t::on_capture(state, event, api_contexts);
+        }
+    };
 };
 
 template <typename T, typename... RootArgs>

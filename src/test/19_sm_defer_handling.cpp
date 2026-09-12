@@ -75,11 +75,8 @@ namespace
         using regions = nil::xalt::tlist<SaveDefer>;
     };
 
-    template <typename T>
-    using DeferTestAPI = nil::sm::api::Default<void>::template type<T>;
-
     template <typename T, typename... RootArgs>
-    using DeferTestSM = nil::sm::SM<DeferTestAPI, T, RootArgs...>;
+    using DeferTestSM = nil::sm::DefaultSM<T, RootArgs...>;
 
     // ---- States for payload preservation test ----
 

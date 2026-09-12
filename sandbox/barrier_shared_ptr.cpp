@@ -33,8 +33,7 @@ namespace
         }
     };
 
-    template <typename T>
-    using child_api = nil::sm::api::Default<>::type<T>;
+        using child_api = nil::sm::api::Default<>;
 
     struct child
     {

@@ -135,11 +135,11 @@ namespace nil::sm::format
     struct diagram;
 
     template <
-        template <typename>
         typename API,
         typename T,
+        typename... Props,
         void (*Render)(std::ostream&, std::span<const ir::Node>)>
-    struct diagram<nil::sm::SM<API, T>, Render>
+    struct diagram<nil::sm::SM<API, T, Props...>, Render>
     {
         explicit diagram()
             : model(ir::build<API, T>())

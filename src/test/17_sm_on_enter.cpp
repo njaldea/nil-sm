@@ -45,11 +45,8 @@ namespace
         }
     };
 
-    template <typename T>
-    using OnEnterTestAPI = nil::sm::api::Default<void>::template type<T>;
-
     template <typename T, typename... RootArgs>
-    using OnEnterTestSM = nil::sm::SM<OnEnterTestAPI, T, RootArgs...>;
+    using OnEnterTestSM = nil::sm::DefaultSM<T, RootArgs...>;
 }
 
 TEST(sm_feature_on_enter, on_enter_can_publish_event)

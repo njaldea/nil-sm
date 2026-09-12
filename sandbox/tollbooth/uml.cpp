@@ -9,7 +9,7 @@
 
 int main()
 {
-    using machine = nil::sm::SM<nil::sm::api::Coalesce<toll::tracing_api>::type, toll::booth>;
+    using machine = nil::sm::SM<nil::sm::api::Coalesce<toll::tracing_api>, toll::booth>;
     nil::sm::puml<machine> diagram;
     std::cout << diagram.root << std::flush;
     return 0;

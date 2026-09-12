@@ -153,11 +153,8 @@ namespace
         );
     }
 
-    template <typename T>
-    using MatrixTestAPI = nil::sm::api::Default<void>::template type<T>;
-
     template <typename T, typename... RootArgs>
-    using MatrixTestSM = nil::sm::SM<MatrixTestAPI, T, RootArgs...>;
+    using MatrixTestSM = nil::sm::DefaultSM<T, RootArgs...>;
 
     template <region_rx K1, region_rx K2>
     void run_matrix_case(const char* /* label */)

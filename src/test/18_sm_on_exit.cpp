@@ -136,11 +136,8 @@ namespace
         }
     };
 
-    template <typename T>
-    using ExitTestAPI = nil::sm::api::Default<void>::template type<T>;
-
     template <typename T, typename... RootArgs>
-    using ExitTestSM = nil::sm::SM<ExitTestAPI, T, RootArgs...>;
+    using ExitTestSM = nil::sm::DefaultSM<T, RootArgs...>;
 }
 
 TEST(sm_feature_on_exit, invokes_on_exit_on_state_destruction)
