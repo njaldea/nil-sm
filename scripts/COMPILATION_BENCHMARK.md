@@ -36,6 +36,7 @@ Standalone front-end compilation metrics (`g++ -c` with Release flags, averaged 
 | Commit | Date | Benchmark 1<br>(Plain SM) | Benchmark 2<br>(SM + Validate) | Benchmark 3<br>(Build IR only) | Benchmark 4<br>(SM + Build IR) | Notes |
 |:---|:---|:---|:---|:---|:---|:---|
 | `ff18492` | 2026-09-12 | 0.93 s / 0.83 s<br>233.1 MB (238,727 KB) | 1.14 s / 1.04 s<br>269.6 MB (276,032 KB) | 0.71 s / 0.64 s<br>186.0 MB (190,473 KB) | 1.22 s / 1.08 s<br>275.8 MB (282,469 KB) | Initial baseline covering all library features |
+| `98a2c6c` | 2026-09-12 | 0.98 s / 0.91 s<br>231.1 MB (236,668 KB) | 1.13 s / 1.00 s<br>267.2 MB (273,612 KB) | 0.71 s / 0.66 s<br>183.7 MB (188,140 KB) | 1.22 s / 1.09 s<br>273.6 MB (280,164 KB) | API convention change (parent struct + nested `api<T>`); single-run, not 3-run averaged; flat vs baseline |
 
 ---
 
@@ -51,6 +52,7 @@ Comparable full test suite and sandbox builds with default parallelism (3 clean 
 | `fd49352` | 2026-09-10 | Added IR validation & error info | 29.37 s | 252.86 s | 474.0 MB (485,344 KB) | **+16.3 MB (+3.57%)** |
 | `915cefb` | 2026-09-11 | BSL license update (`v0.0.1`) | 28.16 s | 240.77 s | 473.9 MB (485,233 KB) | **+16.2 MB (+3.54%)** |
 | `ff18492` | 2026-09-12 | Fix API requirements & `constexpr` validation | 26.97 s | 210.97 s | 458.0 MB (468,959 KB) | **+0.3 MB (+0.07%)** |
+| `98a2c6c` | 2026-09-12 | API convention change (parent struct + nested `api<T>`) | 27.86 s | 239.65 s | 457.3 MB (468,248 KB) | **-0.4 MB (-0.09%)** (single run, not 3-run averaged) |
 
 > **Note on Wall Time**: Later revisions include additional sandbox targets, diagram rendering formats, and new test translation units.
 
