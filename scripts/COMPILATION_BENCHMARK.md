@@ -4,63 +4,68 @@ Compilation time and peak memory (Max RSS) metrics for `nil-sml` across clean Re
 
 ---
 
-## 1. Parallel Clean Build History (`ninja -C .build`)
+## 1. Scope of Benchmarks
 
-Comparable full test suite and sandbox builds with default parallelism.
+All four benchmark sandboxes share the exact same state machine topology ([sandbox/benchmark_sm.hpp](sandbox/benchmark_sm.hpp)) exercising all library features:
+- **Hierarchical & Orthogonal Regions**: Nested composite states and parallel regions.
+- **Full Action Suite**: `TransitTo<T>`, `Forward`, `Discard`, `Defer`, `DeferTo<T>`, `Emit<E>`, `Terminate`, and `std::variant`.
+- **Hooks & Captures**: `on_enter()`, `on_exit()`, `on_regions_finalized()`, and `on_capture()`.
+- **Dependency Injection**: Ancestor `props`, descendant `args`, and `direct_parent`.
+
+### Benchmark Variants
+
+- **Benchmark 1 (Plain SM)** ([sandbox/benchmark_1_plain.cpp](sandbox/benchmark_1_plain.cpp)):
+  - **Scope**: Compiles standalone State Machine instantiation (`DefaultSM<Root>`) and runtime event dispatch.
+  - **Focus**: Isolates template instantiation overhead of states, orthogonal/nested regions, lifecycle hooks, and action dispatch.
+- **Benchmark 2 (SM + Validate)** ([sandbox/benchmark_2_validate.cpp](sandbox/benchmark_2_validate.cpp)):
+  - **Scope**: Compiles State Machine instantiation + compile-time validation via `static_assert(nil::sm::validate<API, Root>())`.
+  - **Focus**: Measures compile-time evaluation and constant-expression overhead of graph validation.
+- **Benchmark 3 (Build IR only)** ([sandbox/benchmark_3_ir.cpp](sandbox/benchmark_3_ir.cpp)):
+  - **Scope**: Compiles standalone IR generation (`nil::sm::ir::build<API, Root>()`).
+  - **Focus**: Measures compile-time and runtime cost of graph reflection and metadata introspection without state machine execution.
+- **Benchmark 4 (SM + Build IR)** ([sandbox/benchmark_4_sm_ir.cpp](sandbox/benchmark_4_sm_ir.cpp)):
+  - **Scope**: Compiles both State Machine instantiation and IR build in the same translation unit.
+  - **Focus**: Measures composite template and memory overhead when runtime state machine and IR model coexist.
+
+---
+
+## 2. Feature Benchmark Comparison Matrix (by Commit)
+
+Standalone front-end compilation metrics (`g++ -c` with Release flags, averaged over 3 clean runs). Each cell reports `Avg Wall Time / Avg User CPU` and `Avg Peak RSS`.
+
+| Commit | Date | Benchmark 1<br>(Plain SM) | Benchmark 2<br>(SM + Validate) | Benchmark 3<br>(Build IR only) | Benchmark 4<br>(SM + Build IR) | Notes |
+|:---|:---|:---|:---|:---|:---|:---|
+| `ff18492` | 2026-09-12 | 0.93 s / 0.83 s<br>233.1 MB (238,727 KB) | 1.14 s / 1.04 s<br>269.6 MB (276,032 KB) | 0.71 s / 0.64 s<br>186.0 MB (190,473 KB) | 1.22 s / 1.08 s<br>275.8 MB (282,469 KB) | Initial baseline covering all library features |
+
+---
+
+## 3. Parallel Clean Build History (`ninja -C .build`)
+
+Comparable full test suite and sandbox builds with default parallelism (3 clean runs averaged per commit):
 
 | Commit | Date | Key Changes / Scope | Avg Wall Time | Avg CPU Time | Avg Peak RSS | $\Delta$ Peak RSS vs Baseline |
 |:---|:---|:---|---:|---:|---:|---:|
-| `933d993` | 2026-09-08 | Baseline (`origin/master`) | 23.45 s | 86.64 s | 468.6 MB (468,648 KB) | *Baseline* |
-| `dbb5928` | 2026-09-08 | `direct_parent` revamp | 23.46 s | 85.50 s | 447.1 MB (447,063 KB) | **-21.5 MB (-4.6%)** |
-| `ff18492` | 2026-09-12 | `constexpr` IR validation & all tests | 27.32 s | 219.99 s | 469.0 MB (469,031 KB) | **+0.4 MB (+0.08%)** |
+| `933d993` | 2026-09-08 | Baseline (`origin/master` barrier layout) | 25.25 s | 195.61 s | 457.6 MB (468,629 KB) | *Baseline* |
+| `87fb83d` | 2026-09-09 | Revamp (`direct_parent` & cleanup) | 25.30 s | 206.43 s | 436.2 MB (446,675 KB) | **-21.4 MB (-4.68%)** |
+| `cf3d691` | 2026-09-09 | More tests & docs update | 26.63 s | 214.59 s | 467.8 MB (479,019 KB) | **+10.1 MB (+2.22%)** |
+| `fd49352` | 2026-09-10 | Added IR validation & error info | 29.37 s | 252.86 s | 474.0 MB (485,344 KB) | **+16.3 MB (+3.57%)** |
+| `915cefb` | 2026-09-11 | BSL license update (`v0.0.1`) | 28.16 s | 240.77 s | 473.9 MB (485,233 KB) | **+16.2 MB (+3.54%)** |
+| `ff18492` | 2026-09-12 | Fix API requirements & `constexpr` validation | 26.97 s | 210.97 s | 458.0 MB (468,959 KB) | **+0.3 MB (+0.07%)** |
 
-> **Note on Wall Time**: Later revisions include additional sandbox targets and new test translation units.
-
----
-
-## 2. Standalone Translation Unit Benchmarks (`g++ -c`)
-
-Isolated front-end compilation time and memory per translation unit without link/LTO overhead:
-
-| Commit | Date | Translation Unit | Key Feature Tested | Wall Time | User CPU Time | Peak RSS |
-|:---|:---|:---|:---|---:|---:|---:|
-| `ff18492` | 2026-09-12 | `src/test/13_sm_compile_time_diagnostics.cpp` | `static_assert(validate<API, Root>())` | 1.17 s | 1.01 s | 276.9 MB (283,592 KB) |
+> **Note on Wall Time**: Later revisions include additional sandbox targets, diagram rendering formats, and new test translation units.
 
 ---
 
-## 3. Single-Threaded Reference Builds (`ninja -j1`)
-
-Isolated single-core builds (sequential compilation & link) to measure per-process ceiling and total sequential CPU work:
-
-| Commit | Date | Scope / Description | Wall Time | User CPU Time | Peak RSS |
-|:---|:---|:---|---:|---:|---:|
-| `36f1f0b` | 2026-08-29 | Historical baseline (earlier test suite & sandbox) | 58.94 s | — | 468.8 MB (480,044 KB) |
-| `ff18492` | 2026-09-12 | Full suite + 6 sandboxes (55 build targets) | 90.70 s | 83.81 s | 458.0 MB (469,008 KB) |
-
----
-
-## 4. Detailed Run Logs
-
-### Commit `ff18492` (2026-09-12)
-3 consecutive clean Release builds (`ninja -C .build -t clean && ninja -C .build`):
-
-| Run | Wall Time | User Time | Sys Time | Peak RSS |
-|:---|---:|---:|---:|---:|
-| Run 1 | 27.69 s | 204.04 s | 18.58 s | 468,948 KB |
-| Run 2 | 27.21 s | 202.92 s | 17.58 s | 468,832 KB |
-| Run 3 | 27.05 s | 200.19 s | 16.65 s | 469,312 KB |
-| **Average** | **27.32 s** | **202.38 s** | **17.60 s** | **469,031 KB (~458.0 MiB)** |
-
----
-
-## 5. Build Environment & Methodology
+## 4. Build Environment & Methodology
 
 - **Compiler**: GCC (`g++`)
 - **Flags**: `-O3 -DNDEBUG -std=gnu++20 -fno-rtti -flto -Wfatal-errors -Wshadow -Werror -Wall -Wextra -Wpedantic -pedantic-errors -Wconversion -Wsign-conversion`
 - **Build System**: Ninja (`.build`)
-- **Measurement Command**:
+- **Measurement Tool**: `/usr/bin/time -f "wall=%e user=%U sys=%S maxrss=%M KB"`
+- **Reproducing Sandbox Benchmarks**:
   ```bash
-  ./scripts/benchmark_build.sh [num_runs]
-  # Or directly:
-  /usr/bin/time -f "wall=%e user=%U sys=%S maxrss=%M KB" ninja -C .build
+  /usr/bin/time -f "wall=%e user=%U sys=%S maxrss=%M KB" \
+    g++ -Isrc/publish -isystem .build/vcpkg_installed/x64-linux/include/nil-xalt/1.4.5 \
+    -O3 -DNDEBUG -std=gnu++20 -fno-rtti -flto -Wfatal-errors \
+    -c sandbox/benchmark_1_plain.cpp -o /dev/null
   ```

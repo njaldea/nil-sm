@@ -79,3 +79,19 @@ target_link_libraries(
             tollbooth_barrier_job_shift
             tollbooth_barrier_job_maintenance
 )
+
+project(sandbox_benchmark_1_plain)
+add_executable(${PROJECT_NAME} benchmark_1_plain.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE sm)
+
+project(sandbox_benchmark_2_validate)
+add_executable(${PROJECT_NAME} benchmark_2_validate.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE sm)
+
+project(sandbox_benchmark_3_ir)
+add_executable(${PROJECT_NAME} benchmark_3_ir.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE sm)
+
+project(sandbox_benchmark_4_sm_ir)
+add_executable(${PROJECT_NAME} benchmark_4_sm_ir.cpp)
+target_link_libraries(${PROJECT_NAME} PRIVATE sm)

@@ -163,7 +163,7 @@ namespace nil::sm::ir
 
 namespace nil::sm::ir
 {
-    inline const std::string& target_id(const transit::Info& transition)
+    constexpr const std::string& target_id(const transit::Info& transition)
     {
         return std::visit(
             [](const auto& info) -> const std::string& { return info.target_id; },
@@ -171,7 +171,7 @@ namespace nil::sm::ir
         );
     }
 
-    inline const std::string& event_name(const transit::Info& transition)
+    constexpr const std::string& event_name(const transit::Info& transition)
     {
         return std::visit(
             [](const auto& info) -> const std::string& { return info.event_name; },
@@ -179,7 +179,7 @@ namespace nil::sm::ir
         );
     }
 
-    inline bool is_capture(const transit::Info& transition)
+    constexpr bool is_capture(const transit::Info& transition)
     {
         return std::holds_alternative<transit::Capture>(transition);
     }
