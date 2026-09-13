@@ -52,13 +52,13 @@ public:
 // This allows lifecycle hooks (on_enter, on_exit, etc.) to call mock methods
 struct TestAPI
 {
-    using api_context_t = testing::StrictMock<APIMock>;
+    using context_t = testing::StrictMock<APIMock>;
 
     template <typename State>
-    struct api
+    struct state
     {
         using state_t = State;
-        using api_t = typename nil::sm::api::Default<api_context_t>::template api<State>;
+        using default_state_t = typename nil::sm::api::Default<context_t>::template state<State>;
         using regions_t = nil::xalt::coalesce_t<State, nil::sm::detail::regions_tag>;
         using events_t = nil::xalt::coalesce_t<State, nil::sm::detail::events_tag>;
         using captures_t = nil::xalt::coalesce_t<State, nil::sm::detail::captures_tag>;
@@ -67,65 +67,61 @@ struct TestAPI
 
         // Make the state - delegate to api::Default
         template <typename... Args>
-        static state_t make(
-            api_context_t* api_contexts,
-            const nil::sm::Metadata& metadata,
-            Args*... args
-        )
+        static state_t make(context_t* contexts, const nil::sm::Metadata& metadata, Args*... args)
         {
             if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
             {
-                api_contexts->on_make_called(nil::xalt::type_id<state_t>);
+                contexts->on_make_called(nil::xalt::type_id<state_t>);
             }
-            return api_t::make(api_contexts, metadata, args...);
+            return default_state_t::make(contexts, metadata, args...);
         }
 
         // Lifecycle hooks that receive the mock from APIContexts
-        static auto on_enter(state_t& state, api_context_t* api_contexts)
+        static auto on_enter(state_t& state, context_t* contexts)
         {
             if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
             {
-                api_contexts->on_enter_called(nil::xalt::type_id<state_t>);
+                contexts->on_enter_called(nil::xalt::type_id<state_t>);
             }
-            return api_t::on_enter(state, api_contexts);
+            return default_state_t::on_enter(state, contexts);
         }
 
-        static auto on_exit(state_t& state, api_context_t* api_contexts)
+        static auto on_exit(state_t& state, context_t* contexts)
         {
             if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
             {
-                api_contexts->on_exit_called(nil::xalt::type_id<state_t>);
+                contexts->on_exit_called(nil::xalt::type_id<state_t>);
             }
-            return api_t::on_exit(state, api_contexts);
+            return default_state_t::on_exit(state, contexts);
         }
 
-        static auto on_regions_finalized(state_t& state, api_context_t* api_contexts)
+        static auto on_regions_finalized(state_t& state, context_t* contexts)
         {
             if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
             {
-                api_contexts->on_regions_finalized_called(nil::xalt::type_id<state_t>);
+                contexts->on_regions_finalized_called(nil::xalt::type_id<state_t>);
             }
-            return api_t::on_regions_finalized(state, api_contexts);
-        }
-
-        template <typename E>
-        static auto on_event(state_t& state, const E& event, api_context_t* api_contexts)
-        {
-            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
-            {
-                api_contexts->on_event_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
-            }
-            return api_t::on_event(state, event, api_contexts);
+            return default_state_t::on_regions_finalized(state, contexts);
         }
 
         template <typename E>
-        static auto on_capture(state_t& state, const E& event, api_context_t* api_contexts)
+        static auto on_event(state_t& state, const E& event, context_t* contexts)
         {
             if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
             {
-                api_contexts->on_capture_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
+                contexts->on_event_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
             }
-            return api_t::on_capture(state, event, api_contexts);
+            return default_state_t::on_event(state, event, contexts);
+        }
+
+        template <typename E>
+        static auto on_capture(state_t& state, const E& event, context_t* contexts)
+        {
+            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            {
+                contexts->on_capture_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
+            }
+            return default_state_t::on_capture(state, event, contexts);
         }
     };
 };

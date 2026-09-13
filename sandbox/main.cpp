@@ -94,10 +94,10 @@ struct SandboxAPIContext
 
 struct SandboxAPI
 {
-    using api_context_t = SandboxAPIContext;
+    using context_t = SandboxAPIContext;
 
     template <typename T>
-    struct api
+    struct state
     {
         static void print(std::ostream& out, const nil::sm::Metadata* metadata)
         {
@@ -123,9 +123,9 @@ struct SandboxAPI
             }
         }
 
-        static T make(api_context_t* /* api_contexts */, const nil::sm::Metadata& metadata)
+        static T make(context_t* /* contexts */, const nil::sm::Metadata& metadata)
         {
-            auto r = nil::sm::api::Default<>::api<T>::make(nullptr, metadata);
+            auto r = nil::sm::api::Default<>::state<T>::make(nullptr, metadata);
 
             if (metadata.subregions == 0)
             {
@@ -136,9 +136,9 @@ struct SandboxAPI
             return r;
         }
 
-        static auto on_enter(T& state, SandboxAPIContext* /* api_contexts */)
+        static auto on_enter(T& state, SandboxAPIContext* /* contexts */)
         {
-            return nil::sm::api::Default<>::api<T>::on_enter(state, nullptr);
+            return nil::sm::api::Default<>::state<T>::on_enter(state, nullptr);
         }
     };
 };
@@ -151,8 +151,8 @@ int main()
 
     using top_state = demo::states::multi_region<random_flavor>;
 
-    SandboxAPIContext api_context;
-    nil::sm::SM<nil::sm::api::Coalesce<SandboxAPI>, top_state> ss{&api_context};
+    SandboxAPIContext context;
+    nil::sm::SM<nil::sm::api::Coalesce<SandboxAPI>, top_state> ss{&context};
 
     {
         demo::events::e1 e;

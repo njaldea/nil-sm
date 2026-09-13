@@ -5,6 +5,7 @@
 
 #include "api.hpp"
 #include "detail.hpp"
+#include "nil/sm/concepts.hpp"
 
 #include <nil/xalt/tlist.hpp>
 #include <nil/xalt/typed.hpp>
@@ -36,19 +37,21 @@ namespace nil::sm
     class State final: public detail::IState
     {
     public:
-        using api_t = API::template api<T>;
-        using self_t = State<API, T>;
-        using metadata_t = Metadata;
-        using api_context_t = typename API::api_context_t;
+        using api_t = API;
 
     private:
-        using regions_t = typename api_t::regions_t;
-        using events_t = typename api_t::events_t;
-        using captures_t = typename api_t::captures_t;
+        using metadata_t = Metadata;
+        using self_t = State<API, T>;
+        using context_t = typename API::context_t;
+
+        using state_t = api_t::template state<T>;
+        using args_t = typename state_t::args_t;
+        using props_t = typename state_t::props_t;
+        using regions_t = typename state_t::regions_t;
+        using events_t = typename state_t::events_t;
+        using captures_t = typename state_t::captures_t;
         using event_dispatch_t = detail::event_dispatcher<self_t, T, events_t>;
         using capture_dispatch_t = detail::capture_dispatcher<self_t, T, captures_t>;
-        using args_t = typename api_t::args_t;
-        using props_t = typename api_t::props_t;
         using on_event_results_t = std::array<detail::on_event_t, regions_t::size>;
 
         using region_dispatcher_t = detail::region_dispatcher<API, regions_t>;
@@ -64,12 +67,12 @@ namespace nil::sm
         static std::array<detail::Region, regions_t::size> init_regions(
             [[maybe_unused]] State<API, T>* self,
             [[maybe_unused]] detail::Queues* queues,
-            [[maybe_unused]] api_context_t* api_contexts,
+            [[maybe_unused]] context_t* contexts,
             nil::xalt::tlist<R...> /* regions */,
             std::index_sequence<I...> /* region indices */
         )
         {
-            on_enter(self->current_state, queues, api_contexts);
+            on_enter(self->current_state, queues, contexts);
 
             [[maybe_unused]] const auto metadata = std::addressof(self->metadata);
             return std::array<detail::Region, regions_t::size>{detail::Region(
@@ -77,7 +80,7 @@ namespace nil::sm
                 I,
                 self,
                 queues,
-                api_contexts,
+                contexts,
                 metadata
             )...};
         }
@@ -104,12 +107,12 @@ namespace nil::sm
         template <typename... Args>
         static T make_current_state(
             [[maybe_unused]] detail::IState* parent,
-            api_context_t* api_contexts,
+            context_t* contexts,
             Metadata metadata,
             nil::xalt::tlist<Args...> /* args */
         )
         {
-            return api_t::make(api_contexts, metadata, resolve_arg<Args>(parent)...);
+            return state_t::make(contexts, metadata, resolve_arg<Args>(parent)...);
         }
 
         // Matches requested_id against every prop<Member, Ptr> in props_t, resolving
@@ -132,22 +135,22 @@ namespace nil::sm
         explicit State(
             detail::IState* init_parent,
             detail::Queues* init_queues,
-            api_context_t* init_api_contexts,
+            context_t* init_contexts,
             metadata_t init_metadata
         )
             : detail::IState(init_parent, init_metadata)
             , current_state(make_current_state(
                   init_parent,
-                  static_cast<api_context_t*>(init_api_contexts),
+                  static_cast<context_t*>(init_contexts),
                   this->metadata,
                   args_t()
               ))
             , queues(init_queues)
-            , api_contexts(init_api_contexts)
+            , contexts(init_contexts)
             , regions(init_regions(
                   this,
                   queues,
-                  api_contexts,
+                  contexts,
                   regions_t(),
                   std::make_index_sequence<regions_t::size>()
               ))
@@ -210,7 +213,7 @@ namespace nil::sm
                 }
             }
 
-            auto capture_result = capture_dispatch_t::dispatch(e, current_state, api_contexts);
+            auto capture_result = capture_dispatch_t::dispatch(e, current_state, contexts);
             if (!std::holds_alternative<Unhandled>(capture_result)
                 && !std::holds_alternative<Forward>(capture_result))
             {
@@ -221,7 +224,7 @@ namespace nil::sm
 
             if (sub_state.handle)
             {
-                auto this_result = event_dispatch_t::dispatch(e, current_state, api_contexts);
+                auto this_result = event_dispatch_t::dispatch(e, current_state, contexts);
                 if (std::holds_alternative<Unhandled>(this_result))
                 {
                     commit_region_results(e, sub_state.results);
@@ -256,18 +259,23 @@ namespace nil::sm
     private:
         T current_state;
         detail::Queues* queues;
-        api_context_t* api_contexts;
+        context_t* contexts;
         std::array<detail::Region, regions_t::size> regions;
         bool finalized = false;
 
-        static void on_enter(
-            T& state,
-            detail::Queues* init_queues,
-            api_context_t* init_api_contexts
-        )
+        static void on_enter(T& state, detail::Queues* init_queues, context_t* init_contexts)
         {
+            static_assert(
+                requires() {
+                    { state_t::on_enter(state, init_contexts) } -> concepts::match::hook;
+                }
+                || requires() {
+                    { state_t::on_enter(state, init_contexts) } -> std::same_as<Unhandled>;
+                },
+                "on_enter only accepts: NOOP, Emit<E>, or Unhandled"
+            );
             const auto on_enter_result = detail::to_runtime_action_as<detail::on_enter_t>(
-                api_t::on_enter(state, init_api_contexts)
+                state_t::on_enter(state, init_contexts)
             );
 
             if (std::holds_alternative<detail::Event>(on_enter_result))
@@ -278,8 +286,18 @@ namespace nil::sm
 
         void on_exit()
         {
+            static_assert(
+                requires() {
+                    { state_t::on_exit(current_state, contexts) } -> concepts::match::hook;
+                }
+                || requires() {
+                    { state_t::on_exit(current_state, contexts) } -> std::same_as<Unhandled>;
+                },
+                "on_exit only accepts: NOOP, Emit<E>, or Unhandled"
+            );
+
             const auto on_exit_result = detail::to_runtime_action_as<detail::on_exit_t>(
-                api_t::on_exit(current_state, api_contexts)
+                state_t::on_exit(current_state, contexts)
             );
 
             if (std::holds_alternative<detail::Event>(on_exit_result))
@@ -290,8 +308,22 @@ namespace nil::sm
 
         detail::on_regions_finalized_t on_regions_finalized()
         {
+            static_assert(
+                requires() {
+                    {
+                        state_t::on_regions_finalized(current_state, contexts)
+                    } -> concepts::match::finalized;
+                }
+                || requires() {
+                    {
+                        state_t::on_regions_finalized(current_state, contexts)
+                    } -> std::same_as<Unhandled>;
+                },
+                "on_regions_finalized only accepts: TransitTo<T>, Emit<T>, Terminate,NOOP or "
+                "Unhandled"
+            );
             return detail::to_runtime_action_as<detail::on_regions_finalized_t>(
-                api_t::on_regions_finalized(current_state, api_contexts)
+                state_t::on_regions_finalized(current_state, contexts)
             );
         }
 
@@ -388,35 +420,31 @@ namespace nil::sm
     template <typename API, typename T, typename... Props>
     class SM final: public ISM
     {
-        using api_t = API::template api<T>;
-        using api_context_t = typename API::api_context_t;
+        using api_t = API::template state<T>;
+        using context_t = typename API::context_t;
         using region_dispatcher_t = detail::region_dispatcher<API, nil::xalt::tlist<T>>;
 
         struct construct_tag final
         {
         };
 
-        explicit SM(
-            construct_tag /* tag */,
-            api_context_t* init_api_contexts,
-            Props*... init_root_args
-        )
-            : api_contexts(init_api_contexts)
+        explicit SM(construct_tag /* tag */, context_t* init_contexts, Props*... init_root_args)
+            : contexts(init_contexts)
             , root(init_root_args...)
-            , region(detail::Region::tag<API, T>{}, 0, &root, &queues, api_contexts, nullptr)
+            , region(detail::Region::tag<API, T>{}, 0, &root, &queues, contexts, nullptr)
         {
             flush();
         }
 
     public:
-        explicit SM(api_context_t* init_api_contexts, Props*... init_root_args)
-            requires(!std::is_void_v<api_context_t>)
-            : SM(construct_tag{}, init_api_contexts, init_root_args...)
+        explicit SM(context_t* init_contexts, Props*... init_root_args)
+            requires(!std::is_void_v<context_t>)
+            : SM(construct_tag{}, init_contexts, init_root_args...)
         {
         }
 
         explicit SM(Props*... init_root_args)
-            requires std::is_void_v<api_context_t>
+            requires std::is_void_v<context_t>
             : SM(construct_tag{}, nullptr, init_root_args...)
         {
         }
@@ -436,7 +464,7 @@ namespace nil::sm
 
     private:
         detail::Queues queues;
-        api_context_t* api_contexts;
+        context_t* contexts;
         detail::RootState<Props...> root;
         detail::Region region;
 

@@ -542,65 +542,61 @@ namespace toll
 {
     struct tracing_api
     {
-        using api_context_t = trace_context;
+        using context_t = trace_context;
 
         template <typename T>
-        struct api
+        struct state
         {
             template <typename... Args>
-            static T make(
-                api_context_t* api_contexts,
-                const nil::sm::Metadata& metadata,
-                Args*... args
-            )
+            static T make(context_t* contexts, const nil::sm::Metadata& metadata, Args*... args)
             {
-                if (api_contexts != nullptr)
+                if (contexts != nullptr)
                 {
-                    api_contexts->constructed++;
-                    api_contexts->max_depth = std::max(api_contexts->max_depth, metadata.depth);
+                    contexts->constructed++;
+                    contexts->max_depth = std::max(contexts->max_depth, metadata.depth);
                     if (metadata.subregions == 0)
                     {
                         trace_context::print_path(std::cout, &metadata);
                         std::cout << '\n';
                     }
                 }
-                return nil::sm::api::Default<trace_context>::api<T>::make(
-                    api_contexts,
+                return nil::sm::api::Default<trace_context>::state<T>::make(
+                    contexts,
                     metadata,
                     args...
                 );
             }
 
             template <typename E>
-            static auto on_event(T& state, const E& event, trace_context* api_contexts)
+            static auto on_event(T& state, const E& event, trace_context* contexts)
             {
-                if (api_contexts != nullptr)
+                if (contexts != nullptr)
                 {
-                    api_contexts->events++;
+                    contexts->events++;
                 }
-                return nil::sm::api::Default<trace_context>::api<T>::on_event(
+                return nil::sm::api::Default<trace_context>::state<T>::on_event(
                     state,
                     event,
-                    api_contexts
+                    contexts
                 );
             }
 
-            static auto on_enter(T& state, trace_context* api_contexts)
+            static auto on_enter(T& state, trace_context* contexts)
             {
-                if (api_contexts != nullptr)
+                if (contexts != nullptr)
                 {
-                    api_contexts->entered++;
+                    contexts->entered++;
                 }
-                return nil::sm::api::Default<trace_context>::api<T>::on_enter(state, api_contexts);
+                return nil::sm::api::Default<trace_context>::state<T>::on_enter(state, contexts);
             }
 
-            static auto on_exit(T& state, trace_context* api_contexts)
+            static auto on_exit(T& state, trace_context* contexts)
             {
-                if (api_contexts != nullptr)
+                if (contexts != nullptr)
                 {
-                    api_contexts->exited++;
+                    contexts->exited++;
                 }
-                return nil::sm::api::Default<trace_context>::api<T>::on_exit(state, api_contexts);
+                return nil::sm::api::Default<trace_context>::state<T>::on_exit(state, contexts);
             }
         };
     };
@@ -722,7 +718,7 @@ namespace toll::repl
     template <typename Handle>
     int loop(
         booth_context& state_context,
-        trace_context& api_context,
+        trace_context& context,
         std::string_view title,
         Handle handle
     )
@@ -765,7 +761,7 @@ namespace toll::repl
             if (command == "status")
             {
                 state_context.print(std::cout);
-                api_context.print(std::cout);
+                context.print(std::cout);
                 continue;
             }
 
@@ -777,7 +773,7 @@ namespace toll::repl
 
         std::cout << "--- final ---\n";
         state_context.print(std::cout);
-        api_context.print(std::cout);
+        context.print(std::cout);
         return 0;
     }
 
@@ -785,16 +781,16 @@ namespace toll::repl
     int run(std::string_view title)
     {
         booth_context state_context;
-        trace_context api_context;
+        trace_context context;
 
         nil::sm::SM<nil::sm::api::Coalesce<tracing_api>, Top, booth_context> machine{
-            &api_context,
+            &context,
             &state_context
         };
 
         return loop(
             state_context,
-            api_context,
+            context,
             title,
             [&](std::string_view command, std::string_view argument)
             {

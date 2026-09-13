@@ -303,7 +303,7 @@ namespace nil::sm::ir::detail
             const auto target_metadata = nil::sm::detail::make_metadata<typename R::type>(
                 metadata.region,
                 target_state,
-                API::template api<typename R::type>::regions_t::size,
+                API::template state<typename R::type>::regions_t::size,
                 metadata.parent
             );
             node.transitions.emplace_back(ir::transit::Event{
@@ -403,7 +403,7 @@ namespace nil::sm::ir::detail
             const auto target_metadata = nil::sm::detail::make_metadata<typename R::type>(
                 metadata.region,
                 target_state,
-                API::template api<typename R::type>::regions_t::size,
+                API::template state<typename R::type>::regions_t::size,
                 metadata.parent
             );
             node.transitions.push_back(TransitionInfoT{
@@ -420,17 +420,17 @@ namespace nil::sm::ir::detail
         nil::xalt::tlist<E...> /* events */
     )
     {
-        using api_t = API::template api<T>;
-        using api_context_t = typename API::api_context_t;
+        using state_t = API::template state<T>;
+        using context_t = typename API::context_t;
 
         (emit_reaction_action<
              API,
              RegionInitial,
              E,
-             decltype(api_t::template on_event<E>(
+             decltype(state_t::template on_event<E>(
                  std::declval<T&>(),
                  std::declval<const E&>(),
-                 static_cast<api_context_t*>(nullptr)
+                 static_cast<context_t*>(nullptr)
              )),
              ir::action::Event,
              ir::transit::Event>(metadata, node),
@@ -444,17 +444,17 @@ namespace nil::sm::ir::detail
         nil::xalt::tlist<E...> /* captures */
     )
     {
-        using api_t = API::template api<T>;
-        using api_context_t = typename API::api_context_t;
+        using state_t = API::template state<T>;
+        using context_t = typename API::context_t;
 
         (emit_reaction_action<
              API,
              RegionInitial,
              E,
-             decltype(api_t::template on_capture<E>(
+             decltype(state_t::template on_capture<E>(
                  std::declval<T&>(),
                  std::declval<const E&>(),
-                 static_cast<api_context_t*>(nullptr)
+                 static_cast<context_t*>(nullptr)
              )),
              ir::action::Capture,
              ir::transit::Capture>(metadata, node),
@@ -464,15 +464,15 @@ namespace nil::sm::ir::detail
     template <typename API, typename T, typename RegionInitial>
     constexpr void emit_node_annotations(const nil::sm::Metadata& metadata, ir::Node& node)
     {
-        using api_t = API::template api<T>;
-        using api_context_t = typename API::api_context_t;
+        using state_t = API::template state<T>;
+        using context_t = typename API::context_t;
         using on_enter_result_t
-            = decltype(api_t::on_enter(std::declval<T&>(), static_cast<api_context_t*>(nullptr)));
+            = decltype(state_t::on_enter(std::declval<T&>(), static_cast<context_t*>(nullptr)));
         using on_exit_result_t
-            = decltype(api_t::on_exit(std::declval<T&>(), static_cast<api_context_t*>(nullptr)));
-        using on_regions_finalized_result_t = decltype(api_t::on_regions_finalized(
+            = decltype(state_t::on_exit(std::declval<T&>(), static_cast<context_t*>(nullptr)));
+        using on_regions_finalized_result_t = decltype(state_t::on_regions_finalized(
             std::declval<T&>(),
-            static_cast<api_context_t*>(nullptr)
+            static_cast<context_t*>(nullptr)
         ));
 
         emit_lifecycle_action<on_enter_result_t, ir::action::Entry, ir::response::EEntry>(
@@ -480,8 +480,8 @@ namespace nil::sm::ir::detail
         );
         emit_lifecycle_action<on_exit_result_t, ir::action::Exit, ir::response::EExit>(node.actions
         );
-        emit_captures<API, T, RegionInitial>(metadata, node, typename api_t::captures_t{});
-        emit_events<API, T, RegionInitial>(metadata, node, typename api_t::events_t{});
+        emit_captures<API, T, RegionInitial>(metadata, node, typename state_t::captures_t{});
+        emit_events<API, T, RegionInitial>(metadata, node, typename state_t::events_t{});
         emit_regions_complete_action<API, RegionInitial, on_regions_finalized_result_t>(
             metadata,
             node
@@ -548,7 +548,7 @@ namespace nil::sm::ir::detail
         }(std::index_sequence_for<R...>());
     }
 
-    // Primary template builds a node from API::template api<T>::regions_t.
+    // Primary template builds a node from API::template state<T>::regions_t.
     template <typename API, typename T>
     struct node_builder
     {
@@ -559,7 +559,7 @@ namespace nil::sm::ir::detail
             BuildContext& context
         )
         {
-            using regions_t = typename API::template api<T>::regions_t;
+            using regions_t = typename API::template state<T>::regions_t;
             auto node = ir::Node{
                 .id = format_stable_id(nil::sm::id::stable_id(*metadata)),
                 .display_name = metadata->name,
@@ -567,8 +567,8 @@ namespace nil::sm::ir::detail
                 .is_final = metadata->is_final,
                 .is_barrier = metadata->is_barrier,
                 .type_id = nil::xalt::type_id<T>,
-                .required_args = make_required_args(typename API::template api<T>::args_t{}),
-                .provided_props = make_provided_props(typename API::template api<T>::props_t{}),
+                .required_args = make_required_args(typename API::template state<T>::args_t{}),
+                .provided_props = make_provided_props(typename API::template state<T>::props_t{}),
                 .has_unsatisfied_args = false,
                 .actions = {},
                 .transitions = {},
@@ -629,7 +629,7 @@ namespace nil::sm::ir::detail
         const auto metadata = nil::sm::detail::make_metadata<T>(
             region,
             state,
-            API::template api<T>::regions_t::size,
+            API::template state<T>::regions_t::size,
             parent
         );
         return node_builder<API, T>::template node<RegionInitial>(&metadata, state, context);

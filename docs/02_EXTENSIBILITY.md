@@ -133,8 +133,8 @@ objects; context and root arguments remain borrowed.
 
 ## Custom hooks
 
-A custom API is a template `API<State>`. Use `Coalesce` when only selected hooks
-need to change:
+A custom API provides a nested `state<State>` template. Use `Coalesce` when only
+selected hooks need to change:
 
 ```cpp
 struct Observer
@@ -142,20 +142,23 @@ struct Observer
     void entered(const void* state_id);
 };
 
-template <typename State>
 struct LoggingAPI
 {
-    using api_context_t = Observer;
+    using context_t = Observer;
 
-    static auto on_enter(State& state, Observer* observer)
+    template <typename State>
+    struct state
     {
-        if constexpr (!std::is_same_v<State, nil::sm::Fin>)
-            observer->entered(nil::xalt::type_id<State>);
-        return nil::sm::api::Default<Observer>::api<State>::on_enter(
-            state,
-            observer
-        );
-    }
+        static auto on_enter(State& state, Observer* observer)
+        {
+            if constexpr (!std::is_same_v<State, nil::sm::Fin>)
+                observer->entered(nil::xalt::type_id<State>);
+            return nil::sm::api::Default<Observer>::state<State>::on_enter(
+                state,
+                observer
+            );
+        }
+    };
 };
 
 AppContext app{42};
@@ -171,5 +174,5 @@ hook contract is in [Advanced API](05_ADVANCED.md).
 
 `post()` is synchronous and the library is not thread-safe. A common integration
 is an application queue drained by one owner thread. Custom APIs can also add
-logging, profiling, timers, allocation, or other services through `api_context_t`
+logging, profiling, timers, allocation, or other services through `context_t`
 and `make()`.

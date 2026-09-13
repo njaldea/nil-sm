@@ -64,25 +64,21 @@ namespace
     // on_exit, on_regions_finalized) are absent — api::Coalesce fills them in.
     struct MakeOnlyAPI
     {
-        using api_context_t = MakeObserver;
+        using context_t = MakeObserver;
 
         template <typename T>
-        struct api
+        struct state
         {
             template <typename... Args>
-            static T make(
-                api_context_t* api_contexts,
-                const nil::sm::Metadata& metadata,
-                Args*... args
-            )
+            static T make(context_t* contexts, const nil::sm::Metadata& metadata, Args*... args)
             {
                 if constexpr (!std::is_same_v<T, nil::sm::Fin>)
                 {
-                    api_contexts->on_construct();
+                    contexts->on_construct();
                 }
                 // Delegate construction to api::Default
-                return nil::sm::api::Default<api_context_t>::template api<T>::make(
-                    api_contexts,
+                return nil::sm::api::Default<context_t>::template state<T>::make(
+                    contexts,
                     metadata,
                     args...
                 );
@@ -104,21 +100,21 @@ namespace
     // on_regions_finalized — all fall through to defaults via api::Coalesce.
     struct EnterOnlyAPI
     {
-        using api_context_t = EnterObserver;
+        using context_t = EnterObserver;
 
         template <typename T>
-        struct api
+        struct state
         {
-            static auto on_enter(T& state, api_context_t* api_contexts)
+            static auto on_enter(T& state, context_t* contexts)
             {
                 if constexpr (!std::is_same_v<T, nil::sm::Fin>)
                 {
-                    api_contexts->on_enter_intercepted();
+                    contexts->on_enter_intercepted();
                 }
                 // Delegate to api::Default for actual state hook dispatch
-                return nil::sm::api::Default<api_context_t>::template api<T>::on_enter(
+                return nil::sm::api::Default<context_t>::template state<T>::on_enter(
                     state,
-                    api_contexts
+                    contexts
                 );
             }
 
@@ -135,32 +131,32 @@ namespace
 
     struct MakeAndEnterAPI
     {
-        using api_context_t = CombinedObserver;
+        using context_t = CombinedObserver;
 
         template <typename T>
-        struct api
+        struct state
         {
             template <typename... Args>
-            static T make(api_context_t* context, const nil::sm::Metadata& metadata, Args*... args)
+            static T make(context_t* context, const nil::sm::Metadata& metadata, Args*... args)
             {
                 if constexpr (!std::is_same_v<T, nil::sm::Fin>)
                 {
                     context->on_construct();
                 }
-                return nil::sm::api::Default<api_context_t>::template api<T>::make(
+                return nil::sm::api::Default<context_t>::template state<T>::make(
                     context,
                     metadata,
                     args...
                 );
             }
 
-            static auto on_enter(T& state, api_context_t* context)
+            static auto on_enter(T& state, context_t* context)
             {
                 if constexpr (!std::is_same_v<T, nil::sm::Fin>)
                 {
                     context->on_enter_intercepted();
                 }
-                return nil::sm::api::Default<api_context_t>::template api<T>::on_enter(
+                return nil::sm::api::Default<context_t>::template state<T>::on_enter(
                     state,
                     context
                 );
@@ -180,23 +176,20 @@ namespace
     // on_regions_finalized — all fall through to defaults via api::Coalesce.
     struct EventOnlyAPI
     {
-        using api_context_t = EventObserver;
+        using context_t = EventObserver;
 
         template <typename T>
-        struct api
+        struct state
         {
             template <typename E>
-            static auto on_event(T& state, const E& event, EventObserver* api_contexts)
+            static auto on_event(T& state, const E& event, EventObserver* contexts)
             {
                 if constexpr (!std::is_same_v<T, nil::sm::Fin>)
                 {
-                    api_contexts->on_event_intercepted();
+                    contexts->on_event_intercepted();
                 }
-                return nil::sm::api::Default<EventObserver>::template api<T>::template on_event<E>(
-                    state,
-                    event,
-                    api_contexts
-                );
+                return nil::sm::api::Default<EventObserver>::template state<T>::template on_event<
+                    E>(state, event, contexts);
             }
 
             // make, on_enter, on_exit, on_regions_finalized — not defined here

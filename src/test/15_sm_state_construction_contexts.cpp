@@ -177,20 +177,20 @@ namespace
 
     struct parent_identity_api
     {
-        using api_context_t = parent_identity_context;
+        using context_t = parent_identity_context;
 
         template <typename T>
-        struct api
+        struct state
         {
-            using api_t = nil::sm::api::Default<api_context_t>::template api<T>;
-            using regions_t = typename api_t::regions_t;
-            using events_t = typename api_t::events_t;
-            using captures_t = typename api_t::captures_t;
-            using args_t = typename api_t::args_t;
-            using props_t = typename api_t::props_t;
+            using state_t = nil::sm::api::Default<context_t>::template state<T>;
+            using regions_t = typename state_t::regions_t;
+            using events_t = typename state_t::events_t;
+            using captures_t = typename state_t::captures_t;
+            using args_t = typename state_t::args_t;
+            using props_t = typename state_t::props_t;
 
             template <typename... Args>
-            static T make(api_context_t* context, nil::sm::Metadata metadata, Args*... args)
+            static T make(context_t* context, nil::sm::Metadata metadata, Args*... args)
             {
                 if constexpr (std::is_same_v<T, parent_identity_child>)
                 {
@@ -200,38 +200,38 @@ namespace
                                          ) { return first; };
                     context->received_parent = capture_first(args...);
                 }
-                return api_t::make(context, metadata, args...);
+                return state_t::make(context, metadata, args...);
             }
 
-            static auto on_enter(T& state, api_context_t* context)
+            static auto on_enter(T& state, context_t* context)
             {
                 if constexpr (std::is_same_v<T, parent_identity_parent>)
                 {
                     context->entered_parent = static_cast<parent_base*>(&state);
                 }
-                return api_t::on_enter(state, context);
+                return state_t::on_enter(state, context);
             }
 
-            static auto on_exit(T& state, api_context_t* context)
+            static auto on_exit(T& state, context_t* context)
             {
-                return api_t::on_exit(state, context);
+                return state_t::on_exit(state, context);
             }
 
-            static auto on_regions_finalized(T& state, api_context_t* context)
+            static auto on_regions_finalized(T& state, context_t* context)
             {
-                return api_t::on_regions_finalized(state, context);
-            }
-
-            template <typename E>
-            static auto on_event(T& state, const E& event, api_context_t* context)
-            {
-                return api_t::on_event(state, event, context);
+                return state_t::on_regions_finalized(state, context);
             }
 
             template <typename E>
-            static auto on_capture(T& state, const E& event, api_context_t* context)
+            static auto on_event(T& state, const E& event, context_t* context)
             {
-                return api_t::on_capture(state, event, context);
+                return state_t::on_event(state, event, context);
+            }
+
+            template <typename E>
+            static auto on_capture(T& state, const E& event, context_t* context)
+            {
+                return state_t::on_capture(state, event, context);
             }
         };
     };

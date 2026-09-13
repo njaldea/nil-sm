@@ -13,10 +13,10 @@ namespace nil::sm::api
     template <typename A = void>
     struct Default final
     {
-        using api_context_t = A;
+        using context_t = A;
 
         template <typename T>
-        struct api final
+        struct state final
         {
             using regions_t = nil::xalt::coalesce_t<T, detail::regions_tag>;
             using events_t = nil::xalt::coalesce_t<T, detail::events_tag>;
@@ -25,13 +25,13 @@ namespace nil::sm::api
             using props_t = nil::xalt::coalesce_t<T, detail::props_tag>;
 
             template <typename... Args>
-            static T make(api_context_t* /* api_contexts */, Metadata /* metadata */, Args*... args)
+            static T make(context_t* /* contexts */, Metadata /* metadata */, Args*... args)
             {
                 return T{args...};
             }
 
             template <typename E>
-            static auto on_event(T& state, const E& event, api_context_t* /* api_contexts */)
+            static auto on_event(T& state, const E& event, context_t* /* contexts */)
             {
                 // will not be called if not in events list
                 static_assert(concepts::has_valid_on_event<T, E>);
@@ -39,14 +39,14 @@ namespace nil::sm::api
             }
 
             template <typename E>
-            static auto on_capture(T& state, const E& event, api_context_t* /* api_contexts */)
+            static auto on_capture(T& state, const E& event, context_t* /* contexts */)
             {
                 // will not be called if not in captures list
                 static_assert(concepts::has_valid_on_capture<T, E>);
                 return state.on_capture(event);
             }
 
-            static auto on_enter(T& state, api_context_t* /* api_contexts */)
+            static auto on_enter(T& state, context_t* /* contexts */)
             {
                 // need to check for existence first
                 if constexpr (concepts::has_on_enter<T>)
@@ -61,7 +61,7 @@ namespace nil::sm::api
                 }
             }
 
-            static auto on_exit(T& state, api_context_t* /* api_contexts */)
+            static auto on_exit(T& state, context_t* /* contexts */)
             {
                 // need to check for existence first
                 if constexpr (concepts::has_on_exit<T>)
@@ -76,7 +76,7 @@ namespace nil::sm::api
                 }
             }
 
-            static auto on_regions_finalized(T& state, api_context_t* /* api_contexts */)
+            static auto on_regions_finalized(T& state, context_t* /* contexts */)
             {
                 // need to check for existence first
                 if constexpr (concepts::has_on_regions_finalized<T>)
@@ -96,21 +96,19 @@ namespace nil::sm::api
     template <typename API>
     struct Coalesce final
     {
-        NIL_XALT_COALESCE_TAG(api_context_t, void);
-        using api_context_t = nil::xalt::coalesce_t<API, api_context_t_tag>;
+        NIL_XALT_COALESCE_TAG(context_t, void);
+        using context_t = nil::xalt::coalesce_t<API, context_t_tag>;
 
         template <typename T>
-        struct api final
+        struct state final
         {
-            using api_t = typename API::template api<T>;
-
-            using inner_t = T;
-            using defaulter_t = typename Default<api_context_t>::template api<inner_t>;
-            NIL_XALT_COALESCE_TAG(events_t, defaulter_t::events_t);
-            NIL_XALT_COALESCE_TAG(regions_t, defaulter_t::regions_t);
-            NIL_XALT_COALESCE_TAG(captures_t, defaulter_t::captures_t);
-            NIL_XALT_COALESCE_TAG(args_t, defaulter_t::args_t);
-            NIL_XALT_COALESCE_TAG(props_t, defaulter_t::props_t);
+            using state_t = typename API::template state<T>;
+            using default_state_t = typename Default<context_t>::template state<T>;
+            NIL_XALT_COALESCE_TAG(events_t, default_state_t::events_t);
+            NIL_XALT_COALESCE_TAG(regions_t, default_state_t::regions_t);
+            NIL_XALT_COALESCE_TAG(captures_t, default_state_t::captures_t);
+            NIL_XALT_COALESCE_TAG(args_t, default_state_t::args_t);
+            NIL_XALT_COALESCE_TAG(props_t, default_state_t::props_t);
 
             using regions_t = nil::xalt::coalesce_t<T, regions_t_tag>;
             using events_t = nil::xalt::coalesce_t<T, events_t_tag>;
@@ -118,80 +116,80 @@ namespace nil::sm::api
             using args_t = nil::xalt::coalesce_t<T, args_t_tag>;
             using props_t = nil::xalt::coalesce_t<T, props_t_tag>;
 
-            static T make(api_context_t* api_contexts, const Metadata& metadata, auto*... args)
+            static T make(context_t* contexts, const Metadata& metadata, auto*... args)
             {
                 static constexpr auto api_has_make
-                    = requires() { api_t::make(api_contexts, metadata, args...); };
+                    = requires() { state_t::make(contexts, metadata, args...); };
 
                 if constexpr (api_has_make)
                 {
-                    return api_t::make(api_contexts, metadata, args...);
+                    return state_t::make(contexts, metadata, args...);
                 }
                 else
                 {
-                    return defaulter_t::make(api_contexts, metadata, args...);
+                    return default_state_t::make(contexts, metadata, args...);
                 }
             }
 
             template <typename E>
-            static auto on_event(T& state, const E& event, api_context_t* api_contexts)
+            static auto on_event(T& state, const E& event, context_t* contexts)
             {
-                if constexpr (requires() { api_t::on_event(state, event, api_contexts); })
+                if constexpr (requires() { state_t::on_event(state, event, contexts); })
                 {
-                    return api_t::on_event(state, event, api_contexts);
+                    return state_t::on_event(state, event, contexts);
                 }
                 else
                 {
-                    return defaulter_t::on_event(state, event, api_contexts);
+                    return default_state_t::on_event(state, event, contexts);
                 }
             }
 
             template <typename E>
-            static auto on_capture(T& state, const E& event, api_context_t* api_contexts)
+            static auto on_capture(T& state, const E& event, context_t* contexts)
             {
-                if constexpr (requires() { api_t::on_capture(state, event, api_contexts); })
+                if constexpr (requires() { state_t::on_capture(state, event, contexts); })
                 {
-                    return api_t::on_capture(state, event, api_contexts);
+                    return state_t::on_capture(state, event, contexts);
                 }
                 else
                 {
-                    return defaulter_t::on_capture(state, event, api_contexts);
+                    return default_state_t::on_capture(state, event, contexts);
                 }
             }
 
-            static auto on_enter(T& state, api_context_t* api_contexts)
+            static auto on_enter(T& state, context_t* contexts)
             {
-                if constexpr (requires() { api_t::on_enter(state, api_contexts); })
+                if constexpr (requires() { state_t::on_enter(state, contexts); })
                 {
-                    return api_t::on_enter(state, api_contexts);
+                    return state_t::on_enter(state, contexts);
                 }
                 else
                 {
-                    return defaulter_t::on_enter(state, api_contexts);
+                    return default_state_t::on_enter(state, contexts);
                 }
             }
 
-            static auto on_exit(T& state, api_context_t* api_contexts)
+            static auto on_exit(T& state, context_t* contexts)
             {
-                if constexpr (requires() { api_t::on_exit(state, api_contexts); })
+                if constexpr (requires() { state_t::on_exit(state, contexts); })
                 {
-                    return api_t::on_exit(state, api_contexts);
+                    return state_t::on_exit(state, contexts);
                 }
                 else
                 {
-                    return defaulter_t::on_exit(state, api_contexts);
+                    return default_state_t::on_exit(state, contexts);
                 }
             }
 
-            static auto on_regions_finalized(T& state, api_context_t* api_contexts)
+            static auto on_regions_finalized(T& state, context_t* contexts)
             {
-                if constexpr (requires() { api_t::on_regions_finalized(state, api_contexts); })
+                if constexpr (requires() { state_t::on_regions_finalized(state, contexts); })
                 {
-                    return api_t::on_regions_finalized(state, api_contexts);
+                    return state_t::on_regions_finalized(state, contexts);
                 }
                 else
                 {
-                    return defaulter_t::on_regions_finalized(state, api_contexts);
+                    return default_state_t::on_regions_finalized(state, contexts);
                 }
             }
         };

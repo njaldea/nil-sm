@@ -75,10 +75,10 @@ namespace legacy
 
     struct legacy_api
     {
-        using api_context_t = void;
+        using context_t = void;
 
         template <typename T>
-        struct api
+        struct state
         {
             using regions_t = nil::xalt::coalesce_t<T, nil::sm::detail::regions_tag>;
             using events_t = nil::xalt::coalesce_t<T, nil::sm::detail::events_tag>::template apply<
@@ -86,7 +86,8 @@ namespace legacy
             using captures_t = nil::xalt::coalesce_t<T, nil::sm::detail::captures_tag>;
             using props_t = nil::xalt::tlist<>;
 
-            using api_t = typename nil::sm::api::Default<api_context_t>::template api<T>;
+            using api_t = typename nil::sm::api::Default<context_t>;
+            using state_t = typename api_t::template state<T>;
 
             static constexpr auto args_f()
             {
@@ -105,7 +106,7 @@ namespace legacy
             using args_t = decltype(args_f());
 
             static T make(
-                api_context_t* /* api_contexts */,
+                context_t* /* contexts */,
                 const nil::sm::Metadata& /* metadata */,
                 auto* parent,
                 auto* context
@@ -115,30 +116,30 @@ namespace legacy
             }
 
             template <typename E>
-            static auto on_event(T& state, const E& event, api_context_t* api_contexts)
+            static auto on_event(T& state, const E& event, context_t* contexts)
             {
-                return api_t::on_event(state, event.get(), api_contexts);
+                return state_t::on_event(state, event.get(), contexts);
             }
 
             template <typename E>
-            static auto on_capture(T& state, const E& event, api_context_t* api_contexts)
+            static auto on_capture(T& state, const E& event, context_t* contexts)
             {
-                return api_t::on_capture(state, event.get(), api_contexts);
+                return state_t::on_capture(state, event.get(), contexts);
             }
 
-            static auto on_enter(T& state, api_context_t* api_contexts)
+            static auto on_enter(T& state, context_t* contexts)
             {
-                return api_t::on_enter(state, api_contexts);
+                return state_t::on_enter(state, contexts);
             }
 
-            static auto on_exit(T& state, api_context_t* api_contexts)
+            static auto on_exit(T& state, context_t* contexts)
             {
-                return api_t::on_exit(state, api_contexts);
+                return state_t::on_exit(state, contexts);
             }
 
-            static auto on_regions_finalized(T& state, api_context_t* api_contexts)
+            static auto on_regions_finalized(T& state, context_t* contexts)
             {
-                return api_t::on_regions_finalized(state, api_contexts);
+                return state_t::on_regions_finalized(state, contexts);
             }
         };
     };

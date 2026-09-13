@@ -11,14 +11,14 @@
 int main()
 {
     toll::booth_context state_context;
-    toll::trace_context api_context;
+    toll::trace_context context;
 
     nil::sm::SM<nil::sm::api::Coalesce<toll::tracing_api>, toll::bslot::booth, toll::booth_context>
-        machine{&api_context, &state_context};
+        machine{&context, &state_context};
 
     return toll::repl::loop(
         state_context,
-        api_context,
+        context,
         "toll booth - barrier adapter",
         [&](std::string_view command, std::string_view argument)
         {
