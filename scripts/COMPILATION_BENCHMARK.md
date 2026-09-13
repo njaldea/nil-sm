@@ -35,8 +35,8 @@ Standalone front-end compilation metrics (`g++ -c` with Release flags, averaged 
 
 | Commit | Date | Benchmark 1<br>(Plain SM) | Benchmark 2<br>(SM + Validate) | Benchmark 3<br>(Build IR only) | Benchmark 4<br>(SM + Build IR) | Notes |
 |:---|:---|:---|:---|:---|:---|:---|
-| `ff18492` | 2026-09-12 | 0.93 s / 0.83 s<br>233.1 MB (238,727 KB) | 1.14 s / 1.04 s<br>269.6 MB (276,032 KB) | 0.71 s / 0.64 s<br>186.0 MB (190,473 KB) | 1.22 s / 1.08 s<br>275.8 MB (282,469 KB) | Initial baseline covering all library features |
-| `98a2c6c` | 2026-09-12 | 0.98 s / 0.91 s<br>231.1 MB (236,668 KB) | 1.13 s / 1.00 s<br>267.2 MB (273,612 KB) | 0.71 s / 0.66 s<br>183.7 MB (188,140 KB) | 1.22 s / 1.09 s<br>273.6 MB (280,164 KB) | API convention change (parent struct + nested `api<T>`); single-run, not 3-run averaged; flat vs baseline |
+| `98a2c6c` | 2026-09-12 | 0.98 s / 0.91 s<br>231.1 MB (236,668 KB) | 1.13 s / 1.00 s<br>267.2 MB (273,612 KB) | 0.71 s / 0.66 s<br>183.7 MB (188,140 KB) | 1.22 s / 1.09 s<br>273.6 MB (280,164 KB) | Baseline (flat vs initial `ff18492` measurement); single-run, not 3-run averaged |
+| `9bf9cde` | 2026-09-13 | 0.80 s / 0.71 s<br>199.2 MB (204,009 KB) | 1.01 s / 0.92 s<br>235.1 MB (240,701 KB) | 0.76 s / 0.70 s<br>183.8 MB (188,192 KB) | 1.12 s / 1.01 s<br>240.6 MB (246,352 KB) | Replaced `std::visit` with a manual index-based `visit()` and replaced `std::variant` with `nil::xalt::tagged_union` (trivially-copyable tagged union, no libstdc++ visit/variant class machinery) for the internal `on_event_t`/`on_enter_t`/`on_exit_t`/`on_regions_finalized_t` action types.<br>3-run average; versus `98a2c6c`:<br>- B1 **-31.9 MB (-13.8%)**<br>- B2 **-32.1 MB (-12.0%)**<br>- B3 +0.1 MB (~0%, unaffected — no `SM`/dispatch instantiation)<br>- B4 **-33.0 MB (-12.1%)** |
 
 ---
 
@@ -47,14 +47,8 @@ Comparable full test suite and sandbox builds with default parallelism (3 clean 
 | Commit | Date | Key Changes / Scope | Avg Wall Time | Avg CPU Time | Avg Peak RSS | $\Delta$ Peak RSS vs Baseline |
 |:---|:---|:---|---:|---:|---:|---:|
 | `933d993` | 2026-09-08 | Baseline (`origin/master` barrier layout) | 25.25 s | 195.61 s | 457.6 MB (468,629 KB) | *Baseline* |
-| `87fb83d` | 2026-09-09 | Revamp (`direct_parent` & cleanup) | 25.30 s | 206.43 s | 436.2 MB (446,675 KB) | **-21.4 MB (-4.68%)** |
-| `cf3d691` | 2026-09-09 | More tests & docs update | 26.63 s | 214.59 s | 467.8 MB (479,019 KB) | **+10.1 MB (+2.22%)** |
-| `fd49352` | 2026-09-10 | Added IR validation & error info | 29.37 s | 252.86 s | 474.0 MB (485,344 KB) | **+16.3 MB (+3.57%)** |
-| `915cefb` | 2026-09-11 | BSL license update (`v0.0.1`) | 28.16 s | 240.77 s | 473.9 MB (485,233 KB) | **+16.2 MB (+3.54%)** |
-| `ff18492` | 2026-09-12 | Fix API requirements & `constexpr` validation | 26.97 s | 210.97 s | 458.0 MB (468,959 KB) | **+0.3 MB (+0.07%)** |
-| `98a2c6c` | 2026-09-12 | API convention change (parent struct + nested `api<T>`) | 27.86 s | 239.65 s | 457.3 MB (468,248 KB) | **-0.4 MB (-0.09%)** (single run, not 3-run averaged) |
-| `41d78c4` | 2026-09-13 | Simplified API policy and separate `Unhandled` boundary checks | 28.73 s | 230.71 s | 456.6 MB (467,512 KB) | **-1.1 MB (-0.24%)**; 3-run average; versus `98a2c6c`: +0.87 s wall, -8.94 s CPU, -736 KB RSS |
-| `WORKTREE` | 2026-09-13 | Centralized state validation; removed duplicate dispatch action checks | 28.26 s | 218.25 s | 459.3 MB (470,315 KB) | **+1.6 MB (+0.36%)**; 3-run average; versus `41d78c4`: -0.47 s wall, -12.46 s CPU, +2,803 KB RSS |
+| `41d78c4` | 2026-09-13 | Simplified API policy and separate `Unhandled` boundary checks (last commit before dispatch-internals optimization) | 28.73 s | 230.71 s | 456.6 MB (467,512 KB) | **-1.1 MB (-0.24%)** |
+| `9bf9cde` | 2026-09-13 | Centralized state validation.<br>Replaced `std::visit` with a manual index-based `visit()`.<br>Replaced `std::variant` with `nil::xalt::tagged_union` for `on_event_t`/`on_enter_t`/`on_exit_t`/`on_regions_finalized_t`. | 30.78 s | 262.87 s | 406.6 MB (416,409 KB) | <br>- **-52.7 MB (-11.5%)** vs `41d78c4`<br>- **-51.0 MB (-11.1%)** vs baseline |
 
 > **Note on Wall Time**: Later revisions include additional sandbox targets, diagram rendering formats, and new test translation units.
 
