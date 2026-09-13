@@ -53,6 +53,8 @@ Comparable full test suite and sandbox builds with default parallelism (3 clean 
 | `915cefb` | 2026-09-11 | BSL license update (`v0.0.1`) | 28.16 s | 240.77 s | 473.9 MB (485,233 KB) | **+16.2 MB (+3.54%)** |
 | `ff18492` | 2026-09-12 | Fix API requirements & `constexpr` validation | 26.97 s | 210.97 s | 458.0 MB (468,959 KB) | **+0.3 MB (+0.07%)** |
 | `98a2c6c` | 2026-09-12 | API convention change (parent struct + nested `api<T>`) | 27.86 s | 239.65 s | 457.3 MB (468,248 KB) | **-0.4 MB (-0.09%)** (single run, not 3-run averaged) |
+| `41d78c4` | 2026-09-13 | Simplified API policy and separate `Unhandled` boundary checks | 28.73 s | 230.71 s | 456.6 MB (467,512 KB) | **-1.1 MB (-0.24%)**; 3-run average; versus `98a2c6c`: +0.87 s wall, -8.94 s CPU, -736 KB RSS |
+| `WORKTREE` | 2026-09-13 | Centralized state validation; removed duplicate dispatch action checks | 28.26 s | 218.25 s | 459.3 MB (470,315 KB) | **+1.6 MB (+0.36%)**; 3-run average; versus `41d78c4`: -0.47 s wall, -12.46 s CPU, +2,803 KB RSS |
 
 > **Note on Wall Time**: Later revisions include additional sandbox targets, diagram rendering formats, and new test translation units.
 

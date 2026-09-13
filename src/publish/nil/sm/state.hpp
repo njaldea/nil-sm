@@ -4,8 +4,9 @@
 #pragma once
 
 #include "api.hpp"
+#include "concepts.hpp"
 #include "detail.hpp"
-#include "nil/sm/concepts.hpp"
+#include "state_validation.hpp"
 
 #include <nil/xalt/tlist.hpp>
 #include <nil/xalt/typed.hpp>
@@ -34,7 +35,51 @@ namespace nil::sm::barrier
 namespace nil::sm
 {
     template <typename API, typename T>
-    class State final: public detail::IState
+    class State;
+
+    template <typename API, typename T>
+        requires(!detail::is_state_valid<API, T>)
+    class State<API, T> final: public detail::IState
+    {
+        using metadata_t = Metadata;
+
+    public:
+        explicit State(
+            detail::IState* init_parent = nullptr,
+            detail::Queues* /* init_queues */ = nullptr,
+            typename API::context_t* /* init_contexts */ = nullptr,
+            metadata_t init_metadata = {}
+        )
+            : detail::IState(init_parent, init_metadata)
+        {
+        }
+
+        detail::on_event_t on_event(const detail::Event& /* event */) override
+        {
+            return {};
+        }
+
+        // Looks up a value owned by this state or one of its ancestors, by type id.
+        void* get(const void* /* requested_id */) override
+        {
+            return nullptr;
+        }
+
+        // clang-format off
+        static_assert(detail::has_state_typedefs<API, T>, "State API typedefs are invalid or not tlist");
+        static_assert(detail::is_make_valid<API, T>, "State API make() is invalid");
+        static_assert(detail::are_props_valid<API, T>, "State API props are invalid");
+        static_assert(detail::are_event_hooks_valid<API, T>, "State API event hooks are invalid");
+        static_assert(detail::are_capture_hooks_valid<API, T>, "State API capture hooks are invalid");
+        static_assert(detail::is_on_enter_hook_valid<API, T>, "State API on_enter hook is invalid");
+        static_assert(detail::is_on_exit_hook_valid<API, T>, "State API on_exit hook is invalid");
+        static_assert(detail::is_on_regions_finalized_hook_valid<API, T>, "State API on_regions_finalized hook is invalid");
+        // clang-format on
+    };
+
+    template <typename API, typename T>
+        requires(detail::is_state_valid<API, T>)
+    class State<API, T> final: public detail::IState
     {
     public:
         using api_t = API;
@@ -196,26 +241,26 @@ namespace nil::sm
                 if (ev->target == std::addressof(current_state))
                 {
                     finalized = true;
-                    return std::visit(
-                        []<typename V>(V v) -> detail::on_event_t
+                    auto finalized_result = on_regions_finalized();
+                    return finalized_result.visit(
+                        []<typename V>(V& v) -> detail::on_event_t
                         {
                             if constexpr (std::is_same_v<NOOP, V>)
                             {
-                                return Discard();
+                                return detail::on_event_t{Discard()};
                             }
                             else
                             {
-                                return v;
+                                return detail::on_event_t{v};
                             }
-                        },
-                        on_regions_finalized()
+                        }
                     );
                 }
             }
 
             auto capture_result = capture_dispatch_t::dispatch(e, current_state, contexts);
-            if (!std::holds_alternative<Unhandled>(capture_result)
-                && !std::holds_alternative<Forward>(capture_result))
+            if (!capture_result.template holds<Unhandled>()
+                && !capture_result.template holds<Forward>())
             {
                 return capture_result;
             }
@@ -225,16 +270,16 @@ namespace nil::sm
             if (sub_state.handle)
             {
                 auto this_result = event_dispatch_t::dispatch(e, current_state, contexts);
-                if (std::holds_alternative<Unhandled>(this_result))
+                if (this_result.template holds<Unhandled>())
                 {
                     commit_region_results(e, sub_state.results);
                     check_finalize();
                     if (sub_state.forward)
                     {
-                        return Forward();
+                        return detail::on_event_t{Forward()};
                     }
 
-                    return Unhandled();
+                    return detail::on_event_t{Unhandled()};
                 }
 
                 // If the current state transitions, its child regions are destroyed,
@@ -242,7 +287,7 @@ namespace nil::sm
                 //
                 // TODO: evaluate if dropping of event/deferral actions from child regions is
                 // acceptable
-                if (!std::holds_alternative<detail::TransitTo>(this_result))
+                if (!this_result.template holds<detail::TransitTo>())
                 {
                     commit_region_results(e, sub_state.results);
                     check_finalize();
@@ -253,7 +298,7 @@ namespace nil::sm
 
             commit_region_results(e, sub_state.results);
             check_finalize();
-            return Discard();
+            return detail::on_event_t{Discard()};
         }
 
     private:
@@ -265,63 +310,30 @@ namespace nil::sm
 
         static void on_enter(T& state, detail::Queues* init_queues, context_t* init_contexts)
         {
-            static_assert(
-                requires() {
-                    { state_t::on_enter(state, init_contexts) } -> concepts::match::hook;
-                }
-                || requires() {
-                    { state_t::on_enter(state, init_contexts) } -> std::same_as<Unhandled>;
-                },
-                "on_enter only accepts: NOOP, Emit<E>, or Unhandled"
-            );
             const auto on_enter_result = detail::to_runtime_action_as<detail::on_enter_t>(
                 state_t::on_enter(state, init_contexts)
             );
 
-            if (std::holds_alternative<detail::Event>(on_enter_result))
+            if (on_enter_result.template holds<detail::Event>())
             {
-                init_queues->push_emit(std::get<detail::Event>(on_enter_result));
+                init_queues->push_emit(on_enter_result.template get<detail::Event>());
             }
         }
 
         void on_exit()
         {
-            static_assert(
-                requires() {
-                    { state_t::on_exit(current_state, contexts) } -> concepts::match::hook;
-                }
-                || requires() {
-                    { state_t::on_exit(current_state, contexts) } -> std::same_as<Unhandled>;
-                },
-                "on_exit only accepts: NOOP, Emit<E>, or Unhandled"
-            );
-
             const auto on_exit_result = detail::to_runtime_action_as<detail::on_exit_t>(
                 state_t::on_exit(current_state, contexts)
             );
 
-            if (std::holds_alternative<detail::Event>(on_exit_result))
+            if (on_exit_result.template holds<detail::Event>())
             {
-                queues->push_emit(std::get<detail::Event>(on_exit_result));
+                queues->push_emit(on_exit_result.template get<detail::Event>());
             }
         }
 
         detail::on_regions_finalized_t on_regions_finalized()
         {
-            static_assert(
-                requires() {
-                    {
-                        state_t::on_regions_finalized(current_state, contexts)
-                    } -> concepts::match::finalized;
-                }
-                || requires() {
-                    {
-                        state_t::on_regions_finalized(current_state, contexts)
-                    } -> std::same_as<Unhandled>;
-                },
-                "on_regions_finalized only accepts: TransitTo<T>, Emit<T>, Terminate,NOOP or "
-                "Unhandled"
-            );
             return detail::to_runtime_action_as<detail::on_regions_finalized_t>(
                 state_t::on_regions_finalized(current_state, contexts)
             );
@@ -334,7 +346,8 @@ namespace nil::sm
             for (auto i = 0U; i < regions_t::size; ++i)
             {
                 scan.results[i] = regions[i].active_state->on_event(e);
-                std::visit(
+                // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
+                scan.results[i].visit(
                     [&]<typename R>(const R& /* r */)
                     {
                         if constexpr (std::is_same_v<R, Forward>)
@@ -346,9 +359,7 @@ namespace nil::sm
                         {
                             no_region_handled = false;
                         }
-                    },
-                    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index)
-                    scan.results[i]
+                    }
                 );
             }
 

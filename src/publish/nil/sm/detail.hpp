@@ -17,9 +17,11 @@
 
 #include <nil/xalt/checks.hpp>
 #include <nil/xalt/coalesce.hpp>
+#include <nil/xalt/tagged_union.hpp>
 #include <nil/xalt/tlist.hpp>
 #include <nil/xalt/typed.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <memory>
@@ -37,10 +39,34 @@ namespace nil::sm::detail
     NIL_XALT_COALESCE_TAG(args, nil::xalt::tlist<>);
     NIL_XALT_COALESCE_TAG(props, nil::xalt::tlist<>);
 
-    using on_event_t = std::variant<Forward, Discard, Unhandled, Defer, TransitTo, Event>;
-    using on_enter_t = std::variant<Unhandled, NOOP, Event>;
-    using on_exit_t = std::variant<Unhandled, NOOP, Event>;
-    using on_regions_finalized_t = std::variant<Unhandled, NOOP, TransitTo, Event>;
+    using on_event_t
+        = nil::xalt::tagged_union<Forward, Discard, Unhandled, Defer, TransitTo, Event>;
+    using on_enter_t = nil::xalt::tagged_union<Unhandled, NOOP, Event>;
+    using on_exit_t = nil::xalt::tagged_union<Unhandled, NOOP, Event>;
+    using on_regions_finalized_t = nil::xalt::tagged_union<Unhandled, NOOP, TransitTo, Event>;
+
+    // Manual index-based single-variant visitation for plain std::variant (still used for
+    // recursing into user-authored std::variant<...> action results before conversion into
+    // the tagged_union forms above), avoiding libstdc++'s recursive vtable-generation
+    // machinery behind std::visit.
+    template <typename Visitor, typename Variant>
+    decltype(auto) visit(Visitor&& vis, Variant& var)
+    {
+        return [&]<std::size_t... I>(std::index_sequence<I...>) -> decltype(auto)
+        {
+            using R = decltype(vis(std::get<0>(var)));
+            if constexpr (std::is_void_v<R>)
+            {
+                ((var.index() == I ? (vis(std::get<I>(var)), true) : false) || ...);
+            }
+            else
+            {
+                R result{};
+                ((var.index() == I ? (result = vis(std::get<I>(var)), true) : false) || ...);
+                return result;
+            }
+        }(std::make_index_sequence<std::variant_size_v<Variant>>{});
+    }
 
     template <typename T>
     constexpr Metadata make_metadata(
@@ -104,7 +130,7 @@ namespace nil::sm::detail
 
         on_event_t on_event(const Event& /* e */) override
         {
-            return Unhandled();
+            return on_event_t{Unhandled()};
         }
 
         void* get(const void* requested_id) override
@@ -249,7 +275,7 @@ namespace nil::sm::detail
         template <typename RegionDispatcher>
         action_t consume_action(const Event& e, on_event_t action)
         {
-            return std::visit(
+            return action.visit(
                 [&]<typename Action>(Action& r) -> action_t
                 {
                     if constexpr (std::is_same_v<Action, Event>)
@@ -298,8 +324,7 @@ namespace nil::sm::detail
                     {
                         return Discard();
                     }
-                },
-                action
+                }
             );
         }
 
@@ -639,7 +664,7 @@ namespace nil::sm::detail
     {
         if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
         {
-            return std::visit([](auto& v) { return to_runtime_action_as<O>(std::move(v)); }, r);
+            return visit([](auto& v) { return to_runtime_action_as<O>(std::move(v)); }, r);
         }
         else if constexpr (std::is_same_v<R, ::nil::sm::Terminate>)
         {
@@ -669,11 +694,6 @@ namespace nil::sm::detail
         static on_event_t invoke(StateT& state, const Event& event, ApiContext* context)
         {
             using state_t = API::template state<StateT>;
-            using result_t = decltype(state_t::template on_event<Event>(state, event, context));
-            static_assert(
-                concepts::match::action<result_t> || std::is_same_v<result_t, Unhandled>,
-                "on_event only accepts actions or Unhandled"
-            );
             return to_runtime_action_as<on_event_t>(
                 state_t::template on_event<Event>(state, event, context)
             );
@@ -688,11 +708,6 @@ namespace nil::sm::detail
         static on_event_t invoke(StateT& state, const Event& event, ApiContext* context)
         {
             using state_t = API::template state<StateT>;
-            using result_t = decltype(state_t::template on_capture<Event>(state, event, context));
-            static_assert(
-                concepts::match::action<result_t> || std::is_same_v<result_t, Unhandled>,
-                "on_capture only accepts actions or Unhandled"
-            );
             return to_runtime_action_as<on_event_t>(
                 state_t::template on_capture<Event>(state, event, context)
             );
@@ -740,7 +755,7 @@ namespace nil::sm::detail
                 }
             }
 
-            return Unhandled();
+            return on_event_t{Unhandled()};
         }
     };
 

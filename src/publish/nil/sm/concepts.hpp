@@ -45,14 +45,19 @@ namespace nil::sm::concepts::match
     };
 
     template <template <typename> typename Leaf, typename T>
-    struct match final: std::bool_constant<Leaf<T>::value>
+    struct match final
     {
+        static constexpr auto value = Leaf<T>::value;
     };
 
     template <template <typename> typename Leaf, typename... T>
-    struct match<Leaf, std::variant<T...>>: std::bool_constant<(match<Leaf, T>::value && ...)>
+    struct match<Leaf, std::variant<T...>> final
     {
+        static constexpr auto value = (match<Leaf, T>::value && ...);
     };
+
+    template <template <typename> typename Leaf, typename T>
+    concept result_of = std::is_same_v<T, Unhandled> || match<Leaf, T>::value;
 
     template <typename T>
     concept action = match<action_leaf, T>::value;

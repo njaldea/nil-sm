@@ -217,7 +217,7 @@ namespace nil::sm
         {
             if (finalized)
             {
-                return Unhandled();
+                return detail::on_event_t{Unhandled()};
             }
 
             auto result = child->post(e);

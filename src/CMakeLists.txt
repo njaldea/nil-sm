@@ -9,6 +9,7 @@ set(
         publish/nil/sm/concepts.hpp
         publish/nil/sm/detail.hpp
         publish/nil/sm/state.hpp
+        publish/nil/sm/state_validation.hpp
         publish/nil/sm/structs.hpp
 )
 
