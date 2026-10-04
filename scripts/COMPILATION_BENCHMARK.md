@@ -6,7 +6,7 @@ Compilation time and peak memory (Max RSS) metrics for `nil-sml` across clean Re
 
 ## 1. Scope of Benchmarks
 
-All four benchmark sandboxes share the exact same state machine topology ([sandbox/benchmark_sm.hpp](sandbox/benchmark_sm.hpp)) exercising all library features:
+All four benchmark sandboxes share the exact same state machine topology ([sandbox/benchmarks/benchmark_sm.hpp](sandbox/benchmarks/benchmark_sm.hpp)) exercising all library features:
 - **Hierarchical & Orthogonal Regions**: Nested composite states and parallel regions.
 - **Full Action Suite**: `TransitTo<T>`, `Forward`, `Discard`, `Defer`, `DeferTo<T>`, `Emit<E>`, `Terminate`, and `std::variant`.
 - **Hooks & Captures**: `on_enter()`, `on_exit()`, `on_regions_finalized()`, and `on_capture()`.
@@ -14,16 +14,16 @@ All four benchmark sandboxes share the exact same state machine topology ([sandb
 
 ### Benchmark Variants
 
-- **Benchmark 1 (Plain SM)** ([sandbox/benchmark_1_plain.cpp](sandbox/benchmark_1_plain.cpp)):
+- **Benchmark 1 (Plain SM)** ([sandbox/benchmarks/1_plain.cpp](sandbox/benchmarks/1_plain.cpp)):
   - **Scope**: Compiles standalone State Machine instantiation (`DefaultSM<Root>`) and runtime event dispatch.
   - **Focus**: Isolates template instantiation overhead of states, orthogonal/nested regions, lifecycle hooks, and action dispatch.
-- **Benchmark 2 (SM + Validate)** ([sandbox/benchmark_2_validate.cpp](sandbox/benchmark_2_validate.cpp)):
+- **Benchmark 2 (SM + Validate)** ([sandbox/benchmarks/2_validate.cpp](sandbox/benchmarks/2_validate.cpp)):
   - **Scope**: Compiles State Machine instantiation + compile-time validation via `static_assert(nil::sm::validate<API, Root>())`.
   - **Focus**: Measures compile-time evaluation and constant-expression overhead of graph validation.
-- **Benchmark 3 (Build IR only)** ([sandbox/benchmark_3_ir.cpp](sandbox/benchmark_3_ir.cpp)):
+- **Benchmark 3 (Build IR only)** ([sandbox/benchmarks/3_ir.cpp](sandbox/benchmarks/3_ir.cpp)):
   - **Scope**: Compiles standalone IR generation (`nil::sm::ir::build<API, Root>()`).
   - **Focus**: Measures compile-time and runtime cost of graph reflection and metadata introspection without state machine execution.
-- **Benchmark 4 (SM + Build IR)** ([sandbox/benchmark_4_sm_ir.cpp](sandbox/benchmark_4_sm_ir.cpp)):
+- **Benchmark 4 (SM + Build IR)** ([sandbox/benchmarks/4_sm_ir.cpp](sandbox/benchmarks/4_sm_ir.cpp)):
   - **Scope**: Compiles both State Machine instantiation and IR build in the same translation unit.
   - **Focus**: Measures composite template and memory overhead when runtime state machine and IR model coexist.
 
@@ -67,5 +67,5 @@ Comparable full test suite and sandbox builds with default parallelism (3 clean 
   /usr/bin/time -f "wall=%e user=%U sys=%S maxrss=%M KB" \
     g++ -Isrc/publish -isystem .build/vcpkg_installed/x64-linux/include/nil-xalt/1.4.5 \
     -O3 -DNDEBUG -std=gnu++20 -fno-rtti -flto -Wfatal-errors \
-    -c sandbox/benchmark_1_plain.cpp -o /dev/null
+    -c sandbox/benchmarks/1_plain.cpp -o /dev/null
   ```

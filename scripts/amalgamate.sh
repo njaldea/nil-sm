@@ -10,10 +10,24 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$BASH_SOURCE")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-if [[ $# -ne 0 ]]; then
-    echo "error: this script does not accept arguments"
-    echo "usage: $(basename "$BASH_SOURCE")"
+INLINE_XALT=0
+if [[ $# -gt 1 || ( $# -eq 1 && "$1" != "--inline-xalt" ) ]]; then
+    echo "error: unsupported argument"
+    echo "usage: $(basename "$BASH_SOURCE") [--inline-xalt]"
     exit 1
+fi
+if [[ $# -eq 1 ]]; then
+    INLINE_XALT=1
+fi
+
+XALT_INCLUDE_ROOT=""
+if [[ "$INLINE_XALT" == "1" ]]; then
+    xalt_include_dir="$(find "$REPO_ROOT/.build/vcpkg_installed" -type d -path '*/include/nil-xalt/*/nil/xalt' -print -quit)"
+    if [[ -z "$xalt_include_dir" ]]; then
+        echo "error: could not find the installed nil-xalt headers under .build/vcpkg_installed" >&2
+        exit 1
+    fi
+    XALT_INCLUDE_ROOT="$(dirname "$(dirname "$xalt_include_dir")")"
 fi
 
 run_amalgamate()
@@ -86,6 +100,23 @@ run_amalgamate()
                 local include_path="${BASH_REMATCH[2]}"
 
                 if [[ "$delim" != '"' ]]; then
+                    if [[ "$INLINE_XALT" == "1" && "$include_path" == nil/xalt/* ]]; then
+                        local xalt_file="$XALT_INCLUDE_ROOT/$include_path"
+                        if [[ ! -f "$xalt_file" ]]; then
+                            echo "error: could not resolve xalt include '$include_path' from '$file'" >&2
+                            exit 1
+                        fi
+
+                        local resolved_xalt
+                        resolved_xalt="$(realpath "$xalt_file")"
+                        if [[ -n "${SEEN[$resolved_xalt]+x}" ]]; then
+                            continue
+                        fi
+                        SEEN["$resolved_xalt"]=1
+                        process_file "$resolved_xalt"
+                        continue
+                    fi
+
                     if [[ -z "${EXTERNAL_SEEN[$include_path]+x}" ]]; then
                         EXTERNAL_SEEN["$include_path"]=1
                         EXTERNAL_INCLUDES+=("$include_path")

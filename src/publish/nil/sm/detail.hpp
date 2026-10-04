@@ -12,7 +12,6 @@
 // state-maker tables use that same order, so a state ID can select its maker
 // by index without storing the ID twice.
 
-#include "concepts.hpp"
 #include "structs.hpp"
 
 #include <nil/xalt/checks.hpp>

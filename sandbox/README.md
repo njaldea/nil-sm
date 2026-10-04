@@ -5,6 +5,7 @@ Small programs used to exercise `nil::sm` and measure compile cost.
 | target | source | purpose |
 |---|---|---|
 | `sandbox` | `main.cpp` | small feature scratchpad |
+| `sandbox_traffic_lights` | `traffic_lights/` | simple traffic-light cycle for interview practice |
 | `sandbox_tollbooth` | `tollbooth/` | toll booth machine, single translation unit |
 | `sandbox_tollbooth_uml` | `tollbooth/uml.cpp` | PlantUML for the toll booth machine |
 | `sandbox_tollbooth_barrier` | `tollbooth_barrier/` | same machine, jobs behind `nil::sm::barrier::State` |

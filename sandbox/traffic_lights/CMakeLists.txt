@@ -1,0 +1,2 @@
+add_executable(sandbox_traffic_lights main.cpp)
+target_link_libraries(sandbox_traffic_lights PRIVATE sm)
