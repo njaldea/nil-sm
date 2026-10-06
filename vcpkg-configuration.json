@@ -9,10 +9,12 @@
     {
       "kind": "git",
       "repository": "https://github.com/njaldea/nil-vcpkg-ports",
-      "baseline": "06b4a46ca6674283d5772676b52053d3a7fdd0aa",
+      "baseline": "0a47bbe4042a2eeb463496e7021c77975607fd6a",
       "packages": [
         "nil-cmake",
-        "nil-xalt"
+        "nil-xalt",
+        "nil-service",
+        "nil-xit"
       ]
     }
   ]

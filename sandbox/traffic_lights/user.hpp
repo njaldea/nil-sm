@@ -50,6 +50,8 @@ private:
 
 struct st_yellow
 {
+    using events = nil::xalt::tlist<ev_tick>;
+
     auto on_event(const ev_tick& /* event */)
         -> std::variant<nil::sm::Discard, nil::sm::TransitTo<st_red>>
     {

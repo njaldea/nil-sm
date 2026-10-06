@@ -48,23 +48,12 @@ namespace nil::sm::detail
     // recursing into user-authored std::variant<...> action results before conversion into
     // the tagged_union forms above), avoiding libstdc++'s recursive vtable-generation
     // machinery behind std::visit.
-    template <typename Visitor, typename Variant>
-    decltype(auto) visit(Visitor&& vis, Variant& var)
+    template <typename Visitor, typename... T>
+    void visit(Visitor&& vis, std::variant<T...>& var)
     {
-        return [&]<std::size_t... I>(std::index_sequence<I...>) -> decltype(auto)
-        {
-            using R = decltype(vis(std::get<0>(var)));
-            if constexpr (std::is_void_v<R>)
-            {
-                ((var.index() == I ? (vis(std::get<I>(var)), true) : false) || ...);
-            }
-            else
-            {
-                R result{};
-                ((var.index() == I ? (result = vis(std::get<I>(var)), true) : false) || ...);
-                return result;
-            }
-        }(std::make_index_sequence<std::variant_size_v<Variant>>{});
+        return [&]<std::size_t... I>(std::index_sequence<I...>) -> decltype(auto) {
+            ((var.index() == I ? (vis(std::get<I>(var)), true) : false) || ...);
+        }(std::make_index_sequence<sizeof...(T)>{});
     }
 
     template <typename T>
@@ -663,7 +652,9 @@ namespace nil::sm::detail
     {
         if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
         {
-            return visit([](auto& v) { return to_runtime_action_as<O>(std::move(v)); }, r);
+            O return_value;
+            visit([&](auto& v) { return_value = to_runtime_action_as<O>(std::move(v)); }, r);
+            return return_value;
         }
         else if constexpr (std::is_same_v<R, ::nil::sm::Terminate>)
         {

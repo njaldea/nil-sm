@@ -7,6 +7,10 @@
         "nil-xalt"
     ],
     "features": {
+        "sandbox": {
+            "description": "Enable sandboxes",
+            "dependencies": [ "nil-xit", "nlohmann-json" ]
+        },
         "test": {
             "description": "Enable tests",
             "dependencies": [ "gtest" ]
