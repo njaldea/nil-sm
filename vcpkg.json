@@ -9,7 +9,7 @@
     "features": {
         "sandbox": {
             "description": "Enable sandboxes",
-            "dependencies": [ "nil-xit", "nlohmann-json" ]
+            "dependencies": [ "nil-xit" ]
         },
         "test": {
             "description": "Enable tests",

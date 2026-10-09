@@ -5,6 +5,7 @@
 
 #include "format/diagram.hpp" // IWYU pragma: export
 #include "format/dot.hpp"     // IWYU pragma: export
+#include "format/json.hpp"    // IWYU pragma: export
 #include "format/mermaid.hpp" // IWYU pragma: export
 #include "format/puml.hpp"    // IWYU pragma: export
 #include "format/scxml.hpp"   // IWYU pragma: export
@@ -20,6 +21,9 @@ namespace nil::sm
 
     template <typename SM>
     using dot_diagram = format::diagram<SM, &format::dot::render>;
+
+    template <typename SM>
+    using json_diagram = format::diagram<SM, &format::json::render>;
 
     template <typename SM>
     using scxml_diagram = format::diagram<SM, &format::scxml::render>;

@@ -17,6 +17,7 @@ std::cout << nil::sm::mermaid<MySM>().root;
 std::cout << nil::sm::dot<MySM>().root;
 std::cout << nil::sm::scxml<MySM>().root;
 std::cout << nil::sm::xstate<MySM>().root;
+std::cout << nil::sm::json<MySM>().root;
 ```
 
 | Format | Type |
@@ -26,10 +27,15 @@ std::cout << nil::sm::xstate<MySM>().root;
 | Graphviz | `nil::sm::dot<SM>` |
 | SCXML | `nil::sm::scxml<SM>` |
 | XState | `nil::sm::xstate<SM>` |
+| JSON | `nil::sm::json<SM>` |
 
 The graph includes reachable states, transitions, captures, lifecycle actions,
 termination, and structural barrier completion. Barrier child graphs are exposed
 through the formatter's `.barriers` range.
+
+The JSON formatter writes the IR itself, not a diagram: `.root` and each barrier view are an
+array of nodes (args, props, actions, transitions, regions). Ids are decimal strings, or `null`
+when absent. It needs no JSON library.
 
 For runnable examples, see `sandbox_uml`, `sandbox_barrier_state_uml`, and
 `sandbox_tollbooth_barrier_uml`.

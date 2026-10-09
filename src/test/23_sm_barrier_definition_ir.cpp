@@ -231,6 +231,27 @@ TEST(BarrierDefinitionIr, GenericDiagramSupportsEveryFormatter)
     EXPECT_NE(puml_output.find("@startuml"), std::string::npos);
 }
 
+TEST(BarrierDefinitionIr, JsonDiagramRendersNodesAsAnArray)
+{
+    nil::sm::json_diagram<machine> diagram;
+
+    std::ostringstream root_output;
+    root_output << diagram.root;
+    const auto root_json = root_output.str();
+    EXPECT_EQ(root_json.front(), '[');
+    EXPECT_EQ(root_json.back(), ']');
+    EXPECT_NE(root_json.find("\"display_name\":\"parent_a\""), std::string::npos);
+    EXPECT_NE(root_json.find("\"barrier_id\":\""), std::string::npos);
+    EXPECT_NE(root_json.find("\"barrier_id\":null"), std::string::npos);
+
+    for (const auto& barrier : diagram.barriers)
+    {
+        std::ostringstream barrier_output;
+        barrier_output << barrier;
+        EXPECT_NE(barrier_output.str().find("\"display_name\":\"child_state\""), std::string::npos);
+    }
+}
+
 TEST(BarrierDefinitionIr, IteratesUnknownBarriersAndRendersEachDefinition)
 {
     const auto model = nil::sm::ir::build<root>();

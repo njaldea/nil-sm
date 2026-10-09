@@ -100,7 +100,15 @@ namespace nil::sm::ir::transit
 
 namespace nil::sm::ir
 {
-    struct Dependency
+    // A value a state exposes to its descendants.
+    struct Prop
+    {
+        const void* type_id = nullptr;
+        std::string_view type_name;
+    };
+
+    // A value a state needs; direct_parent<T> args are keyed by T and look at the parent only.
+    struct Arg
     {
         const void* type_id = nullptr;
         std::string_view type_name;
@@ -122,8 +130,8 @@ namespace nil::sm::ir
         bool is_final = false;
         bool is_barrier = false;
         const void* type_id = nullptr;
-        std::vector<Dependency> required_args;
-        std::vector<Dependency> provided_props;
+        std::vector<Arg> required_args;
+        std::vector<Prop> provided_props;
         std::vector<action::Info> actions; // entry, exit, regions-finalized, event, capture
         std::vector<transit::Info> transitions;
         // event/capture transitions (no entry/exit/regions-finalized transitions)
@@ -146,13 +154,9 @@ namespace nil::sm::ir
 
     // Types of the arguments passed to the SM constructor; they act as props above the roots.
     template <typename... RootProps>
-    constexpr std::vector<Dependency> make_root_props()
+    constexpr std::vector<Prop> make_root_props()
     {
-        return {Dependency{
-            nil::xalt::type_id<RootProps>,
-            nil::sm::detail::type_name<RootProps>(),
-            false
-        }...};
+        return {Prop{nil::xalt::type_id<RootProps>, nil::sm::detail::type_name<RootProps>()}...};
     }
 }
 
@@ -184,20 +188,20 @@ namespace nil::sm::ir::detail
 {
     // A direct_parent<T> requirement is keyed by T, the type the parent exposes (as_parent<T>).
     template <typename... Args>
-    constexpr std::vector<ir::Dependency> make_required_args(nil::xalt::tlist<Args...> /* a */)
+    constexpr std::vector<ir::Arg> make_required_args(nil::xalt::tlist<Args...> /* a */)
     {
-        return {
-            ir::Dependency{nil::xalt::type_id<nil::sm::detail::resolved_arg_type_t<Args>>, nil::sm::detail::type_name<nil::sm::detail::resolved_arg_type_t<Args>>(), nil::xalt::is_of_template_v<Args, direct_parent>}...
-        };
+        return {ir::
+                    Arg{nil::xalt::type_id<nil::sm::detail::resolved_arg_type_t<Args>>,
+                        nil::sm::detail::type_name<nil::sm::detail::resolved_arg_type_t<Args>>(),
+                        nil::xalt::is_of_template_v<Args, direct_parent>}...};
     }
 
     template <typename... Props>
-    constexpr std::vector<ir::Dependency> make_provided_props(nil::xalt::tlist<Props...> /* p */)
+    constexpr std::vector<ir::Prop> make_provided_props(nil::xalt::tlist<Props...> /* p */)
     {
-        return {ir::Dependency{
+        return {ir::Prop{
             nil::xalt::type_id<typename Props::type>,
-            nil::sm::detail::type_name<typename Props::type>(),
-            false
+            nil::sm::detail::type_name<typename Props::type>()
         }...};
     }
 

@@ -1,7 +1,6 @@
 <script>
     import "https://unpkg.com/elkjs@0.12.0/lib/elk.bundled.js";
     import { xit } from "@nil-/xit";
-    import { decode } from "@msgpack/msgpack";
     import Model from "./Model.svelte";
 
     const { values } = xit();
@@ -28,7 +27,9 @@
 
     let show_props = $state(false);
 
-    const payload = $derived($model && $model.length > 0 ? decode($model) : null);
+    const payload = $derived(
+        $model && $model.length > 0 ? JSON.parse(new TextDecoder().decode($model)) : null
+    );
     const machines = $derived(payload?.machines ?? []);
     const ir = $derived(machines[machine]?.model ?? null);
 

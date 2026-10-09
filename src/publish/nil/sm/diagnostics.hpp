@@ -12,12 +12,12 @@ namespace nil::sm::detail
 {
     // direct_parent<T> needs the immediate parent to expose T; other args look through ancestors.
     constexpr bool diagnostic_satisfied(
-        const ir::Dependency& requirement,
-        const std::vector<ir::Dependency>& ancestor_props,
+        const ir::Arg& requirement,
+        const std::vector<ir::Prop>& ancestor_props,
         const ir::Node* parent
     )
     {
-        const auto provides = [&](const std::vector<ir::Dependency>& props)
+        const auto provides = [&](const std::vector<ir::Prop>& props)
         {
             return std::any_of(
                 props.begin(),
@@ -35,7 +35,7 @@ namespace nil::sm::detail
     constexpr bool nodes_satisfied(
         const ir::Model& model,
         const std::vector<ir::Node>& nodes,
-        const std::vector<ir::Dependency>& ancestor_props,
+        const std::vector<ir::Prop>& ancestor_props,
         const ir::Node* parent
     )
     {
@@ -84,10 +84,7 @@ namespace nil::sm
 {
     // True when every state's args are provided by an ancestor prop or by a root arg.
     // Use the viz sandbox to see which state is missing what.
-    constexpr bool validate(
-        const ir::Model& model,
-        const std::vector<ir::Dependency>& root_props = {}
-    )
+    constexpr bool validate(const ir::Model& model, const std::vector<ir::Prop>& root_props = {})
     {
         return detail::nodes_satisfied(model, model.roots, root_props, nullptr);
     }
