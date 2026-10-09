@@ -13,6 +13,7 @@
 #include <nil/xalt/fn_make.hpp>
 
 #include <cassert>
+#include <functional>
 #include <iostream>
 
 namespace demo
@@ -73,6 +74,33 @@ namespace legacy
     {
     };
 
+    struct EventQueue
+    {
+        nil::sm::ISM* sm;
+
+        void set_machine(nil::sm::ISM* machine)
+        {
+            sm = machine;
+        }
+
+        template <typename T>
+        void post(T event)
+        {
+            // queue to event queue (iocontext)
+            tasks.push_back(
+                [this, event = std::move(event)]() mutable
+                {
+                    if (sm)
+                    {
+                        sm->post(std::move(event));
+                    }
+                }
+            );
+        }
+
+        std::vector<std::function<void()>> tasks;
+    };
+
     struct legacy_api
     {
         using context_t = void;
@@ -84,7 +112,7 @@ namespace legacy
             using events_t = nil::xalt::coalesce_t<T, nil::sm::detail::events_tag>::template apply<
                 demo::SEvent>;
             using captures_t = nil::xalt::coalesce_t<T, nil::sm::detail::captures_tag>;
-            using props_t = nil::xalt::tlist<>;
+            using props_t = nil::xalt::coalesce_t<T, nil::sm::detail::props_tag>;
 
             using api_t = typename nil::sm::api::Default<context_t>;
             using state_t = typename api_t::template state<T>;
@@ -95,11 +123,15 @@ namespace legacy
                 {
                     return nil::xalt::tlist<
                         nil::sm::direct_parent<typename T::parent>,
+                        std::shared_ptr<EventQueue>,
                         std::shared_ptr<demo::context>>{};
                 }
                 else
                 {
-                    return nil::xalt::tlist<fallback_parent, std::shared_ptr<demo::context>>{};
+                    return nil::xalt::tlist<
+                        fallback_parent,
+                        std::shared_ptr<EventQueue>,
+                        std::shared_ptr<demo::context>>{};
                 }
             }
 
@@ -108,38 +140,58 @@ namespace legacy
             static T make(
                 context_t* /* contexts */,
                 const nil::sm::Metadata& /* metadata */,
-                auto* parent,
-                auto* context
+                auto*... props
             )
             {
-                return nil::xalt::fn_make<T>(*parent, *context);
+                return nil::xalt::fn_make<T>(*props...);
             }
 
             template <typename E>
-            static auto on_event(T& state, const E& event, context_t* contexts)
+            static auto on_event(T& state, const E& event, context_t* /* contexts */)
             {
-                return state_t::on_event(state, event.get(), contexts);
+                return state.React(event.get());
             }
 
             template <typename E>
-            static auto on_capture(T& state, const E& event, context_t* contexts)
+            static auto on_capture(T& state, const E& event, context_t* /* contexts */)
             {
-                return state_t::on_capture(state, event.get(), contexts);
+                return state.Capture(event.get());
             }
 
-            static auto on_enter(T& state, context_t* contexts)
+            static auto on_enter(T& state, context_t* /* contexts */)
             {
-                return state_t::on_enter(state, contexts);
+                if constexpr (requires(T s) { s.OnEnter(); })
+                {
+                    return state.OnEnter();
+                }
+                else
+                {
+                    return nil::sm::Unhandled();
+                }
             }
 
-            static auto on_exit(T& state, context_t* contexts)
+            static auto on_exit(T& state, context_t* /* contexts */)
             {
-                return state_t::on_exit(state, contexts);
+                if constexpr (requires(T s) { s.OnExit(); })
+                {
+                    return state.OnExit();
+                }
+                else
+                {
+                    return nil::sm::Unhandled();
+                }
             }
 
-            static auto on_regions_finalized(T& state, context_t* contexts)
+            static auto on_regions_finalized(T& state, context_t* /* contexts */)
             {
-                return state_t::on_regions_finalized(state, contexts);
+                if constexpr (requires(T s) { s.OnSubTerminate(); })
+                {
+                    return state.OnSubTerminate();
+                }
+                else
+                {
+                    return nil::sm::Unhandled();
+                }
             }
         };
     };
@@ -153,6 +205,8 @@ namespace demo
     struct child
     {
         using events = nil::xalt::tlist<e1>;
+        // add parent alias temporarily to allow getting the exact type of the parent.
+        // does not check if the actual parent is of type `base`.
         using parent = base;
 
         explicit child(auto& /* parent */, std::shared_ptr<context> context_value)
@@ -160,10 +214,7 @@ namespace demo
         {
         }
 
-        template <typename E>
-        void foo(const E&) const;
-
-        auto on_event(const e1& /* event */) const
+        auto React(const e1& /* event */) const
         {
             ctx->value++;
             return nil::sm::Discard();
@@ -174,9 +225,10 @@ namespace demo
 
     struct root: base
     {
+        using props = nil::xalt::tlist<nil::sm::as_parent<base>>;
         using regions = nil::xalt::tlist<child>;
 
-        explicit root(const std::shared_ptr<context>& /* ctx */)
+        explicit root(const auto& /* parent */, const std::shared_ptr<context>& /* ctx */)
         {
         }
     };
@@ -184,13 +236,30 @@ namespace demo
 
 int main()
 {
+    // The root args are the ones the SM below is constructed with.
+    const auto valid = nil::sm::validate<
+        demo::root,
+        legacy::legacy_api,
+        legacy::fallback_parent,
+        std::shared_ptr<legacy::EventQueue>,
+        std::shared_ptr<demo::context>>();
+    std::cout << (valid ? "root state is valid\n" : "root state has unmet args\n");
+
     std::shared_ptr<demo::context> ctx = std::make_shared<demo::context>();
     legacy::fallback_parent fp{};
 
-    using LegacySM = nil::sm::
-        SM<legacy::legacy_api, demo::root, legacy::fallback_parent, std::shared_ptr<demo::context>>;
+    using LegacySM = nil::sm::SM<
+        legacy::legacy_api,
+        demo::root,
+        legacy::fallback_parent,
+        std::shared_ptr<legacy::EventQueue>,
+        std::shared_ptr<demo::context>>;
 
-    LegacySM machine{&fp, &ctx};
+    auto eq = std::make_shared<legacy::EventQueue>();
+
+    LegacySM machine{&fp, &eq, &ctx};
+
+    eq->set_machine(&machine);
 
     nil::sm::puml<LegacySM> diagram;
 

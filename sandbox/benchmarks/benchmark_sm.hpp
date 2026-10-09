@@ -130,6 +130,7 @@ namespace benchmark
     // Composite state in Region 1
     struct running
     {
+        using props = nil::xalt::tlist<nil::sm::as_parent<running>>;
         using regions = nil::xalt::tlist<processing_sub1>;
         using events = nil::xalt::tlist<ev_pause, ev_tick>;
 

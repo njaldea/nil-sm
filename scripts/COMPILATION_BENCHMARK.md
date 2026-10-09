@@ -21,7 +21,7 @@ All four benchmark sandboxes share the exact same state machine topology ([sandb
   - **Scope**: Compiles State Machine instantiation + compile-time validation via `static_assert(nil::sm::validate<API, Root>())`.
   - **Focus**: Measures compile-time evaluation and constant-expression overhead of graph validation.
 - **Benchmark 3 (Build IR only)** ([sandbox/benchmarks/3_ir.cpp](sandbox/benchmarks/3_ir.cpp)):
-  - **Scope**: Compiles standalone IR generation (`nil::sm::ir::build<API, Root>()`).
+  - **Scope**: Compiles standalone IR generation (`nil::sm::ir::build<Root, API>()`).
   - **Focus**: Measures compile-time and runtime cost of graph reflection and metadata introspection without state machine execution.
 - **Benchmark 4 (SM + Build IR)** ([sandbox/benchmarks/4_sm_ir.cpp](sandbox/benchmarks/4_sm_ir.cpp)):
   - **Scope**: Compiles both State Machine instantiation and IR build in the same translation unit.

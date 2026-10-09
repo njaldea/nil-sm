@@ -26,6 +26,8 @@
     // index into the focus options of the current machine
     let selected = $state(0);
 
+    let show_props = $state(false);
+
     const payload = $derived($model && $model.length > 0 ? decode($model) : null);
     const machines = $derived(payload?.machines ?? []);
     const ir = $derived(machines[machine]?.model ?? null);
@@ -70,6 +72,12 @@
 
     {#if options.length > 0}
         <label>
+            props
+
+            <input type="checkbox" bind:checked={show_props} />
+        </label>
+
+        <label>
             model
 
             <select bind:value={selected}>
@@ -83,7 +91,7 @@
     {#if ir && current}
         <!-- a fresh Model per selection drops the opened barriers -->
         {#key `${machine}:${selected}`}
-            <Model model={ir} focus={current.focus} {theme} />
+            <Model model={ir} root_props={machines[machine]?.root_props ?? []} focus={current.focus} {theme} {show_props} />
         {/key}
     {:else}
         <p class="waiting">waiting for model...</p>

@@ -218,79 +218,37 @@ namespace
     };
 
     using transitioned_to_nested_barrier = state_1a;
-
-    template <typename T>
-    auto build_validated()
-    {
-        auto model = nil::sm::ir::build<barrier_api, T>();
-        nil::sm::validate(model);
-        return model;
-    }
 }
 
 TEST(sm_feature_barrier_dependency_diagnostics, two_levels_are_satisfied)
 {
-    EXPECT_TRUE((nil::sm::validate<barrier_api, two_levels_ok_root>()));
-
-    const auto model = build_validated<two_levels_ok_root>();
-
-    EXPECT_FALSE(model.has_unsatisfied_args);
-    EXPECT_TRUE(model.barrier_errors.empty());
-
-    std::ostringstream output;
-    nil::sm::ir::print_errors(output, model);
-    EXPECT_TRUE(output.str().empty());
+    EXPECT_TRUE((nil::sm::validate<two_levels_ok_root, barrier_api>()));
 }
 
 TEST(sm_feature_barrier_dependency_diagnostics, two_levels_second_state_missing_a_fails)
 {
-    EXPECT_FALSE((nil::sm::validate<barrier_api, two_levels_missing_a_root>()));
-
-    const auto model = build_validated<two_levels_missing_a_root>();
-
-    EXPECT_TRUE(model.has_unsatisfied_args);
-    EXPECT_TRUE(model.barrier_errors.empty());
-
-    std::ostringstream output;
-    nil::sm::ir::print_errors(output, model);
-    EXPECT_EQ(output.str(), "root | A |\n");
+    EXPECT_FALSE((nil::sm::validate<two_levels_missing_a_root, barrier_api>()));
 }
 
 TEST(sm_feature_barrier_dependency_diagnostics, two_levels_second_barrier_is_satisfied)
 {
-    const auto model = build_validated<two_levels_barrier_ok_root>();
-
-    EXPECT_FALSE(model.has_unsatisfied_args);
-    EXPECT_TRUE(model.barrier_errors.empty());
-
-    std::ostringstream output;
-    nil::sm::ir::print_errors(output, model);
-    EXPECT_TRUE(output.str().empty());
+    EXPECT_TRUE((nil::sm::validate<two_levels_barrier_ok_root, barrier_api>()));
 }
 
 TEST(sm_feature_barrier_dependency_diagnostics, two_levels_second_barrier_missing_a_fails)
 {
-    const auto model = build_validated<two_levels_barrier_missing_a_root>();
+    EXPECT_FALSE((nil::sm::validate<two_levels_barrier_missing_a_root, barrier_api>()));
+}
 
-    EXPECT_TRUE(model.has_unsatisfied_args);
-    ASSERT_EQ(model.barrier_errors.size(), 1U);
-    EXPECT_EQ(model.barrier_errors.front().dependency.type_id, nil::xalt::type_id<A>);
-
-    std::ostringstream output;
-    nil::sm::ir::print_errors(output, model);
-    EXPECT_EQ(output.str(), "barrier 2 | A | state 1\n");
+TEST(sm_feature_barrier_dependency_diagnostics, root_args_satisfy_barrier_requirements)
+{
+    EXPECT_TRUE((nil::sm::validate<two_levels_barrier_missing_a_root, barrier_api, A>()));
+    EXPECT_FALSE((nil::sm::validate<two_levels_barrier_missing_a_root, barrier_api, B>()));
 }
 
 TEST(sm_feature_barrier_dependency_diagnostics, three_levels_second_state_missing_a_fails)
 {
-    const auto model = build_validated<three_levels_second_missing_a_root>();
-
-    EXPECT_TRUE(model.has_unsatisfied_args);
-    EXPECT_TRUE(model.barrier_errors.empty());
-
-    std::ostringstream output;
-    nil::sm::ir::print_errors(output, model);
-    EXPECT_EQ(output.str(), "root | A |\n");
+    EXPECT_FALSE((nil::sm::validate<three_levels_second_missing_a_root, barrier_api>()));
 }
 
 TEST(
@@ -298,30 +256,13 @@ TEST(
     three_levels_second_and_third_barriers_third_missing_b_fails
 )
 {
-    const auto model = build_validated<three_levels_third_barrier_missing_b_root>();
-
-    EXPECT_TRUE(model.has_unsatisfied_args);
-    ASSERT_EQ(model.barrier_errors.size(), 1U);
-    EXPECT_EQ(model.barrier_errors.front().dependency.type_id, nil::xalt::type_id<B>);
-    EXPECT_EQ(model.barrier_errors.front().barrier_path.size(), 2U);
-
-    std::ostringstream output;
-    nil::sm::ir::print_errors(output, model);
-    EXPECT_EQ(output.str(), "barrier 3 | B | state 1 - barrier 2\n");
+    EXPECT_FALSE((nil::sm::validate<three_levels_third_barrier_missing_b_root, barrier_api>()));
+    EXPECT_TRUE((nil::sm::validate<three_levels_third_barrier_missing_b_root, barrier_api, B>()));
 }
 
 TEST(sm_feature_barrier_dependency_diagnostics, three_levels_second_barrier_missing_a_fails)
 {
-    const auto model = build_validated<three_levels_second_barrier_missing_a_root>();
-
-    EXPECT_TRUE(model.has_unsatisfied_args);
-    ASSERT_EQ(model.barrier_errors.size(), 1U);
-    EXPECT_EQ(model.barrier_errors.front().dependency.type_id, nil::xalt::type_id<A>);
-    EXPECT_EQ(model.barrier_errors.front().barrier_path.size(), 1U);
-
-    std::ostringstream output;
-    nil::sm::ir::print_errors(output, model);
-    EXPECT_EQ(output.str(), "barrier 2 | A | state 1\n");
+    EXPECT_FALSE((nil::sm::validate<three_levels_second_barrier_missing_a_root, barrier_api>()));
 }
 
 TEST(
@@ -329,38 +270,24 @@ TEST(
     three_levels_second_barrier_missing_a_and_third_barrier_missing_b_fail
 )
 {
-    const auto model = build_validated<three_levels_second_missing_a_third_missing_b_root>();
-
-    EXPECT_TRUE(model.has_unsatisfied_args);
-    ASSERT_EQ(model.barrier_errors.size(), 2U);
-    EXPECT_EQ(model.barrier_errors[0].dependency.type_id, nil::xalt::type_id<A>);
-    EXPECT_EQ(model.barrier_errors[1].dependency.type_id, nil::xalt::type_id<B>);
-
-    std::ostringstream output;
-    nil::sm::ir::print_errors(output, model);
-
-    EXPECT_EQ(
-        output.str(),
-        "barrier 2 | A | state 1\n"
-        "barrier 3 | B | state 1 - barrier 2\n"
+    EXPECT_FALSE(
+        (nil::sm::validate<three_levels_second_missing_a_third_missing_b_root, barrier_api>())
+    );
+    EXPECT_FALSE(
+        (nil::sm::validate<three_levels_second_missing_a_third_missing_b_root, barrier_api, A>())
+    );
+    EXPECT_TRUE(
+        (nil::sm::validate<three_levels_second_missing_a_third_missing_b_root, barrier_api, A, B>())
     );
 }
 
 TEST(sm_feature_barrier_dependency_diagnostics, transition_reaches_nested_barrier_levels)
 {
-    const auto model = build_validated<transitioned_to_nested_barrier>();
+    const auto model = nil::sm::ir::build<transitioned_to_nested_barrier, barrier_api>();
 
-    ASSERT_TRUE(model.has_unsatisfied_args);
     ASSERT_EQ(model.barriers.size(), 2U);
-    ASSERT_EQ(model.barrier_errors.size(), 2U);
     EXPECT_EQ(model.barriers[0].name, "barrier 2");
     EXPECT_EQ(model.barriers[1].name, "barrier 3");
-
-    std::ostringstream output;
-    nil::sm::ir::print_errors(output, model);
-    EXPECT_EQ(
-        output.str(),
-        "barrier 3 | B | state 1a - barrier 2\n"
-        "barrier 3 | B | state 1b - barrier 2\n"
-    );
+    EXPECT_FALSE(nil::sm::validate(model));
+    EXPECT_TRUE(nil::sm::validate(model, nil::sm::ir::make_root_props<B>()));
 }

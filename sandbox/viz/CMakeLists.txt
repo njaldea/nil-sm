@@ -3,7 +3,7 @@ project(viz)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(nil-xit CONFIG REQUIRED)
 
-add_executable(${PROJECT_NAME} main.cpp tollbooth.cpp tollbooth_barrier.cpp)
+add_executable(${PROJECT_NAME} main.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 target_link_libraries(
     ${PROJECT_NAME}

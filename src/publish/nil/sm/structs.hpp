@@ -73,9 +73,30 @@ namespace nil::sm
         }
     };
 
-    // Opt-in escape hatch: `using args = tlist<direct_parent<ParentType>>;` resolves to the
-    // immediate parent's own state address, cast to `ParentType*` (you assert what type it
-    // actually is - no prop<> needed on the parent's side).
+    // Exposes the state itself as its base type: `using props = tlist<as_parent<Base>>;`.
+    // Children reach it with `args = tlist<Base>` or, for the immediate parent only,
+    // `args = tlist<direct_parent<Base>>`.
+    template <typename Base>
+    struct as_parent final
+    {
+        static_assert(!std::is_const_v<Base>, "Properties must expose a mutable type.");
+
+        using type = Base;
+
+        template <typename State>
+        static type* get(State& state)
+        {
+            static_assert(
+                std::is_convertible_v<State*, Base*>,
+                "as_parent needs the state to derive from Base."
+            );
+            return static_cast<Base*>(std::addressof(state));
+        }
+    };
+
+    // Opt-in escape hatch: `using args = tlist<direct_parent<Type>>;` resolves `Type*` from the
+    // immediate parent's own props only (never its ancestors), so the parent must expose `Type`,
+    // for example with `as_parent<Type>`. Not available across a barrier boundary.
     template <typename T>
     struct direct_parent final
     {

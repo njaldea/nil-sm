@@ -113,6 +113,7 @@ namespace
 
     struct parent_identity_parent: parent_base
     {
+        using props = nil::xalt::tlist<nil::sm::as_parent<parent_base>>;
         using regions = nil::xalt::tlist<parent_identity_child>;
     };
 

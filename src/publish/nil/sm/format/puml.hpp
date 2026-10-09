@@ -96,9 +96,8 @@ namespace nil::sm::format::puml
 
         if (node.barrier_id != nullptr)
         {
-            indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\" "
-                              << (node.has_unsatisfied_args ? "<<invalid-args>>" : "<<barrier>>")
-                              << "\n";
+            indent(os, depth) << "state " << node.id << " as \"" << node.display_name
+                              << "\" <<barrier>>\n";
             render_annotations(os, depth, node);
             return;
         }
@@ -106,10 +105,7 @@ namespace nil::sm::format::puml
         if (!node.regions.empty())
         {
             indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\""
-                              << (node.has_unsatisfied_args
-                                      ? " <<invalid-args>>"
-                                      : (node.is_barrier ? " <<barrier>>" : ""))
-                              << " {\n";
+                              << (node.is_barrier ? " <<barrier>>" : "") << " {\n";
             for (auto region_idx = std::size_t{0}; region_idx < node.regions.size(); ++region_idx)
             {
                 render_region(os, depth + 1, node.regions[region_idx]);
@@ -122,8 +118,7 @@ namespace nil::sm::format::puml
         }
         else
         {
-            indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\""
-                              << (node.has_unsatisfied_args ? " <<invalid-args>>" : "") << "\n";
+            indent(os, depth) << "state " << node.id << " as \"" << node.display_name << "\"\n";
         }
 
         render_annotations(os, depth, node);
@@ -138,8 +133,6 @@ namespace nil::sm::format::puml
               "    BackgroundColor<<barrier>> #EEE8FF\n"
               "    BorderColor<<barrier>> #7F5FBF\n"
               "    BorderStyle<<barrier>> dashed\n"
-              "    BackgroundColor<<invalid-args>> #FFE2E2\n"
-              "    BorderColor<<invalid-args>> #B22222\n"
               "}\n";
 
         render_region(os, 0, roots);

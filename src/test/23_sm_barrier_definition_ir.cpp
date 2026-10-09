@@ -73,7 +73,7 @@ namespace
 
 TEST(BarrierDefinitionIr, BarrierUsesBarrierStateAsLeafRegion)
 {
-    const auto model = nil::sm::ir::build<nil::sm::api::Default<>, lifecycle_root>();
+    const auto model = nil::sm::ir::build<lifecycle_root>();
 
     ASSERT_EQ(model.roots.size(), 1U);
     ASSERT_EQ(model.roots.front().regions.size(), 1U);
@@ -94,7 +94,7 @@ TEST(BarrierDefinitionIr, BarrierUsesBarrierStateAsLeafRegion)
 
 TEST(BarrierDefinitionIr, StoresRepeatedBarrierStateOnceAndReferencesIt)
 {
-    const auto model = nil::sm::ir::build<nil::sm::api::Default<>, root>();
+    const auto model = nil::sm::ir::build<root>();
     const void* const barrier_id = shared_barrier_state::id;
 
     ASSERT_EQ(model.barriers.size(), 1U);
@@ -108,7 +108,7 @@ TEST(BarrierDefinitionIr, StoresRepeatedBarrierStateOnceAndReferencesIt)
 
 TEST(BarrierDefinitionIr, BarrierDefinitionIdsIgnoreHostMetadata)
 {
-    const auto model = nil::sm::ir::build<nil::sm::api::Default<>, root>();
+    const auto model = nil::sm::ir::build<root>();
     const auto local_barrier = shared_barrier_state::ir(nullptr);
 
     ASSERT_EQ(model.barriers.size(), 1U);
@@ -118,7 +118,7 @@ TEST(BarrierDefinitionIr, BarrierDefinitionIdsIgnoreHostMetadata)
 
 TEST(BarrierDefinitionIr, RendersRootAndSelectedBarrierSeparately)
 {
-    const auto model = nil::sm::ir::build<nil::sm::api::Default<>, root>();
+    const auto model = nil::sm::ir::build<root>();
 
     std::ostringstream root_output;
     nil::sm::format::puml::render(root_output, model.roots);
@@ -233,7 +233,7 @@ TEST(BarrierDefinitionIr, GenericDiagramSupportsEveryFormatter)
 
 TEST(BarrierDefinitionIr, IteratesUnknownBarriersAndRendersEachDefinition)
 {
-    const auto model = nil::sm::ir::build<nil::sm::api::Default<>, root>();
+    const auto model = nil::sm::ir::build<root>();
     auto barrier_count = std::size_t{0};
 
     nil::sm::ir::for_each_barrier(

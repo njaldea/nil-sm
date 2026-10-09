@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "../diagnostics.hpp"
+#include "../ir.hpp"
 #include "../state.hpp"
 
 #include <iterator>
@@ -142,11 +142,10 @@ namespace nil::sm::format
     struct diagram<nil::sm::SM<API, T, Props...>, Render>
     {
         explicit diagram()
-            : model(ir::build<API, T>())
+            : model(ir::build<T, API>())
             , root{&model, Render}
             , barriers{&model, Render}
         {
-            nil::sm::validate(model);
         }
 
         ~diagram() = default;

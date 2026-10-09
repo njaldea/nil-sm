@@ -48,7 +48,7 @@
     }                                                                                              \
     [[maybe_unused]] nil::sm::ir::Model NAME::ir(const nil::sm::Metadata* parent_metadata)         \
     {                                                                                              \
-        return nil::sm::ir::detail::build_unchecked<typename NAME::api, STATE>(parent_metadata);   \
+        return nil::sm::ir::detail::build_unchecked<STATE, typename NAME::api>(parent_metadata);   \
     }
 
 namespace nil::sm::barrier
@@ -205,11 +205,6 @@ namespace nil::sm
 
         void* get(const void* requested_id) override
         {
-            if (requested_id == nil::xalt::type_id<detail::direct_parent_marker>)
-            {
-                return nullptr;
-            }
-
             return parent != nullptr ? parent->get(requested_id) : nullptr;
         }
 

@@ -3,7 +3,7 @@
 
 #include "benchmark_sm.hpp"
 
-static_assert(nil::sm::validate<nil::sm::api::Default<>, benchmark::root>());
+static_assert(nil::sm::validate<benchmark::root, nil::sm::api::Default<>>());
 
 int main()
 {

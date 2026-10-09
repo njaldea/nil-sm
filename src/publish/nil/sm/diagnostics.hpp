@@ -10,124 +10,92 @@
 
 namespace nil::sm::detail
 {
+    // direct_parent<T> needs the immediate parent to expose T; other args look through ancestors.
     constexpr bool diagnostic_satisfied(
         const ir::Dependency& requirement,
         const std::vector<ir::Dependency>& ancestor_props,
-        bool has_parent
+        const ir::Node* parent
     )
     {
-        return requirement.is_direct_parent
-            ? has_parent
-            : std::any_of(
-                  ancestor_props.begin(),
-                  ancestor_props.end(),
-                  [&](const auto& property) { return property.type_id == requirement.type_id; }
-              );
-    }
-
-    constexpr void append_diagnostic_requirement(
-        std::vector<ir::UnsatisfiedArgument>& requirements,
-        ir::UnsatisfiedArgument requirement
-    )
-    {
-        if (!std::any_of(
-                requirements.begin(),
-                requirements.end(),
-                [&](const auto& existing)
-                {
-                    return existing.dependency.type_id == requirement.dependency.type_id
-                        && existing.dependency.is_direct_parent
-                        == requirement.dependency.is_direct_parent
-                        && existing.barrier_path == requirement.barrier_path;
-                }
-            ))
+        const auto provides = [&](const std::vector<ir::Dependency>& props)
         {
-            requirements.push_back(std::move(requirement));
-        }
-    }
-
-    // NOLINTNEXTLINE
-    constexpr void validate_nodes(
-        std::vector<ir::Node>& nodes,
-        const std::vector<ir::Dependency>& ancestor_props,
-        bool has_parent,
-        std::vector<std::string_view> host_path,
-        ir::Model& model
-    )
-    {
-        for (auto& node : nodes)
-        {
-            host_path.push_back(node.display_name);
-            for (const auto& requirement : node.required_args)
-            {
-                if (!diagnostic_satisfied(requirement, ancestor_props, has_parent))
-                {
-                    node.has_unsatisfied_args = true;
-                    model.has_unsatisfied_args = true;
-                    append_diagnostic_requirement(
-                        model.unsatisfied_args,
-                        ir::UnsatisfiedArgument{requirement, {}}
-                    );
-                }
-            }
-
-            auto descendant_props = ancestor_props;
-            descendant_props.insert(
-                descendant_props.end(),
-                node.provided_props.begin(),
-                node.provided_props.end()
+            return std::any_of(
+                props.begin(),
+                props.end(),
+                [&](const auto& property) { return property.type_id == requirement.type_id; }
             );
-            for (auto& region : node.regions)
-            {
-                validate_nodes(region, descendant_props, true, host_path, model);
-            }
+        };
 
-            if (node.barrier_id != nullptr)
+        return requirement.is_direct_parent ? parent != nullptr && provides(parent->provided_props)
+                                            : provides(ancestor_props);
+    }
+
+    // A barrier looks props up through its host, but never reaches direct_parent.
+    // NOLINTNEXTLINE
+    constexpr bool nodes_satisfied(
+        const ir::Model& model,
+        const std::vector<ir::Node>& nodes,
+        const std::vector<ir::Dependency>& ancestor_props,
+        const ir::Node* parent
+    )
+    {
+        return std::all_of(
+            nodes.begin(),
+            nodes.end(),
+            [&](const ir::Node& node)
             {
-                for (const auto& barrier : model.barriers)
+                const auto own_satisfied = std::all_of(
+                    node.required_args.begin(),
+                    node.required_args.end(),
+                    [&](const auto& requirement)
+                    { return diagnostic_satisfied(requirement, ancestor_props, parent); }
+                );
+                if (!own_satisfied)
                 {
-                    if (barrier.id == node.barrier_id)
-                    {
-                        for (const auto& requirement : barrier.unsatisfied_args)
-                        {
-                            if (!diagnostic_satisfied(
-                                    requirement.dependency,
-                                    ancestor_props,
-                                    false
-                                ))
-                            {
-                                node.has_unsatisfied_args = true;
-                                model.has_unsatisfied_args = true;
-                                append_diagnostic_requirement(model.unsatisfied_args, requirement);
-                                model.barrier_errors.push_back(ir::BarrierError{
-                                    requirement.dependency,
-                                    requirement.barrier_path,
-                                    host_path
-                                });
-                            }
-                        }
-                        break;
-                    }
+                    return false;
                 }
-            }
 
-            host_path.pop_back();
-        }
+                auto descendant_props = ancestor_props;
+                descendant_props.insert(
+                    descendant_props.end(),
+                    node.provided_props.begin(),
+                    node.provided_props.end()
+                );
+                const auto regions_satisfied = std::all_of(
+                    node.regions.begin(),
+                    node.regions.end(),
+                    [&](const auto& region)
+                    { return nodes_satisfied(model, region, descendant_props, &node); }
+                );
+                if (!regions_satisfied)
+                {
+                    return false;
+                }
+
+                const auto* barrier = ir::find_barrier(model, node.barrier_id);
+                return node.barrier_id == nullptr || barrier == nullptr
+                    || nodes_satisfied(model, barrier->roots, ancestor_props, nullptr);
+            }
+        );
     }
 }
 
 namespace nil::sm
 {
-    constexpr bool validate(ir::Model& model)
+    // True when every state's args are provided by an ancestor prop or by a root arg.
+    // Use the viz sandbox to see which state is missing what.
+    constexpr bool validate(
+        const ir::Model& model,
+        const std::vector<ir::Dependency>& root_props = {}
+    )
     {
-        detail::validate_nodes(model.roots, {}, false, {}, model);
-        return !model.has_unsatisfied_args;
+        return detail::nodes_satisfied(model, model.roots, root_props, nullptr);
     }
 
-    template <typename API, typename T>
-    consteval bool validate()
+    // Not consteval: a barrier's definition is built by its out-of-line ir() at runtime.
+    template <typename T, typename API, typename... RootProps>
+    constexpr bool validate()
     {
-        auto model = ir::build<API, T>();
-        return validate(model);
+        return validate(ir::build<T, API>(), ir::make_root_props<RootProps...>());
     }
 }

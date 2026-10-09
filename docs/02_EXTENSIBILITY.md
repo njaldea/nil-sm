@@ -74,44 +74,52 @@ The member function and free function receive mutable state. A `const` member
 function, a free function taking `const C&`, and a `prop<const T, ...>` are not
 valid property accessors.
 
-`direct_parent<T>` is an explicit escape hatch for the immediate parent. It is
-not available across a barrier boundary.
+`direct_parent<T>` is an explicit escape hatch for the immediate parent. Only that parent's
+own props are searched, so it must expose `T`; `as_parent<Base>` exposes the state itself
+as its base type:
+
+```cpp
+struct parent: base
+{
+    using props = nil::xalt::tlist<nil::sm::as_parent<base>>;
+};
+
+struct child
+{
+    using args = nil::xalt::tlist<nil::sm::direct_parent<base>>;
+};
+```
+
+It is not available across a barrier boundary.
 
 ## Argument validation in diagrams
 
-`ir::build()` populates the model structure and dependency requirements. Call
-`nil::sm::validate(model)` to validate non-root construction arguments against
-properties declared by ancestors. Missing requirements set
-`Model::has_unsatisfied_args` and the affected node's `has_unsatisfied_args`:
+`ir::build()` returns a plain model: `roots` (the states of the top-level region) and
+`barriers` (each barrier definition with its own `roots`). Every node lists the
+`required_args` it needs and the `provided_props` it offers; the model holds no
+validation results, because a shared barrier can be satisfied at one host and not at
+another.
+
+`nil::sm::validate` answers pass/fail: does every state get its args from an ancestor
+prop or a root arg?
 
 ```cpp
-auto model = nil::sm::ir::build<
-    nil::sm::api::Default<>,
-    parent>();
-const bool valid = nil::sm::validate(model);
-
-assert(valid);
+auto model = nil::sm::ir::build<parent>();
+assert(nil::sm::validate(model));
 ```
 
-For a direct pass/fail check without retaining the model, validate the API and
-root types directly at compile-time or runtime:
+Arguments handed to the `SM` constructor are not props of any state. List their
+types so root requirements are satisfied:
 
 ```cpp
-static_assert(nil::sm::validate<
-    nil::sm::api::Default<>,
-    parent>());
+static_assert(nil::sm::validate<parent, api, app_context>());
+assert(nil::sm::validate(model, nil::sm::ir::make_root_props<app_context>()));
 ```
 
-It examines all states reachable in each child region, including transition
-targets and barrier child states. Root construction arguments are not checked
-because they are provided directly to the machine constructor.
-Each model and barrier definition also exposes `unsatisfied_args`: the
-dependencies it cannot satisfy with properties declared inside that model.
-When a barrier is used, its host checks this list against its own ancestor
-properties. This keeps a shared barrier definition neutral while marking only
-the host occurrence that cannot provide its dependencies.
-PlantUML renders affected states with the `<<invalid-args>>` stereotype and an
-error color while continuing to render the rest of the model.
+A barrier looks props up through its host but never reaches `direct_parent`, so its
+requirements are checked against each host's ancestors. To see which state is missing
+what, use the `viz` sandbox: it evaluates the model per occurrence and lists the
+unmet args on each state, barrier host, and root.
 
 ## Type erasure
 

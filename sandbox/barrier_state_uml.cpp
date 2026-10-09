@@ -35,7 +35,7 @@ namespace demo
         }
     };
 
-        using child_api = nil::sm::api::Default<>;
+    using child_api = nil::sm::api::Default<>;
 
     NIL_SM_BARRIER_DECLARE(second_level_barrier_state, child_api);
     NIL_SM_BARRIER_DEFINE(second_level_barrier_state, second_level_missing);
@@ -114,8 +114,6 @@ int main()
 {
     using machine = nil::sm::DefaultSM<demo::root>;
     nil::sm::puml<machine> diagram;
-
-    nil::sm::ir::print_barrier_errors(std::cout, diagram.model);
 
     std::cout << diagram.root;
     for (const auto& barrier : diagram.barriers)

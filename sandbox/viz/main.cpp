@@ -1,18 +1,21 @@
+#include "../tollbooth/jobs.hpp"
+#include "../tollbooth_barrier/slot.hpp"
 #include "../traffic_lights/user.hpp"
 #include "showcase.hpp"
 
 #include <nil/service.hpp>
 #include <nil/sm.hpp>
 #include <nil/sm/barrier.hpp>
+#include <nil/sm/diagnostics.hpp>
 #include <nil/xit.hpp>
 
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
 #include <filesystem>
+#include <iostream>
 #include <string>
 #include <string_view>
-#include <utility>
 #include <variant>
 #include <vector>
 
@@ -99,19 +102,6 @@ namespace nil::sm::ir
                {"is_direct_parent", d.is_direct_parent}};
     }
 
-    void to_json(nlohmann::json& j, const UnsatisfiedArgument& u)
-    {
-        j = {{"dependency", u.dependency}, {"barrier_path", u.barrier_path}};
-    }
-
-    void to_json(nlohmann::json& j, const BarrierError& e)
-    {
-        j
-            = {{"dependency", e.dependency},
-               {"barrier_path", e.barrier_path},
-               {"host_path", e.host_path}};
-    }
-
     void to_json(nlohmann::json& j, const Node& n)
     {
         j
@@ -123,7 +113,6 @@ namespace nil::sm::ir
                {"type_id", to_uint(n.type_id)},
                {"required_args", n.required_args},
                {"provided_props", n.provided_props},
-               {"has_unsatisfied_args", n.has_unsatisfied_args},
                {"actions", n.actions},
                {"transitions", n.transitions},
                {"regions", n.regions},
@@ -132,27 +121,22 @@ namespace nil::sm::ir
 
     void to_json(nlohmann::json& j, const BarrierDefinition& b)
     {
-        j
-            = {{"id", to_uint(b.id)},
-               {"name", b.name},
-               {"roots", b.roots},
-               {"unsatisfied_args", b.unsatisfied_args}};
+        j = {{"id", to_uint(b.id)}, {"name", b.name}, {"roots", b.roots}};
     }
 
     void to_json(nlohmann::json& j, const Model& m)
     {
-        j
-            = {{"roots", m.roots},
-               {"barriers", m.barriers},
-               {"unsatisfied_args", m.unsatisfied_args},
-               {"barrier_errors", m.barrier_errors},
-               {"has_unsatisfied_args", m.has_unsatisfied_args}};
+        j = {{"roots", m.roots}, {"barriers", m.barriers}};
     }
 }
 
 namespace viz_demo
 {
     struct st_dont_walk;
+
+    struct pedestrian_button
+    {
+    };
 
     struct st_walk
     {
@@ -166,7 +150,12 @@ namespace viz_demo
 
     struct st_dont_walk
     {
+        using args = nil::xalt::tlist<pedestrian_button>;
         using events = nil::xalt::tlist<ev_tick>;
+
+        explicit st_dont_walk(pedestrian_button* /* button */)
+        {
+        }
 
         static auto on_event(const ev_tick& /* event */)
         {
@@ -192,40 +181,86 @@ namespace viz_demo
     };
 }
 
-nil::sm::ir::Model viz_build_tollbooth();
-nil::sm::ir::Model viz_build_tollbooth_barrier();
+namespace viz
+{
+    struct machine
+    {
+        std::string name;
+        nil::sm::ir::Model model;
+        // Arguments given to the SM constructor; the diagram needs them to judge the root states.
+        std::vector<nil::sm::ir::Dependency> root_props;
+    };
+
+    void to_json(nlohmann::json& j, const viz::machine& m)
+    {
+        j = {{"name", m.name}, {"model", m.model}, {"root_props", m.root_props}};
+    }
+}
+
+using DefaultApi = nil::sm::api::Default<>;
+using tollbooth_api = nil::sm::api::Coalesce<toll::tracing_api>;
+
+// Not static_asserts: barrier definitions are built at runtime, and the demos are unsatisfied on
+// purpose.
+void report_validity()
+{
+    const auto report = [](std::string_view name, bool valid)
+    { std::cout << name << ": " << (valid ? "valid" : "unmet args") << '\n'; };
+
+    report("showcase", nil::sm::validate<viz_demo::showcase::plant, DefaultApi>());
+    report("intersection", nil::sm::validate<viz_demo::st_intersection, DefaultApi>());
+    report("tollbooth", nil::sm::validate<toll::booth, tollbooth_api, toll::booth_context>());
+    report(
+        "tollbooth_barrier",
+        nil::sm::validate<toll::bslot::booth, tollbooth_api, toll::booth_context>()
+    );
+}
 
 int main()
 {
-    using DefaultApi = nil::sm::api::Default<>;
-
-    const std::vector<std::pair<std::string, nil::sm::ir::Model>> machines = [&]
-    {
-        std::vector<std::pair<std::string, nil::sm::ir::Model>> out;
-        out.emplace_back("showcase", nil::sm::ir::build<DefaultApi, viz_demo::showcase::plant>());
-        out.emplace_back(
-            "intersection",
-            nil::sm::ir::build<DefaultApi, viz_demo::st_intersection>()
-        );
-        out.emplace_back("tollbooth", viz_build_tollbooth());
-        out.emplace_back("tollbooth_barrier", viz_build_tollbooth_barrier());
-        return out;
-    }();
-
-    nlohmann::json machines_json = nlohmann::json::array();
-    for (const auto& [name, model] : machines)
-    {
-        machines_json.push_back({{"name", name}, {"model", model}});
-    }
-    const auto payload = nlohmann::json::to_msgpack(nlohmann::json{{"machines", machines_json}});
+    report_validity();
 
     auto server = nil::service::http::server::create({.host = "127.0.0.1", .port = 1101});
     auto core = nil::xit::make_core(*server, *server->use_ws("/ws"));
     nil::xit::setup_svelte_server(*server);
     nil::xit::set_groups(*core, {{"base", std::filesystem::path(__FILE__).parent_path() / "gui"}});
 
-    auto& frame = nil::xit::add_unique_frame(*core, "model", {"base", "Frame.svelte"});
-    nil::xit::unique::add_value(frame, "model", [&payload]() { return payload; });
+    auto& frame = nil::xit::add_unique_frame(*core, "index", {"base", "Frame.svelte"});
+    nil::xit::unique::add_value(
+        frame,
+        "model",
+        []()
+        {
+            // clang-format off
+            static const auto machines =  nlohmann::json::to_msgpack(nlohmann::json{{
+                "machines",
+                std::vector<viz::machine>{
+                    {
+                        "showcase",
+                        nil::sm::ir::build<viz_demo::showcase::plant>(),
+                        {}
+                    },
+                    {
+                        "intersection",
+                        nil::sm::ir::build<viz_demo::st_intersection>(),
+                        {}
+                    },
+                    {
+                        "tollbooth",
+                        nil::sm::ir::build<toll::booth, tollbooth_api>(),
+                        nil::sm::ir::make_root_props<toll::booth_context>()
+                    },
+                    {
+                        "tollbooth_barrier",
+                        nil::sm::ir::build<toll::bslot::booth, tollbooth_api>(),
+                        nil::sm::ir::make_root_props<toll::booth_context>()
+                    }
+                }
+            }});
+            // clang-format on
+            return machines;
+        }
+    );
 
     server->on_ready([](const nil::service::ID& id)
                      { std::cout << "Server is ready: http://" << to_string(id) << std::endl; });

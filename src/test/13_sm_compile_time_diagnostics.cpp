@@ -171,8 +171,8 @@ namespace
     // Overloads are currently legal in this runtime.
     static_assert(nil::sm::concepts::has_valid_on_event<overloads_are_legal, e1>);
 
-    static_assert(nil::sm::validate<nil::sm::api::Default<>, dependency_provider>());
-    static_assert(!nil::sm::validate<nil::sm::api::Default<>, missing_dependency_provider>());
+    static_assert(nil::sm::validate<dependency_provider, nil::sm::api::Default<>>());
+    static_assert(!nil::sm::validate<missing_dependency_provider, nil::sm::api::Default<>>());
 }
 
 TEST(sm_feature_compile_time_diagnostics, static_checks_compile)
@@ -182,26 +182,54 @@ TEST(sm_feature_compile_time_diagnostics, static_checks_compile)
 
 TEST(sm_feature_compile_time_diagnostics, ir_build_validates_ancestor_properties)
 {
-    auto valid_model = nil::sm::ir::build<nil::sm::api::Default<>, dependency_provider>();
+    const auto valid_model = nil::sm::ir::build<dependency_provider>();
     EXPECT_TRUE(nil::sm::validate(valid_model));
 
-    auto missing_model
-        = nil::sm::ir::build<nil::sm::api::Default<>, missing_dependency_provider>();
+    const auto missing_model = nil::sm::ir::build<missing_dependency_provider>();
     EXPECT_FALSE(nil::sm::validate(missing_model));
-    EXPECT_TRUE(missing_model.has_unsatisfied_args);
-    EXPECT_TRUE(missing_model.roots.front().regions.front().front().has_unsatisfied_args);
+    EXPECT_EQ(missing_model.roots.front().regions.front().front().required_args.size(), 1U);
+    EXPECT_EQ(missing_model.roots.front().regions.front().front().required_args.front().type_id, nil::xalt::type_id<dependency>);
 
-    std::ostringstream puml;
-    nil::sm::format::puml::render(puml, missing_model.roots);
-    EXPECT_NE(puml.str().find("<<invalid-args>>"), std::string::npos);
-    EXPECT_EQ(puml.str().find("ERROR:"), std::string::npos);
-    EXPECT_NO_THROW((
-        [] { (void)nil::sm::ir::build<nil::sm::api::Default<>, direct_parent_provider>(); }()
-    ));
-    EXPECT_NO_THROW((
-        [] {
-            (void
-            )nil::sm::ir::build<nil::sm::api::Default<>, transition_dependency_provider>();
-        }()
-    ));
+    EXPECT_NO_THROW(([] { (void)nil::sm::ir::build<direct_parent_provider>(); }()));
+    EXPECT_NO_THROW(([] { (void)nil::sm::ir::build<transition_dependency_provider>(); }()));
+}
+
+TEST(sm_feature_compile_time_diagnostics, root_props_satisfy_requirements)
+{
+    static_assert(
+        nil::sm::validate<missing_dependency_provider, nil::sm::api::Default<>, dependency>()
+    );
+
+    const auto model = nil::sm::ir::build<missing_dependency_provider>();
+    EXPECT_FALSE(nil::sm::validate(model));
+    EXPECT_TRUE(nil::sm::validate(model, nil::sm::ir::make_root_props<dependency>()));
+}
+
+namespace
+{
+    struct parent_base
+    {
+    };
+
+    struct base_child
+    {
+        using args = nil::xalt::tlist<nil::sm::direct_parent<parent_base>>;
+    };
+
+    struct exposing_parent: parent_base
+    {
+        using props = nil::xalt::tlist<nil::sm::as_parent<parent_base>>;
+        using regions = nil::xalt::tlist<base_child>;
+    };
+
+    struct plain_parent: parent_base
+    {
+        using regions = nil::xalt::tlist<base_child>;
+    };
+}
+
+TEST(sm_feature_compile_time_diagnostics, direct_parent_needs_the_parent_to_expose_the_type)
+{
+    EXPECT_TRUE((nil::sm::validate<exposing_parent, nil::sm::api::Default<>>()));
+    EXPECT_FALSE((nil::sm::validate<plain_parent, nil::sm::api::Default<>>()));
 }

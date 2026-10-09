@@ -1,5 +1,6 @@
 #pragma once
 
+#include "nil/sm/structs.hpp"
 #include <nil/sm.hpp>
 #include <nil/sm/barrier.hpp>
 
@@ -12,6 +13,7 @@
 //  - captures, custom display names, orthogonal and nested regions
 //  - args via props and direct_parent
 //  - barriers: nested, and one definition used by two hosts
+//  - unsatisfied args: the barriers need a telemetry prop that only the failed state provides
 namespace viz_demo::showcase
 {
     struct ev_next
@@ -52,6 +54,11 @@ namespace viz_demo::showcase
         int retries = 3;
     };
 
+    struct telemetry
+    {
+        int samples = 0;
+    };
+
     struct plant;
     struct loading;
     struct running;
@@ -74,7 +81,12 @@ namespace viz_demo::showcase
 
     struct cal_probe
     {
+        using args = nil::xalt::tlist<config, telemetry>;
         using events = nil::xalt::tlist<ev_next, ev_fail>;
+
+        cal_probe(config* /* cfg */, telemetry* /* sensors */)
+        {
+        }
 
         static auto on_event(const ev_next& /* event */)
         {
@@ -240,6 +252,9 @@ namespace viz_demo::showcase
     {
         static constexpr std::string_view name = "pipeline:failed";
 
+        telemetry sensors;
+        using props = nil::xalt::tlist<nil::sm::prop<telemetry, &failed::sensors>>;
+
         using regions = nil::xalt::tlist<diagnostics_barrier>;
         using events = nil::xalt::tlist<ev_retry, ev_halt>;
 
@@ -287,9 +302,13 @@ namespace viz_demo::showcase
         }
     };
 
+    struct plant;
+
     struct idle
     {
         static constexpr std::string_view name = "pipeline:idle";
+
+        using args = nil::xalt::tlist<nil::sm::direct_parent<plant>>;
 
         using events = nil::xalt::tlist<ev_next, ev_log, ev_data>;
 

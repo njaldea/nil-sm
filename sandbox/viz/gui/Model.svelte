@@ -1,6 +1,6 @@
 <script>
     // model: one machine's IR; focus: id of the barrier to show, or null for the root.
-    let { model, focus = null, theme = "light" } = $props();
+    let { model, root_props = [], focus = null, theme = "light", show_props = false } = $props();
 
     const elk = new window.ELK();
 
@@ -56,20 +56,42 @@
         }
     };
 
-    const action_lines = (node) =>
-        (node?.actions ?? []).map(action_text);
+    // The path starts with the reporting host's own barrier, which the row need not repeat.
+    const missing_text = ({ dependency, barrier_path, as_parent }) => {
+        const nested = barrier_path.slice(1);
+        let name = dependency.type_name;
+        if (as_parent) {
+            name = `as_parent<${dependency.type_name}>`;
+        } else if (dependency.is_direct_parent) {
+            name = `direct_parent<${dependency.type_name}>`;
+        }
+        return `missing ${name}${
+            nested.length > 0 ? ` (${nested[0]})` : ""
+        }`;
+    };
 
-    const actions_height = (node) => {
-        const count = action_lines(node).length;
-        return count === 0
+    // Blocks under the name: the actions, the args nothing provides, then (optionally) the props it provides.
+    const action_texts = (node) => (node?.actions ?? []).map(action_text);
+    const missing_texts = (node) => (node?.unsatisfied_args ?? []).map(missing_text);
+    const prop_texts = (node) =>
+        show_props
+            ? (node?.provided_props ?? []).map((prop) => `provides ${prop.type_name}`)
+            : [];
+
+    const block_height = (count) =>
+        count === 0
             ? 0
             : count * ACTION_LINE_H + 2 * ACTION_PAD_Y;
-    };
+
+    const actions_height = (node) =>
+        block_height(action_texts(node).length) +
+        block_height(missing_texts(node).length) +
+        block_height(prop_texts(node).length);
 
     const actions_width = (node) =>
         Math.max(
             0,
-            ...action_lines(node).map(
+            ...[...action_texts(node), ...missing_texts(node), ...prop_texts(node)].map(
                 (line) =>
                     line.length * ACTION_CHAR_W +
                     2 * ACTION_PAD_X
@@ -1654,13 +1676,21 @@
         }));
 
     // Only hosts listed in `expanded` are opened; `stack` keeps a barrier from containing itself.
+    // `props` are the props provided above `nodes` (null: do not judge the states). An opened
+    // barrier body is judged against its host's ancestors, so each state shows what it lacks.
     const expand_barriers = (
         nodes,
         barriers,
         expanded,
-        stack = []
+        stack = [],
+        props = null,
+        parent = null
     ) =>
         nodes.map((node) => {
+            const inner = props && [
+                ...props,
+                ...(node.provided_props ?? []),
+            ];
             const regions = (
                 node.regions ?? []
             ).map((region) =>
@@ -1668,7 +1698,9 @@
                     region,
                     barriers,
                     expanded,
-                    stack
+                    stack,
+                    inner,
+                    node
                 )
             );
 
@@ -1699,21 +1731,27 @@
                 };
             }
 
+            const body = prefix_tree(
+                definition.roots,
+                `${node.id}::`
+            );
+
             return {
                 ...node,
                 expandable: true,
                 regions: [
                     expand_barriers(
-                        prefix_tree(
-                            definition.roots,
-                            `${node.id}::`
-                        ),
+                        props
+                            ? annotate_issues(body, barriers, props, null)
+                            : body,
                         barriers,
                         expanded,
                         [
                             ...stack,
                             node.barrier_id,
-                        ]
+                        ],
+                        props,
+                        null
                     ),
                 ],
             };
@@ -1753,11 +1791,109 @@
             };
         });
 
+    // direct_parent<T> needs the immediate parent to expose T; other args look through ancestors.
+    const satisfied = (dependency, props, parent) =>
+        (dependency.is_direct_parent ? (parent?.provided_props ?? []) : props).some(
+            (prop) => prop.type_id === dependency.type_id
+        );
+
+    const unique_issues = (issues) => {
+        const seen = new Set();
+        return issues.filter((issue) => {
+            const key = `${issue.dependency.type_id}:${issue.dependency.is_direct_parent}:${issue.as_parent ?? false}:${issue.barrier_path.join(">")}:${issue.state}`;
+            if (seen.has(key)) {
+                return false;
+            }
+            seen.add(key);
+            return true;
+        });
+    };
+
+    /*
+     * Validation lives here, not in the IR: whether a barrier is satisfied depends on the host
+     * it is used at, so it is judged per occurrence.
+     *
+     * A state's issues are its own args that no ancestor prop provides, plus, for a barrier host,
+     * everything the barrier body cannot get from the host's ancestors. A barrier looks props up
+     * through its host but never reaches direct_parent.
+     */
+    const node_issues = (node, barriers, props, parent) => {
+        const own = (node.required_args ?? [])
+            .filter((dependency) => !satisfied(dependency, props, parent))
+            .map((dependency) => ({
+                dependency,
+                barrier_path: [],
+                state: node.display_name,
+            }));
+
+        const definition = barriers.get(node.barrier_id);
+        const hosted = definition
+            ? collect_issues(definition.roots, barriers, props, null).map((issue) => ({
+                  ...issue,
+                  barrier_path: [definition.name, ...issue.barrier_path],
+              }))
+            : [];
+
+        return unique_issues([...own, ...hosted]);
+    };
+
+    const descendant_props = (node, props) => [
+        ...props,
+        ...(node.provided_props ?? []),
+    ];
+
+    const collect_issues = (nodes, barriers, props, parent) =>
+        unique_issues(
+            nodes.flatMap((node) => [
+                ...node_issues(node, barriers, props, parent),
+                ...(node.regions ?? []).flatMap((region) =>
+                    collect_issues(region, barriers, descendant_props(node, props), node)
+                ),
+            ])
+        );
+
+    // Parent side of an unmet direct_parent<T>: what this state would have to expose.
+    const parent_issues = (node) => {
+        const provided = node.provided_props ?? [];
+        return unique_issues(
+            (node.regions ?? []).flatMap((region) =>
+                region.flatMap((child) =>
+                    (child.required_args ?? [])
+                        .filter(
+                            (dependency) =>
+                                dependency.is_direct_parent &&
+                                !provided.some((prop) => prop.type_id === dependency.type_id)
+                        )
+                        .map((dependency) => ({
+                            dependency,
+                            barrier_path: [],
+                            state: node.display_name,
+                            as_parent: true,
+                        }))
+                )
+            )
+        );
+    };
+
+    // Attach `unsatisfied_args` to each state of the tree.
+    const annotate_issues = (nodes, barriers, props, parent) =>
+        nodes.map((node) => ({
+            ...node,
+            unsatisfied_args: unique_issues([
+                ...node_issues(node, barriers, props, parent),
+                ...parent_issues(node),
+            ]),
+            regions: (node.regions ?? []).map((region) =>
+                annotate_issues(region, barriers, descendant_props(node, props), node)
+            ),
+        }));
+
     const layout_graph = async (
         roots,
         barriers = [],
         expanded = new Set(),
-        collapsed = new Set()
+        collapsed = new Set(),
+        props = null
     ) => {
         edge_seq = 0;
 
@@ -1765,15 +1901,10 @@
             collapse_nodes(
                 expand_barriers(
                     roots,
-                    new Map(
-                        barriers.map(
-                            (barrier) => [
-                                barrier.id,
-                                barrier,
-                            ]
-                        )
-                    ),
-                    expanded
+                    new Map(barriers.map((barrier) => [barrier.id, barrier])),
+                    expanded,
+                    [],
+                    props
                 ),
                 collapsed
             ),
@@ -2002,24 +2133,68 @@
         }
     };
 
+    const barrier_map = $derived(
+        new Map((model?.barriers ?? []).map((barrier) => [barrier.id, barrier]))
+    );
+
     const roots = $derived(
         focus == null
             ? model?.roots
             : model?.barriers?.find((barrier) => barrier.id === focus)?.roots
     );
 
+    // The root lists what its root args leave unmet; a barrier lists what its host must provide.
+    const requirements = $derived(
+        roots
+            ? collect_issues(roots, barrier_map, focus == null ? root_props : [], null)
+            : []
+    );
+
+    // Only the root tree is judged; a barrier body is judged where it is used.
+    // The root is shown as one unnamed state so it lists what it provides and lacks like any state.
+    const shown_roots = $derived(
+        roots && focus == null
+            ? [
+                  {
+                      id: "root",
+                      display_name: "",
+                      is_initial: false,
+                      is_final: false,
+                      is_barrier: false,
+                      required_args: [],
+                      provided_props: root_props,
+                      actions: [],
+                      transitions: [],
+                      // direct_parent is reported by the states involved, not by the root
+                      unsatisfied_args: requirements
+                          .filter((issue) => !issue.dependency.is_direct_parent)
+                          .map((issue) => ({
+                          ...issue,
+                          // the unnamed root has no own barrier to skip
+                          barrier_path: issue.barrier_path.length > 0 ? ["", ...issue.barrier_path] : [],
+                      })),
+                      regions: [annotate_issues(roots, barrier_map, root_props, null)],
+                  },
+              ]
+            : roots
+    );
+
     $effect(() => {
-        if (!roots) {
+        // the layout depends on the rows, which depend on this
+        void show_props;
+
+        if (!shown_roots) {
             return;
         }
 
         let cancelled = false;
 
         layout_graph(
-            roots,
+            shown_roots,
             model.barriers ?? [],
             new Set(expanded),
-            new Set(collapsed)
+            new Set(collapsed),
+            focus == null ? [] : null
         )
             .then((result) => {
                 if (cancelled) {
@@ -2111,6 +2286,12 @@
 </script>
 
 <div class="model-container" class:dark={theme === "dark"}>
+    {#if focus != null && requirements.length > 0}
+        <div class="requirements">
+            requires:
+            {[...new Set(requirements.map((entry) => entry.dependency.type_name))].join(", ")}
+        </div>
+    {/if}
     {#if error}
         <pre class="error">{error}</pre>
     {:else if layout}
@@ -2216,25 +2397,75 @@
                 </g>
             {/if}
 
-            <!-- divider plus the action rows, starting at y -->
+            <!-- the action block and the unprovided-args block, each with its divider, from y -->
             {#snippet action_rows(node, y)}
-                <line
-                    class="divider"
-                    x1={node.x}
-                    x2={node.x + node.width}
-                    y1={y}
-                    y2={y}
-                />
+                {@const actions = action_texts(node.data)}
+                {@const missing = missing_texts(node.data)}
+                {@const provided = prop_texts(node.data)}
 
-                {#each action_lines(node.data) as line, index}
-                    <text
-                        x={node.x + ACTION_PAD_X}
-                        y={y + ACTION_PAD_Y + ACTION_LINE_H * (index + 0.5)}
-                        class="action"
-                    >
-                        {line}
-                    </text>
-                {/each}
+                {#if actions.length > 0}
+                    <line
+                        class="divider"
+                        x1={node.x}
+                        x2={node.x + node.width}
+                        y1={y}
+                        y2={y}
+                    />
+
+                    {#each actions as line, index}
+                        <text
+                            x={node.x + ACTION_PAD_X}
+                            y={y + ACTION_PAD_Y + ACTION_LINE_H * (index + 0.5)}
+                            class="action"
+                        >
+                            {line}
+                        </text>
+                    {/each}
+                {/if}
+
+                {#if missing.length > 0}
+                    {@const top = y + block_height(actions.length)}
+
+                    <line
+                        class="divider"
+                        x1={node.x}
+                        x2={node.x + node.width}
+                        y1={top}
+                        y2={top}
+                    />
+
+                    {#each missing as line, index}
+                        <text
+                            x={node.x + ACTION_PAD_X}
+                            y={top + ACTION_PAD_Y + ACTION_LINE_H * (index + 0.5)}
+                            class="action missing"
+                        >
+                            {line}
+                        </text>
+                    {/each}
+                {/if}
+
+                {#if provided.length > 0}
+                    {@const top = y + block_height(actions.length) + block_height(missing.length)}
+
+                    <line
+                        class="divider"
+                        x1={node.x}
+                        x2={node.x + node.width}
+                        y1={top}
+                        y2={top}
+                    />
+
+                    {#each provided as line, index}
+                        <text
+                            x={node.x + ACTION_PAD_X}
+                            y={top + ACTION_PAD_Y + ACTION_LINE_H * (index + 0.5)}
+                            class="action"
+                        >
+                            {line}
+                        </text>
+                    {/each}
+                {/if}
             {/snippet}
 
             <!-- expand/collapse icon: a box with a minus (open) or a plus (closed) -->
@@ -2370,7 +2601,7 @@
 
                         {@render toggle_icon(node, false, node.y + 9)}
 
-                        {#if action_lines(node.data).length > 0}
+                        {#if actions_height(node.data) > 0}
                             {@render action_rows(
                                 node,
                                 node.y + COMPOSITE_TITLE_H
@@ -2442,7 +2673,7 @@
                             }
                         </text>
 
-                        {#if action_lines(node.data).length > 0}
+                        {#if actions_height(node.data) > 0}
                             {@render action_rows(
                                 node,
                                 node.y + NODE_H
@@ -2482,6 +2713,7 @@
         --peer-stroke: #db2777;
         --collapsed-fill: #ecfeff;
         --collapsed-stroke: #0891b2;
+        --missing-text: #dc2626;
         --error-border: #fecaca;
         --error-bg: #fef2f2;
         --error-text: #ef4444;
@@ -2517,6 +2749,7 @@
         --peer-stroke: #f472b6;
         --collapsed-fill: #12302f;
         --collapsed-stroke: #5eead4;
+        --missing-text: #f87171;
         --error-border: #7f1d1d;
         --error-bg: #3b0a0a;
         --error-text: #fca5a5;
@@ -2750,6 +2983,15 @@
         font-size: 10px;
         dominant-baseline: central;
         pointer-events: none;
+    }
+
+    text.action.missing {
+        fill: var(--missing-text);
+    }
+
+    .requirements {
+        font-size: 11px;
+        color: var(--text-muted);
     }
 
     text.region-title {

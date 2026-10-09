@@ -76,12 +76,6 @@ namespace nil::sm::detail
         };
     }
 
-    // Fixed sentinel State<API,T>::get() matches on for any direct_parent<T> request,
-    // regardless of what T the caller asked for.
-    struct direct_parent_marker final
-    {
-    };
-
     struct IState
     {
         explicit IState(IState* init_parent, Metadata init_metadata)
@@ -100,6 +94,12 @@ namespace nil::sm::detail
 
         // Looks up a value owned by this state or one of its ancestors, by type id.
         virtual void* get(const void* requested_id) = 0;
+
+        // Like get(), but only this state's own props; never asks the ancestors.
+        virtual void* get_own(const void* /* requested_id */)
+        {
+            return nullptr;
+        }
 
         IState* parent = nullptr;
         const Metadata metadata;

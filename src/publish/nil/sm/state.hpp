@@ -130,15 +130,15 @@ namespace nil::sm
             )...};
         }
 
-        // Resolves a single arg via the parent chain's get(); direct_parent<T> always
-        // matches on the fixed direct_parent_marker sentinel, then casts to T*.
+        // Resolves a single arg via the parent chain's get(); direct_parent<T> asks only the
+        // immediate parent's own props, so that parent must expose T.
         template <typename Arg>
         static auto resolve_arg(detail::IState* parent)
         {
             if constexpr (nil::xalt::is_of_template_v<Arg, direct_parent>)
             {
                 return static_cast<typename Arg::type*>(
-                    parent->get(nil::xalt::type_id<detail::direct_parent_marker>)
+                    parent->get_own(nil::xalt::type_id<typename Arg::type>)
                 );
             }
             else
@@ -204,17 +204,17 @@ namespace nil::sm
 
         void* get(const void* requested_id) override
         {
-            if (requested_id == nil::xalt::type_id<detail::direct_parent_marker>)
-            {
-                return static_cast<void*>(std::addressof(current_state));
-            }
-
             if (auto* found = match_props(requested_id, props_t()))
             {
                 return found;
             }
 
             return parent != nullptr ? parent->get(requested_id) : nullptr;
+        }
+
+        void* get_own(const void* requested_id) override
+        {
+            return match_props(requested_id, props_t());
         }
 
         State(State&&) = delete;
