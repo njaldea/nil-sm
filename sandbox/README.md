@@ -7,11 +7,29 @@ Small programs used to exercise `nil::sm` and measure compile cost.
 | `sandbox` | `main.cpp` | small feature scratchpad |
 | `sandbox_traffic_lights` | `traffic_lights/` | simple traffic-light cycle for interview practice |
 | `sandbox_tollbooth` | `tollbooth/` | toll booth machine, single translation unit |
-| `sandbox_tollbooth_uml` | `tollbooth/uml.cpp` | PlantUML for the toll booth machine |
+| `uml_sandbox_tollbooth` | `tollbooth/uml.cpp` | PlantUML for the toll booth machine |
 | `sandbox_tollbooth_barrier` | `tollbooth_barrier/` | same machine, jobs behind `nil::sm::barrier::State` |
 | `sandbox_barrier_property` | `barrier_property.cpp` | barrier state context selected from a parent property |
 | `sandbox_barrier_shared_ptr` | `barrier_shared_ptr.cpp` | shared_ptr barrier context converted to a base |
-| `sandbox_barrier_state_uml` | `barrier_state_uml.cpp` | one barrier state used twice, with root and standalone PlantUML output |
+| `uml_sandbox_barrier_state` | `barrier_state_uml.cpp` | one barrier state used twice, with root and standalone PlantUML output |
+
+## Visualization
+
+Each viewer serves one machine using XIT and the shared Svelte renderer. The page asks for one
+level at a time (`/model/...`) and the unmet args of that level (`/model_val/...`), so a large
+machine is never sent or drawn whole; see `viz/viewer.hpp` for the routes. Build with
+`./configure/gcc -ts` and `ninja -C .build`, then run the corresponding executable:
+
+| executable | URL | machine |
+|---|---|---|
+| `.build/bin/viz` | <http://127.0.0.1:1101> | visualization showcase |
+| `.build/bin/viz_sandbox_traffic_lights` | <http://127.0.0.1:1102> | traffic-light demo |
+| `.build/bin/viz_sandbox_tollbooth` | <http://127.0.0.1:1103> | toll booth |
+| `.build/bin/viz_sandbox_tollbooth_barrier` | <http://127.0.0.1:1104> | toll booth with barrier jobs |
+| `.build/bin/viz_sandbox_large` | <http://127.0.0.1:1105> | synthetic, about 1.5M states 8 levels deep (`--measure` prints the size of the whole model as json) |
+
+The ports are distinct so viewers can run together. Root/barrier selection, dependency warnings,
+and property display are shared; the CLI demos are unchanged.
 
 ## Toll booth
 
@@ -95,7 +113,7 @@ Clean serialized build, link included (`ninja -C .build -j1 <target>`):
 | target | wall | maxrss |
 |---|---:|---:|
 | `sandbox_tollbooth` | 3.47s | 408 276 KB |
-| `sandbox_tollbooth_uml` | 2.79s | 275 040 KB |
+| `uml_sandbox_tollbooth` | 2.79s | 275 040 KB |
 
 Findings:
 
@@ -108,7 +126,7 @@ Findings:
   ceiling from 408 MB to 284 MB — the limit becomes the collection job alone.
 - Total wall time goes *up* (3.5s → 5.2s / 6.0s) because the shared headers are reparsed per TU and
   there are more LTO objects to link. The win is peak memory and parallelism, not total work.
-- `sandbox_tollbooth_uml` names the same SM type but only instantiates the formatter's compile-time
+- `uml_sandbox_tollbooth` names the same SM type but only instantiates the formatter's compile-time
   traversal, not the runtime `State` / `Region` tree, and peaks 130 MB lower — a useful control
   when trying to reduce instantiation cost.
 

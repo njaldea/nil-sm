@@ -37,5 +37,5 @@ The JSON formatter writes the IR itself, not a diagram: `.root` and each barrier
 array of nodes (args, props, actions, transitions, regions). Ids are decimal strings, or `null`
 when absent. It needs no JSON library.
 
-For runnable examples, see `sandbox_uml`, `sandbox_barrier_state_uml`, and
-`sandbox_tollbooth_barrier_uml`.
+For runnable examples, see `sandbox_uml`, `uml_sandbox_barrier_state`, and
+`uml_sandbox_tollbooth_barrier`.

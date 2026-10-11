@@ -1,6 +1,6 @@
 <script>
-    // model: one machine's IR; focus: id of the barrier to show, or null for the root.
-    let { model, root_props = [], focus = null, theme = "light", show_props = false } = $props();
+    // focus: id of the barrier to show, or null for the root. The server hands out the states.
+    let { root_props = [], focus = null, theme = "light", show_props = false } = $props();
 
     const elk = new window.ELK();
 
@@ -66,13 +66,19 @@
             name = `direct_parent<${dependency.type_name}>`;
         }
         return `missing ${name}${
-            nested.length > 0 ? ` (${nested[0]})` : ""
+            nested.length > 0 ? ` (${nested.join(" > ")})` : ""
         }`;
     };
 
     // Blocks under the name: the actions, the args nothing provides, then (optionally) the props it provides.
+    // A collapsed state also says how many unmet args it hides.
     const action_texts = (node) => (node?.actions ?? []).map(action_text);
-    const missing_texts = (node) => (node?.unsatisfied_args ?? []).map(missing_text);
+    const missing_texts = (node) => [
+        ...(node?.unsatisfied_args ?? []).map(missing_text),
+        ...(node?.collapsed && node.subtree_unmet > 0
+            ? [`${node.subtree_unmet} unmet below`]
+            : []),
+    ];
     const prop_texts = (node) =>
         show_props
             ? (node?.provided_props ?? []).map((prop) => `provides ${prop.type_name}`)
@@ -1642,275 +1648,171 @@
     };
 
     /*
-     * Barrier occurrences are expanded in place: the host state becomes a composite whose
-     * single region is a copy of the barrier definition.
-     *
-     * Definitions share node ids between occurrences, so every copy gets its host's id
-     * as a prefix to keep ids unique across the diagram.
+     * The server hands out one level at a time (see viewer.hpp). Levels that were asked for
+     * are kept, oldest dropped first, so reopening a state costs no request.
      */
-    const prefix_tree = (
-        nodes,
-        prefix
-    ) =>
-        nodes.map((node) => ({
-            ...node,
-            id: `${prefix}${node.id}`,
-            transitions: (
-                node.transitions ?? []
-            ).map((transition) => ({
-                ...transition,
-                target:
-                    transition.target ===
-                    TERMINATION
-                        ? transition.target
-                        : `${prefix}${transition.target}`,
-            })),
-            regions: (
-                node.regions ?? []
-            ).map((region) =>
-                prefix_tree(
-                    region,
-                    prefix
-                )
-            ),
-        }));
+    const MAX_CACHED = 256;
+    const fetched = new Map();
 
-    // Only hosts listed in `expanded` are opened; `stack` keeps a barrier from containing itself.
-    // `props` are the props provided above `nodes` (null: do not judge the states). An opened
-    // barrier body is judged against its host's ancestors, so each state shows what it lacks.
-    const expand_barriers = (
-        nodes,
-        barriers,
-        expanded,
-        stack = [],
-        props = null,
-        parent = null
-    ) =>
-        nodes.map((node) => {
-            const inner = props && [
-                ...props,
-                ...(node.provided_props ?? []),
-            ];
-            const regions = (
-                node.regions ?? []
-            ).map((region) =>
-                expand_barriers(
-                    region,
-                    barriers,
-                    expanded,
-                    stack,
-                    inner,
-                    node
-                )
-            );
+    const fetch_json = (url) => {
+        const hit = fetched.get(url);
+        if (hit) {
+            fetched.delete(url);
+            fetched.set(url, hit);
+            return hit;
+        }
 
-            const definition = node.barrier_id
-                ? barriers.get(
-                      node.barrier_id
-                  )
-                : undefined;
+        const request = fetch(url)
+            .then((response) => response.json())
+            .then((body) => {
+                if (body.error) {
+                    throw new Error(`${url}: ${body.error}`);
+                }
+                return body;
+            })
+            .catch((failure) => {
+                fetched.delete(url);
+                throw failure;
+            });
 
-            if (
-                !definition ||
-                regions.length > 0 ||
-                stack.includes(
-                    node.barrier_id
-                )
-            ) {
-                return {
-                    ...node,
-                    regions,
-                };
-            }
-
-            if (!expanded.has(node.id)) {
-                return {
-                    ...node,
-                    regions,
-                    expandable: true,
-                };
-            }
-
-            const body = prefix_tree(
-                definition.roots,
-                `${node.id}::`
-            );
-
-            return {
-                ...node,
-                expandable: true,
-                regions: [
-                    expand_barriers(
-                        props
-                            ? annotate_issues(body, barriers, props, null)
-                            : body,
-                        barriers,
-                        expanded,
-                        [
-                            ...stack,
-                            node.barrier_id,
-                        ],
-                        props,
-                        null
-                    ),
-                ],
-            };
-        });
-
-    /*
-     * Build the complete graph for either:
-     *
-     *   ir.roots
-     *
-     * or:
-     *
-     *   barrier.roots
-     */
-    // A collapsed state keeps its transitions but shows no regions; barrier hosts open and close
-    // through `expanded` instead.
-    const collapse_nodes = (nodes, collapsed) =>
-        nodes.map((node) => {
-            if ((node.regions?.length ?? 0) === 0) {
-                return node;
-            }
-
-            if (collapsed.has(node.id) && !node.expandable) {
-                return {
-                    ...node,
-                    regions: [],
-                    collapsed: true,
-                    region_count: node.regions.length,
-                };
-            }
-
-            return {
-                ...node,
-                regions: node.regions.map((region) =>
-                    collapse_nodes(region, collapsed)
-                ),
-            };
-        });
-
-    // direct_parent<T> needs the immediate parent to expose T; other args look through ancestors.
-    const satisfied = (dependency, props, parent) =>
-        (dependency.is_direct_parent ? (parent?.provided_props ?? []) : props).some(
-            (prop) => prop.type_id === dependency.type_id
-        );
-
-    const unique_issues = (issues) => {
-        const seen = new Set();
-        return issues.filter((issue) => {
-            const key = `${issue.dependency.type_id}:${issue.dependency.is_direct_parent}:${issue.as_parent ?? false}:${issue.barrier_path.join(">")}:${issue.state}`;
-            if (seen.has(key)) {
-                return false;
-            }
-            seen.add(key);
-            return true;
-        });
+        fetched.set(url, request);
+        if (fetched.size > MAX_CACHED) {
+            fetched.delete(fetched.keys().next().value);
+        }
+        return request;
     };
 
+    // A barrier shown on its own is judged where it is hosted, not here.
+    const judged = focus == null;
+
     /*
-     * Validation lives here, not in the IR: whether a barrier is satisfied depends on the host
-     * it is used at, so it is judged per occurrence.
-     *
-     * A state's issues are its own args that no ancestor prop provides, plus, for a barrier host,
-     * everything the barrier body cannot get from the host's ancestors. A barrier looks props up
-     * through its host but never reaches direct_parent.
+     * Ids of a barrier body are shared by every host of it, so each occurrence gets its host's
+     * id as a prefix to stay unique across the diagram. The server judges by the same ids.
      */
-    const node_issues = (node, barriers, props, parent) => {
-        const own = (node.required_args ?? [])
-            .filter((dependency) => !satisfied(dependency, props, parent))
-            .map((dependency) => ({
-                dependency,
-                barrier_path: [],
-                state: node.display_name,
-            }));
+    const place_node = (prefix, node, report) => ({
+        ...node,
+        id: `${prefix}${node.id}`,
+        transitions: (node.transitions ?? []).map((transition) => ({
+            ...transition,
+            target:
+                transition.target === TERMINATION
+                    ? transition.target
+                    : `${prefix}${transition.target}`,
+        })),
+        unsatisfied_args: report?.unsatisfied_args ?? [],
+        subtree_unmet: report?.subtree_unmet ?? 0,
+    });
 
-        const definition = barriers.get(node.barrier_id);
-        const hosted = definition
-            ? collect_issues(definition.roots, barriers, props, null).map((issue) => ({
-                  ...issue,
-                  barrier_path: [definition.name, ...issue.barrier_path],
-              }))
-            : [];
-
-        return unique_issues([...own, ...hosted]);
-    };
-
-    const descendant_props = (node, props) => [
-        ...props,
-        ...(node.provided_props ?? []),
-    ];
-
-    const collect_issues = (nodes, barriers, props, parent) =>
-        unique_issues(
-            nodes.flatMap((node) => [
-                ...node_issues(node, barriers, props, parent),
-                ...(node.regions ?? []).flatMap((region) =>
-                    collect_issues(region, barriers, descendant_props(node, props), node)
-                ),
-            ])
+    /*
+     * The regions of one state. `state_id` is its id within `scope` (null: the top of the scope),
+     * `parent_id` its id in the diagram and `val_key` the id the server judges it by.
+     * Only states in `open_ids` bring their own regions; the others stay collapsed.
+     * `placement` records where each state sits so that opening one can close its siblings.
+     */
+    const load_regions = async (
+        scope,
+        state_id,
+        parent_id,
+        val_key,
+        prefix,
+        open_ids,
+        placement
+    ) => {
+        const [level, validation] = await Promise.all([
+            fetch_json(state_id == null ? `/model/${scope}` : `/model/${scope}/${state_id}`),
+            judged ? fetch_json(`/model_val/${val_key}`) : null,
+        ]);
+        const reports = new Map(
+            (validation?.children ?? []).map((report) => [report.id, report])
         );
 
-    // Parent side of an unmet direct_parent<T>: what this state would have to expose.
-    const parent_issues = (node) => {
-        const provided = node.provided_props ?? [];
-        return unique_issues(
-            (node.regions ?? []).flatMap((region) =>
-                region.flatMap((child) =>
-                    (child.required_args ?? [])
-                        .filter(
-                            (dependency) =>
-                                dependency.is_direct_parent &&
-                                !provided.some((prop) => prop.type_id === dependency.type_id)
-                        )
-                        .map((dependency) => ({
-                            dependency,
-                            barrier_path: [],
-                            state: node.display_name,
-                            as_parent: true,
-                        }))
+        return Promise.all(
+            level.regions.map((region, index) =>
+                Promise.all(
+                    region.map(async (state) => {
+                        const node = place_node(prefix, state, reports.get(state.id));
+                        placement.set(node.id, {
+                            parent: parent_id,
+                            region: `${parent_id}/${index}`,
+                        });
+
+                        if (state.barrier_id != null) {
+                            // a host opens onto a copy of its barrier body
+                            node.expandable = true;
+                            if (open_ids.has(node.id)) {
+                                node.regions = await load_regions(
+                                    state.barrier_id,
+                                    null,
+                                    node.id,
+                                    node.id,
+                                    `${node.id}::`,
+                                    open_ids,
+                                    placement
+                                );
+                            }
+                        } else if ((state.region_sizes ?? []).length > 0) {
+                            if (open_ids.has(node.id)) {
+                                node.regions = await load_regions(
+                                    scope,
+                                    state.id,
+                                    node.id,
+                                    node.id,
+                                    prefix,
+                                    open_ids,
+                                    placement
+                                );
+                            } else {
+                                node.collapsed = true;
+                                node.region_count = state.region_sizes.length;
+                            }
+                        }
+                        return node;
+                    })
                 )
             )
         );
     };
 
-    // Attach `unsatisfied_args` to each state of the tree.
-    const annotate_issues = (nodes, barriers, props, parent) =>
-        nodes.map((node) => ({
-            ...node,
-            unsatisfied_args: unique_issues([
-                ...node_issues(node, barriers, props, parent),
-                ...parent_issues(node),
-            ]),
-            regions: (node.regions ?? []).map((region) =>
-                annotate_issues(region, barriers, descendant_props(node, props), node)
-            ),
-        }));
-
-    const layout_graph = async (
-        roots,
-        barriers = [],
-        expanded = new Set(),
-        collapsed = new Set(),
-        props = null
-    ) => {
-        edge_seq = 0;
-
-        return layout_region(
-            collapse_nodes(
-                expand_barriers(
-                    roots,
-                    new Map(barriers.map((barrier) => [barrier.id, barrier])),
-                    expanded,
-                    [],
-                    props
-                ),
-                collapsed
-            ),
-            "root"
+    // The root is shown as one unnamed state so it lists what it provides and lacks like any state.
+    const build_tree = async (open_ids) => {
+        const placement = new Map();
+        const regions = await load_regions(
+            focus ?? "0",
+            null,
+            "root",
+            "0",
+            "",
+            open_ids,
+            placement
         );
+
+        if (!judged) {
+            return { roots: regions[0], placement };
+        }
+
+        const { root } = await fetch_json("/model_val/0");
+        return {
+            roots: [
+                {
+                    id: "root",
+                    display_name: "",
+                    is_initial: false,
+                    is_final: false,
+                    is_barrier: false,
+                    required_args: [],
+                    provided_props: root_props,
+                    actions: [],
+                    transitions: [],
+                    unsatisfied_args: root,
+                    regions,
+                },
+            ],
+            placement,
+        };
     };
+
+    // Edge ids keep counting across layouts: a superseded layout may still be running.
+    const layout_graph = (roots) => layout_region(roots, "root");
 
     /*
      * Convert all nested ELK coordinates into SVG/root coordinates.
@@ -2102,106 +2004,107 @@
     let layout = $state(null);
     let error = $state(null);
 
-    // ids of the barrier hosts that are currently opened
-    let expanded = $state([]);
+    // ids of the states and barrier hosts that are open; every other one is collapsed
+    let open = $state([]);
 
-    const toggle_barrier = (id) => {
-        expanded = expanded.includes(id)
-            ? expanded.filter((other) => other !== id)
-            : [...expanded, id];
-    };
-
-    // ids of the composite states whose regions are hidden
-    let collapsed = $state([]);
-
-    const toggle_collapse = (id) => {
-        collapsed = collapsed.includes(id)
-            ? collapsed.filter((other) => other !== id)
-            : [...collapsed, id];
-    };
+    // Where each state of the last layout sits: its parent and its region.
+    let placement = new Map();
 
     const toggleable = (data) =>
-        data.expandable ||
-        data.collapsed ||
-        (data.regions?.length ?? 0) > 0;
+        data.id !== "root" &&
+        (data.expandable ||
+            data.collapsed ||
+            (data.regions?.length ?? 0) > 0);
 
-    const toggle_node = (data) => {
-        if (data.expandable) {
-            toggle_barrier(data.id);
-        } else if (toggleable(data)) {
-            toggle_collapse(data.id);
+    const is_below = (id, ancestor) => {
+        for (
+            let parent = placement.get(id)?.parent;
+            parent != null;
+            parent = placement.get(parent)?.parent
+        ) {
+            if (parent === ancestor) {
+                return true;
+            }
         }
+        return false;
     };
 
-    const barrier_map = $derived(
-        new Map((model?.barriers ?? []).map((barrier) => [barrier.id, barrier]))
-    );
+    // Opening a state unloads the opened state of its region, and with it everything below.
+    const toggle_node = (data) => {
+        if (!toggleable(data)) {
+            return;
+        }
 
-    const roots = $derived(
-        focus == null
-            ? model?.roots
-            : model?.barriers?.find((barrier) => barrier.id === focus)?.roots
-    );
+        const opened = new Set(open);
+        const unload = (id) => {
+            for (const other of [...opened]) {
+                if (other === id || is_below(other, id)) {
+                    opened.delete(other);
+                }
+            }
+        };
 
-    // The root lists what its root args leave unmet; a barrier lists what its host must provide.
-    const requirements = $derived(
-        roots
-            ? collect_issues(roots, barrier_map, focus == null ? root_props : [], null)
-            : []
-    );
+        if (opened.has(data.id)) {
+            unload(data.id);
+        } else {
+            const region = placement.get(data.id)?.region;
+            for (const other of [...opened]) {
+                if (region != null && placement.get(other)?.region === region) {
+                    unload(other);
+                }
+            }
+            opened.add(data.id);
+        }
+        open = [...opened];
+    };
 
-    // Only the root tree is judged; a barrier body is judged where it is used.
-    // The root is shown as one unnamed state so it lists what it provides and lacks like any state.
-    const shown_roots = $derived(
-        roots && focus == null
-            ? [
-                  {
-                      id: "root",
-                      display_name: "",
-                      is_initial: false,
-                      is_final: false,
-                      is_barrier: false,
-                      required_args: [],
-                      provided_props: root_props,
-                      actions: [],
-                      transitions: [],
-                      // direct_parent is reported by the states involved, not by the root
-                      unsatisfied_args: requirements
-                          .filter((issue) => !issue.dependency.is_direct_parent)
-                          .map((issue) => ({
-                          ...issue,
-                          // the unnamed root has no own barrier to skip
-                          barrier_path: issue.barrier_path.length > 0 ? ["", ...issue.barrier_path] : [],
-                      })),
-                      regions: [annotate_issues(roots, barrier_map, root_props, null)],
-                  },
-              ]
-            : roots
-    );
+    // What a barrier shown on its own leaves for its host to provide.
+    let requirements = $state([]);
 
     $effect(() => {
-        // the layout depends on the rows, which depend on this
-        void show_props;
-
-        if (!shown_roots) {
+        if (focus == null) {
             return;
         }
 
         let cancelled = false;
 
-        layout_graph(
-            shown_roots,
-            model.barriers ?? [],
-            new Set(expanded),
-            new Set(collapsed),
-            focus == null ? [] : null
-        )
-            .then((result) => {
+        fetch_json(`/model_val/${focus}`)
+            .then((body) => {
+                if (!cancelled) {
+                    requirements = body.requires;
+                }
+            })
+            .catch((exception) => {
+                if (!cancelled) {
+                    error = String(exception);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    });
+
+    $effect(() => {
+        // the layout depends on the rows, which depend on this
+        void show_props;
+
+        const open_ids = new Set(open);
+        let cancelled = false;
+
+        // The previous layout stays on screen until the levels this one needs have arrived.
+        build_tree(open_ids)
+            .then(async (tree) => ({
+                result: await layout_graph(tree.roots),
+                placed: tree.placement,
+            }))
+            .then(({ result, placed }) => {
                 if (cancelled) {
                     return;
                 }
 
                 layout = result;
+                placement = placed;
                 error = null;
             })
             .catch((exception) => {

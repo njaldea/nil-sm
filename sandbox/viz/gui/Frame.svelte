@@ -1,10 +1,6 @@
 <script>
     import "https://unpkg.com/elkjs@0.12.0/lib/elk.bundled.js";
-    import { xit } from "@nil-/xit";
     import Model from "./Model.svelte";
-
-    const { values } = xit();
-    const model = values("model");
 
     // light or dark; remembered between visits, first visit follows the system setting
     const stored_theme =
@@ -19,26 +15,30 @@
         document.body.style.background = theme === "dark" ? "#0a0a0a" : "";
     });
 
-    // index into the machines the server sends
-    let machine = $state(0);
-
     // index into the focus options of the current machine
     let selected = $state(0);
 
     let show_props = $state(false);
 
-    const payload = $derived(
-        $model && $model.length > 0 ? JSON.parse(new TextDecoder().decode($model)) : null
-    );
-    const machines = $derived(payload?.machines ?? []);
-    const ir = $derived(machines[machine]?.model ?? null);
+    // the barriers and root props; the states themselves are fetched by the model
+    let machine = $state(null);
+    let failure = $state(null);
+
+    fetch("/model")
+        .then((response) => response.json())
+        .then((body) => {
+            machine = body;
+        })
+        .catch((exception) => {
+            failure = String(exception);
+        });
 
     // the root graph, then one entry per barrier
     const options = $derived(
-        ir
+        machine
             ? [
                   { label: "root", focus: null },
-                  ...(ir.barriers ?? []).map((barrier) => ({
+                  ...(machine.barriers ?? []).map((barrier) => ({
                       label: barrier.name,
                       focus: barrier.id,
                   })),
@@ -59,18 +59,6 @@
         </select>
     </label>
 
-    {#if machines.length > 0}
-        <label>
-            machine
-
-            <select bind:value={machine} onchange={() => (selected = 0)}>
-                {#each machines as entry, index}
-                    <option value={index}>{entry.name}</option>
-                {/each}
-            </select>
-        </label>
-    {/if}
-
     {#if options.length > 0}
         <label>
             props
@@ -89,11 +77,13 @@
         </label>
     {/if}
 
-    {#if ir && current}
-        <!-- a fresh Model per selection drops the opened barriers -->
-        {#key `${machine}:${selected}`}
-            <Model model={ir} root_props={machines[machine]?.root_props ?? []} focus={current.focus} {theme} {show_props} />
+    {#if machine && current}
+        <!-- a fresh Model per selection drops the opened states -->
+        {#key selected}
+            <Model root_props={machine.root_props ?? []} focus={current.focus} {theme} {show_props} />
         {/key}
+    {:else if failure}
+        <pre class="waiting">{failure}</pre>
     {:else}
         <p class="waiting">waiting for model...</p>
     {/if}

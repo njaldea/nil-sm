@@ -20,5 +20,11 @@ set(TOLLBOOTH_BARRIER_JOBS
 add_executable(sandbox_tollbooth_barrier main.cpp)
 target_link_libraries(sandbox_tollbooth_barrier PRIVATE sm ${TOLLBOOTH_BARRIER_JOBS})
 
-add_executable(sandbox_tollbooth_barrier_uml uml.cpp)
-target_link_libraries(sandbox_tollbooth_barrier_uml PRIVATE sm ${TOLLBOOTH_BARRIER_JOBS})
+add_executable(uml_sandbox_tollbooth_barrier uml.cpp)
+target_link_libraries(uml_sandbox_tollbooth_barrier PRIVATE sm ${TOLLBOOTH_BARRIER_JOBS})
+
+add_executable(viz_sandbox_tollbooth_barrier viz.cpp)
+target_link_libraries(
+    viz_sandbox_tollbooth_barrier
+    PRIVATE sandbox_viz_support ${TOLLBOOTH_BARRIER_JOBS}
+)

@@ -28,7 +28,7 @@ project(sandbox_legacy_style_api)
 add_executable(${PROJECT_NAME} legacy_style_api.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 
-project(sandbox_barrier_state_uml)
+project(uml_sandbox_barrier_state)
 
 add_executable(${PROJECT_NAME} barrier_state_uml.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
@@ -49,7 +49,12 @@ project(sandbox_benchmark_4_sm_ir)
 add_executable(${PROJECT_NAME} benchmarks/4_sm_ir.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 
+find_package(nil-xit CONFIG REQUIRED)
+add_library(sandbox_viz_support INTERFACE)
+target_link_libraries(sandbox_viz_support INTERFACE sm nil::xit)
+
 add_subdirectory(traffic_lights)
+# add_subdirectory(large) # disabled to avoid building the very large synthetic machine by default
 add_subdirectory(tollbooth)
 add_subdirectory(tollbooth_barrier)
 add_subdirectory(viz)

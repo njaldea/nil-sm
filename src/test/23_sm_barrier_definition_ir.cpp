@@ -252,6 +252,18 @@ TEST(BarrierDefinitionIr, JsonDiagramRendersNodesAsAnArray)
     }
 }
 
+TEST(BarrierDefinitionIr, JsonMachineWritesRootPropsNextToModel)
+{
+    std::ostringstream output;
+    const auto root_props = nil::sm::ir::make_root_props<child_state>();
+
+    nil::sm::format::json::write(output, nil::sm::ir::build<root>(), root_props);
+
+    const auto text = output.str();
+    EXPECT_NE(text.find("]},\"root_props\":[{\"type_id\":"), std::string::npos);
+    EXPECT_EQ(text.back(), '}');
+}
+
 TEST(BarrierDefinitionIr, IteratesUnknownBarriersAndRendersEachDefinition)
 {
     const auto model = nil::sm::ir::build<root>();

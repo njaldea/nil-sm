@@ -25,6 +25,7 @@ add_test_executable(
     23_sm_barrier_definition_ir.cpp
     24_sm_barrier_runtime.cpp
     25_sm_barrier_dependency_diagnostics.cpp
+    26_sm_diagnostics_report.cpp
 )
 target_link_libraries(sm_test PRIVATE sm)
 target_link_libraries(sm_test PRIVATE GTest::gmock)

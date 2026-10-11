@@ -100,7 +100,6 @@ namespace viz_demo::showcase
     };
 
     NIL_SM_BARRIER_DECLARE(calibration, nil::sm::api::Default<>);
-    NIL_SM_BARRIER_DEFINE(calibration, cal_probe);
     using calibration_barrier = nil::sm::barrier::State<nil::sm::Terminate, calibration>;
 
     // ---- barrier: diagnostics ----
@@ -147,7 +146,6 @@ namespace viz_demo::showcase
     };
 
     NIL_SM_BARRIER_DECLARE(diagnostics, nil::sm::api::Default<>, "diagnostics");
-    NIL_SM_BARRIER_DEFINE(diagnostics, diag_start);
     using diagnostics_barrier = nil::sm::barrier::State<nil::sm::Terminate, diagnostics>;
 
     // ---- region: pipeline ----
