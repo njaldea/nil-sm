@@ -158,7 +158,10 @@ namespace nil::sm::detail
         // type id of the target state to transit into
         const void* target = nullptr;
     };
+}
 
+namespace nil::sm
+{
     struct Event final
     {
         const void* id = nullptr; // type id of the event to emit
@@ -176,10 +179,7 @@ namespace nil::sm::detail
             };
         }
     };
-}
 
-namespace nil::sm
-{
     struct Fin final
     {
         // NOLINTNEXTLINE
@@ -293,9 +293,9 @@ namespace nil::sm
         }
 
         // NOLINTNEXTLINE
-        operator detail::Event() &&
+        operator Event() &&
         {
-            return detail::Event{
+            return Event{
                 .id = id,
                 .deleter = deleter,
                 .cloner = cloner,

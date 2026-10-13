@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.27.1)
 
 project(
     nil-sm
-    VERSION 0.0.1
+    VERSION 1.0.0
     LANGUAGES CXX
     DESCRIPTION "template repository for c++ project"
 )

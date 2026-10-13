@@ -54,7 +54,7 @@ namespace nil::sm
         {
         }
 
-        detail::on_event_t on_event(const detail::Event& /* event */) override
+        detail::on_event_t on_event(const Event& /* event */) override
         {
             return {};
         }
@@ -231,7 +231,7 @@ namespace nil::sm
             on_exit();
         }
 
-        detail::on_event_t on_event(const detail::Event& e) override
+        detail::on_event_t on_event(const Event& e) override
         {
             const auto is_regions_finalized_event
                 = e.id == nil::xalt::type_id<detail::EvRegionsFinalized>;
@@ -314,9 +314,9 @@ namespace nil::sm
                 state_t::on_enter(state, init_contexts)
             );
 
-            if (on_enter_result.template holds<detail::Event>())
+            if (on_enter_result.template holds<Event>())
             {
-                init_queues->push_emit(on_enter_result.template get<detail::Event>());
+                init_queues->push_emit(on_enter_result.template get<Event>());
             }
         }
 
@@ -326,9 +326,9 @@ namespace nil::sm
                 state_t::on_exit(current_state, contexts)
             );
 
-            if (on_exit_result.template holds<detail::Event>())
+            if (on_exit_result.template holds<Event>())
             {
-                queues->push_emit(on_exit_result.template get<detail::Event>());
+                queues->push_emit(on_exit_result.template get<Event>());
             }
         }
 
@@ -339,7 +339,7 @@ namespace nil::sm
             );
         }
 
-        sub_state_scan_t dispatch_to_regions(const detail::Event& e)
+        sub_state_scan_t dispatch_to_regions(const Event& e)
         {
             sub_state_scan_t scan = {};
             auto no_region_handled = true;
@@ -378,11 +378,11 @@ namespace nil::sm
                 ))
             {
                 auto r = Emit<detail::EvRegionsFinalized>(std::addressof(current_state));
-                queues->push_emit(detail::Event(std::move(r)));
+                queues->push_emit(Event(std::move(r)));
             }
         }
 
-        void commit_region_results(const detail::Event& e, on_event_results_t& sub_state_result)
+        void commit_region_results(const Event& e, on_event_results_t& sub_state_result)
         {
             for (auto i = 0U; i < regions_t::size; ++i)
             {
@@ -405,10 +405,10 @@ namespace nil::sm
         virtual ~ISM() noexcept = default;
 
         template <typename T>
-            requires(!std::is_same_v<T, detail::Event>)
+            requires(!std::is_same_v<T, Event>)
         void post(T event = {})
         {
-            (void)post_impl(detail::Event{
+            (void)post_impl(Event{
                 .id = nil::xalt::type_id<T>,
                 .deleter = &detail::deleter<T>,
                 .cloner = &detail::cloner<T>,
@@ -417,7 +417,7 @@ namespace nil::sm
         }
 
         // Posts an already type-erased event and returns its normalized action.
-        action_t post(detail::Event event)
+        action_t post(Event event)
         {
             return post_impl(event);
         }
@@ -425,7 +425,7 @@ namespace nil::sm
         virtual bool is_finalized() const = 0;
 
     private:
-        virtual action_t post_impl(detail::Event event) = 0;
+        virtual action_t post_impl(Event event) = 0;
     };
 
     template <typename API, typename T, typename... Props>
@@ -479,7 +479,7 @@ namespace nil::sm
         detail::RootState<Props...> root;
         detail::Region region;
 
-        action_t dispatch(const detail::Event& event)
+        action_t dispatch(const Event& event)
         {
             auto action = region.active_state->on_event(event);
             return region.template consume_action<region_dispatcher_t>(event, action);
@@ -487,10 +487,10 @@ namespace nil::sm
 
         void flush()
         {
-            queues.flush([this](const detail::Event& event) { dispatch(event); });
+            queues.flush([this](const Event& event) { dispatch(event); });
         }
 
-        action_t post_impl(detail::Event event) override
+        action_t post_impl(Event event) override
         {
             auto action = dispatch(event);
             flush();

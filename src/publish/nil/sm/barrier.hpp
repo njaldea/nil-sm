@@ -157,7 +157,7 @@ namespace nil::sm::barrier
         context_t* contexts;
         detail::Region region;
 
-        action_t post_impl(detail::Event event) override
+        action_t post_impl(Event event) override
         {
             return region.template consume_action<region_dispatcher_t>(
                 event,
@@ -208,7 +208,7 @@ namespace nil::sm
             return parent != nullptr ? parent->get(requested_id) : nullptr;
         }
 
-        detail::on_event_t on_event(const detail::Event& e) override
+        detail::on_event_t on_event(const Event& e) override
         {
             if (finalized)
             {
