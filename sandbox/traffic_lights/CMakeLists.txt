@@ -2,4 +2,4 @@ add_executable(sandbox_traffic_lights main.cpp)
 target_link_libraries(sandbox_traffic_lights PRIVATE sm)
 
 add_executable(viz_sandbox_traffic_lights viz.cpp)
-target_link_libraries(viz_sandbox_traffic_lights PRIVATE sandbox_viz_support)
+target_link_libraries(viz_sandbox_traffic_lights PRIVATE viz)

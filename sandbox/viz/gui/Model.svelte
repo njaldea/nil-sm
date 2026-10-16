@@ -22,6 +22,8 @@ How the pieces fit:
 -->
 
 <script>
+    import "elkjs/lib/elk.bundled.js";
+
     import { setContext, tick } from "svelte";
     import ArrowMarkers from "./ArrowMarkers.svelte";
     import BoxFrame from "./BoxFrame.svelte";
@@ -283,7 +285,7 @@ How the pieces fit:
 
         let cancelled = false;
 
-        fetch_json(`/model_val/${focus}`)
+        fetch_json(`model_val/${focus}.json`)
             .then((body) => {
                 if (!cancelled) {
                     requirements = body.requires;
@@ -374,9 +376,22 @@ How the pieces fit:
         node.data.is_barrier &&
         node.data.barrier_id === hovered_barrier;
 
+    // id of the start or end marker under the pointer
+    let hovered_marker = $state(null);
+
+    // A start marker has exactly one transition, so hovering it highlights that transition.
     const hovered_edge = $derived(
-        edges.find((edge) => edge.id === hovered)
+        edges.find((edge) => edge.id === hovered) ??
+            (hovered_marker == null
+                ? undefined
+                : edges.find((edge) => edge.sources[0] === hovered_marker))
     );
+
+    // a marker is lit when it is hovered or an end of the highlighted transition
+    const is_marker_hot = (node) =>
+        hovered_marker === node.id ||
+        hovered_edge?.sources[0] === node.id ||
+        hovered_edge?.targets[0] === node.id;
 
     // Containers are drawn under the edges so their fill does not hide the transitions inside.
     const is_container = (node) =>
@@ -403,6 +418,9 @@ How the pieces fit:
             leave,
             is_peer,
             is_focus: (data) => hovered_state === data.id,
+            is_marker_hot,
+            enter_marker: (node) => (hovered_marker = node.id),
+            leave_marker: () => (hovered_marker = null),
         },
         toggleable,
         toggle: toggle_node,

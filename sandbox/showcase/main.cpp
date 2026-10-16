@@ -1,5 +1,5 @@
+#include "../viz/viewer.hpp"
 #include "showcase.hpp"
-#include "viewer.hpp"
 
 #include <nil/sm.hpp>
 #include <nil/sm/diagnostics.hpp>
@@ -16,5 +16,6 @@ int main()
 {
     const auto valid = nil::sm::validate<viz_demo::showcase::plant, nil::sm::api::Default<>>();
     std::cout << "showcase: " << (valid ? "valid" : "unmet args") << '\n';
-    return sandbox::viz::run(nil::sm::ir::build<viz_demo::showcase::plant>());
+    const auto model = nil::sm::ir::build<viz_demo::showcase::plant>();
+    return sandbox::viz::run(model);
 }

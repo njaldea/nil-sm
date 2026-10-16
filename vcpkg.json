@@ -9,7 +9,7 @@
     "features": {
         "sandbox": {
             "description": "Enable sandboxes",
-            "dependencies": [ "nil-xit" ]
+            "dependencies": [ "nil-service" ]
         },
         "test": {
             "description": "Enable tests",

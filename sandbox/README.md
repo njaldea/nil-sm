@@ -15,14 +15,14 @@ Small programs used to exercise `nil::sm` and measure compile cost.
 
 ## Visualization
 
-Each viewer serves one machine using XIT and the shared Svelte renderer. The page asks for one
+Each viewer serves one machine with the prebuilt Svelte bundle in `assets`. The page asks for one
 level at a time (`/model/...`) and the unmet args of that level (`/model_val/...`), so a large
 machine is never sent or drawn whole; see `viz/viewer.hpp` for the routes. Build with
 `./configure/gcc -ts` and `ninja -C .build`, then run the corresponding executable:
 
 | executable | URL | machine |
 |---|---|---|
-| `.build/bin/viz` | <http://127.0.0.1:1101> | visualization showcase |
+| `.build/bin/viz_sandbox_showcase` | <http://127.0.0.1:1101> | visualization showcase |
 | `.build/bin/viz_sandbox_traffic_lights` | <http://127.0.0.1:1102> | traffic-light demo |
 | `.build/bin/viz_sandbox_tollbooth` | <http://127.0.0.1:1103> | toll booth |
 | `.build/bin/viz_sandbox_tollbooth_barrier` | <http://127.0.0.1:1104> | toll booth with barrier jobs |

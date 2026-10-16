@@ -30,7 +30,7 @@ The arrowheads come from ArrowMarkers.svelte.
 
 {#if hot}
     <g class="edge hot overlay">
-        <path d={path} class="line" marker-end="url(#arrow-hot)" />
+        <path d={path} class="line" class:capture={edge.capture} marker-end="url(#arrow-hot)" />
 
         {@render labels()}
     </g>

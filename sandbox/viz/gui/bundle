@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+if [[ $0 != $BASH_SOURCE ]]; then
+    echo "do not source this script"
+    return 1
+fi
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$BASH_SOURCE")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if ! command -v pnpm > /dev/null; then
+    echo "error: pnpm not found" >&2
+    exit 1
+fi
+
+pnpm install
+pnpm exec rebundler config .

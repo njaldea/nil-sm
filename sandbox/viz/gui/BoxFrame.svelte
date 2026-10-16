@@ -19,6 +19,7 @@ it can be clicked to turn the move around.
 
     const box = $derived(scene.box);
     const node = $derived({ x: box.x, y: box.y, width: box.w, height: box.h, data: scene.data });
+    const peer = $derived(hover.is_peer(node));
 </script>
 
 {#if part === "box"}
@@ -26,13 +27,14 @@ it can be clicked to turn the move around.
         role="presentation"
         class="composite outer link"
         class:barrier={scene.data.is_barrier}
+        class:peer
         class:focus={hover.is_focus(scene.data)}
         x={box.x}
         y={box.y}
         width={box.w}
         height={box.h}
         rx={5 + scene.grown}
-        style:stroke-width={1.25 + 0.75 * scene.grown}
+        style:stroke-width={peer ? null : 1.25 + 0.75 * scene.grown}
         onmouseenter={() => hover.enter(scene.data)}
         onmouseleave={hover.leave}
         onclick={() => toggle(scene.data)}
@@ -41,6 +43,7 @@ it can be clicked to turn the move around.
     <g class="stale">
         <rect
             class="inset"
+            class:barrier={scene.data.is_barrier}
             x={box.x + 3}
             y={box.y + 3}
             width={box.w - 6}

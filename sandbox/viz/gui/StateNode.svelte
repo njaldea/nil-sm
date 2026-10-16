@@ -20,26 +20,42 @@ The sizes and the hover/toggle handlers come from the "viz" context set by Model
 </script>
 
 {#if node.kind === "start"}
-    <circle
-        class="start"
-        cx={node.x + node.width / 2}
-        cy={node.y + NODE.START_SIZE / 2}
-        r={node.width / 2}
-    />
+    <g
+        role="presentation"
+        class="marker"
+        class:hot={hover.is_marker_hot(node)}
+        onmouseenter={() => hover.enter_marker(node)}
+        onmouseleave={hover.leave_marker}
+    >
+        <circle
+            class="start"
+            cx={node.x + node.width / 2}
+            cy={node.y + NODE.START_SIZE / 2}
+            r={node.width / 2}
+        />
+    </g>
 {:else if node.kind === "end"}
-    <circle
-        class="ring"
-        cx={node.x + node.width / 2}
-        cy={node.y + node.height / 2}
-        r={node.width / 2}
-    />
+    <g
+        role="presentation"
+        class="marker"
+        class:hot={hover.is_marker_hot(node)}
+        onmouseenter={() => hover.enter_marker(node)}
+        onmouseleave={hover.leave_marker}
+    >
+        <circle
+            class="ring"
+            cx={node.x + node.width / 2}
+            cy={node.y + node.height / 2}
+            r={node.width / 2}
+        />
 
-    <circle
-        class="end"
-        cx={node.x + node.width / 2}
-        cy={node.y + node.height / 2}
-        r={node.width / 2 - 3}
-    />
+        <circle
+            class="end"
+            cx={node.x + node.width / 2}
+            cy={node.y + node.height / 2}
+            r={node.width / 2 - 3}
+        />
+    </g>
 {:else if node.kind === "region"}
     <!-- a region is a container, not a state -->
     <rect x={node.x} y={node.y} width={node.width} height={node.height} class="region" />
@@ -70,6 +86,7 @@ The sizes and the hover/toggle handlers come from the "viz" context set by Model
         <!-- the same dashed outline the collapsed state has -->
         <rect
             class="inset"
+            class:barrier={node.data.is_barrier}
             x={node.x + 3}
             y={node.y + 3}
             width={node.width - 6}
@@ -119,10 +136,11 @@ The sizes and the hover/toggle handlers come from the "viz" context set by Model
         {/if}
     </rect>
 
-    {#if node.data.collapsed}
-        <!-- a second, inner outline marks a state that hides regions -->
+    {#if node.data.collapsed || node.data.expandable}
+        <!-- a second, inner outline marks a state that hides regions, or a closed barrier host -->
         <rect
             class="inset"
+            class:barrier={node.data.is_barrier}
             x={node.x + 3}
             y={node.y + 3}
             width={node.width - 6}

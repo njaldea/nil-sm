@@ -26,5 +26,5 @@ target_link_libraries(uml_sandbox_tollbooth_barrier PRIVATE sm ${TOLLBOOTH_BARRI
 add_executable(viz_sandbox_tollbooth_barrier viz.cpp)
 target_link_libraries(
     viz_sandbox_tollbooth_barrier
-    PRIVATE sandbox_viz_support ${TOLLBOOTH_BARRIER_JOBS}
+    PRIVATE viz ${TOLLBOOTH_BARRIER_JOBS}
 )

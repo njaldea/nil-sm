@@ -48,10 +48,11 @@ Render it once, next to the diagram.
         stroke-dasharray: 4 3;
     }
 
-    :global(.model-container rect.barrier) {
+    /* a barrier is an ordinary state in another colour: a solid outline, plus the dashed inset when collapsed */
+    :global(.model-container rect.barrier),
+    :global(.model-container rect.collapsed.barrier) {
         fill: var(--barrier-fill);
         stroke: var(--barrier-stroke);
-        stroke-dasharray: 4 2;
     }
 
     :global(.model-container rect.barrier.peer) {
@@ -71,6 +72,10 @@ Render it once, next to the diagram.
         stroke: var(--collapsed-stroke);
         stroke-dasharray: 2 2;
         pointer-events: none;
+    }
+
+    :global(.model-container rect.inset.barrier) {
+        stroke: var(--barrier-stroke);
     }
 
     /* the state under the pointer */
@@ -119,6 +124,15 @@ Render it once, next to the diagram.
     :global(.model-container circle.end) {
         fill: var(--terminal);
         stroke: none;
+    }
+
+    :global(.model-container g.marker.hot circle.start),
+    :global(.model-container g.marker.hot circle.end) {
+        fill: var(--edge-hot);
+    }
+
+    :global(.model-container g.marker.hot circle.ring) {
+        stroke: var(--edge-hot);
     }
 
     /* transitions */

@@ -5,4 +5,4 @@ add_executable(uml_sandbox_tollbooth uml.cpp)
 target_link_libraries(uml_sandbox_tollbooth PRIVATE sm)
 
 add_executable(viz_sandbox_tollbooth viz.cpp)
-target_link_libraries(viz_sandbox_tollbooth PRIVATE sandbox_viz_support)
+target_link_libraries(viz_sandbox_tollbooth PRIVATE viz)

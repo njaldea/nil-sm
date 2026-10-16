@@ -74,8 +74,10 @@ const load_regions = async (
     placement
 ) => {
     const [level, validation] = await Promise.all([
-        fetch_json(state_id == null ? `/model/${scope}` : `/model/${scope}/${state_id}`),
-        judged ? fetch_json(`/model_val/${val_key}`) : null,
+        fetch_json(
+            state_id == null ? `model/${scope}.json` : `model/${scope}/${state_id}.json`
+        ),
+        judged ? fetch_json(`model_val/${val_key}.json`) : null,
     ]);
     const reports = new Map(
         (validation?.children ?? []).map((report) => [report.id, report])
@@ -174,7 +176,7 @@ export const build_tree = async ({ focus, root_props, open_ids, focused }) => {
         return { roots: focus_roots(regions[0]), placement };
     }
 
-    const { root } = await fetch_json("/model_val/0");
+    const { root } = await fetch_json("model_val/0.json");
     const root_node = {
         id: "root",
         display_name: "",

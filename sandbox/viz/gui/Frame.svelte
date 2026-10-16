@@ -8,7 +8,6 @@ list props, the speed of expanding and collapsing, and which model to show.
 
 <script>
     import { tick } from "svelte";
-    import "https://unpkg.com/elkjs@0.12.0/lib/elk.bundled.js";
     import Model from "./Model.svelte";
 
     // light or dark; remembered between visits, first visit follows the system setting
@@ -61,7 +60,7 @@ list props, the speed of expanding and collapsing, and which model to show.
     let machine = $state(null);
     let failure = $state(null);
 
-    fetch("/model")
+    fetch("model.json")
         .then((response) => response.json())
         .then((body) => {
             machine = body;
