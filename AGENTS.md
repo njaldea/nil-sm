@@ -4,12 +4,12 @@
 
 | Step | Command |
 |------|---------|
-| Configure with tests and auxiliary tools | `./configure/gcc -ts` or `./configure/clang -ts` |
+| Configure with tests and auxiliary tools | `./configure/gcc -tsv` or `./configure/clang -tsv` |
 | Build | `ninja -C .build` |
 | Run tests | `.build/bin/sm_test` |
 | Run auxiliary tool | `.build/bin/sandbox` |
 
-Configure flags: `-t` enables tests and `-s` enables auxiliary tools. Build output goes to `.build/`, with executables in `.build/bin/`.
+Configure flags: `-t` enables tests, `-s` enables auxiliary tools and `-v` enables the viz viewer library (the viewer sandboxes need it). Build output goes to `.build/`, with executables in `.build/bin/`.
 
 ## Workflow Rules
 

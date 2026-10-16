@@ -11,10 +11,9 @@
 // Some leaves need a `config` that only part of the tree provides, and some leaves host barriers
 // (one of which hosts the other), so the unmet-args side has something to report too.
 
-#include "../viz/viewer.hpp"
-
 #include <nil/sm/format/json.hpp>
 #include <nil/sm/ir.hpp>
+#include <nil/sm/viz.hpp>
 
 #include <array>
 #include <charconv>
@@ -43,7 +42,7 @@ namespace
     };
 
     // The addresses stand in for type ids and barrier ids; elements of one array are distinct.
-    char markers[3] = {};
+    char markers[3] = {}; // NOLINT
     const void* const config_marker = &markers[0];
     const void* const inventory_marker = &markers[1];
     const void* const audit_marker = &markers[2];
@@ -338,14 +337,10 @@ namespace
 
     bool flag(std::span<const char* const> args, std::string_view name)
     {
-        for (const std::string_view arg : args)
-        {
-            if (arg == name)
-            {
-                return true;
-            }
-        }
-        return false;
+        return std::ranges::any_of(
+            args,
+            [name](const std::string_view arg) { return arg == name; }
+        );
     }
 }
 
@@ -383,8 +378,8 @@ int main(int argc, const char** argv)
         counting_buffer buffer;
         std::ostream out(&buffer);
         nil::sm::format::json::write(out, model);
-        std::cout << "whole model as json: " << buffer.size / (1024U * 1024U) << " MB\n";
+        std::cout << "whole model as json: " << buffer.size / (1024UL * 1024UL) << " MB\n";
     }
 
-    return sandbox::viz::run(model, {}, 1105);
+    return nil::sm::viz::run(model, {}, 1105);
 }

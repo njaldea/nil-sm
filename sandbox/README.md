@@ -17,7 +17,7 @@ Small programs used to exercise `nil::sm` and measure compile cost.
 
 Each viewer serves one machine with the prebuilt Svelte bundle in `assets`. The page asks for one
 level at a time (`/model/...`) and the unmet args of that level (`/model_val/...`), so a large
-machine is never sent or drawn whole; see `viz/viewer.hpp` for the routes. Build with
+machine is never sent or drawn whole; see `src/src/viewer.cpp` for the routes. Build with
 `./configure/gcc -ts` and `ninja -C .build`, then run the corresponding executable:
 
 | executable | URL | machine |

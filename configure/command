@@ -12,19 +12,21 @@ CMAKE_BUILD_TYPE="Release"
 VCPKG_MANIFEST_FEATURES="core"
 ENABLE_SANDBOX="OFF"
 ENABLE_TEST="OFF"
+ENABLE_VIZ="OFF"
 GENERATOR="Ninja"
 
 HELP()
 {
-    echo "[-h|d|t|s]"
+    echo "[-h|d|t|s|v]"
     echo "options:"
     echo "h         Print this help"
     echo "d         Configure Debug Build (default: Release)"
     echo "t         Enable Tests"
     echo "s         Enable Sandboxes"
+    echo "v         Enable Viz"
 }
 
-while getopts ":hdts" option; do
+while getopts ":hdtsv" option; do
     case $option in
         h)
             HELP
@@ -39,6 +41,10 @@ while getopts ":hdts" option; do
             SANDBOX="sandbox"
             VCPKG_MANIFEST_FEATURES="${SANDBOX};${VCPKG_MANIFEST_FEATURES}"
             ENABLE_SANDBOX="ON";;
+        v)
+            VIZ="viz"
+            VCPKG_MANIFEST_FEATURES="${VIZ};${VCPKG_MANIFEST_FEATURES}"
+            ENABLE_VIZ="ON";;
         \?)
             echo "unknown option is provided: ${option}"
             HELP
@@ -59,4 +65,5 @@ cmake                                                                       \
     -DVCPKG_OVERLAY_TRIPLETS="${REPO_PATH}/triplets"                        \
     -DENABLE_SANDBOX=${ENABLE_SANDBOX}                                      \
     -DENABLE_TEST=${ENABLE_TEST}                                            \
+    -DENABLE_VIZ=${ENABLE_VIZ}                                              \
     ${TRIPLET}

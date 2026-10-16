@@ -1,3 +1,4 @@
 gui/node_modules
 gui/pnpm-lock.yaml
-assets/index.js
+index_html.cpp
+index_js.cpp

@@ -1,16 +1,15 @@
-#include "viewer.hpp"
+#include "assets.hpp"
 
 #include <nil/service.hpp>
 #include <nil/sm/diagnostics.hpp>
 #include <nil/sm/format/json.hpp>
+#include <nil/sm/viz.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cctype>
 #include <charconv>
 #include <cstdint>
-#include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <optional>
 #include <span>
@@ -20,7 +19,7 @@
 #include <system_error>
 #include <vector>
 
-namespace sandbox::viz
+namespace nil::sm::viz
 {
     // The viewer asks for one level of the machine at a time:
     //   /model                     barriers and root props
@@ -96,8 +95,7 @@ namespace sandbox::viz
             {
                 return std::nullopt;
             }
-            // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast,
-            // performance-no-int-to-ptr)
+            // NOLINTNEXTLINE
             return reinterpret_cast<const void*>(value);
         }
 
@@ -216,14 +214,14 @@ namespace sandbox::viz
             struct Asset
             {
                 std::string_view route;
-                std::string_view file;
+                std::string_view (*body)();
                 std::string_view type;
             };
 
-            static constexpr std::array<Asset, 4> assets{{
-                {"/", "assets/index.html", "text/html"},
-                {"/index.html", "assets/index.html", "text/html"},
-                {"/index.js", "assets/index.js", "text/javascript"},
+            static const std::array<Asset, 3> files{{
+                {"/", assets::index_html, "text/html"},
+                {"/index.html", assets::index_html, "text/html"},
+                {"/index.js", assets::index_js, "text/javascript"},
             }};
 
             auto route = nil::service::get_route(transaction);
@@ -232,23 +230,17 @@ namespace sandbox::viz
                 route = route.substr(0, query);
             }
             const auto* asset = std::find_if(
-                assets.begin(),
-                assets.end(),
+                files.begin(),
+                files.end(),
                 [&](const Asset& a) { return a.route == route; }
             );
-            if (asset == assets.end())
+            if (asset == files.end())
             {
                 return false;
             }
 
-            const auto path = std::filesystem::path(__FILE__).parent_path() / asset->file;
-            std::ifstream file(path, std::ios::binary);
-            if (!file)
-            {
-                return false;
-            }
             nil::service::set_content_type(transaction, asset->type);
-            nil::service::send(transaction, file);
+            nil::service::send(transaction, asset->body());
             return true;
         }
     }

@@ -1,7 +1,7 @@
-#include "../viz/viewer.hpp"
 #include "user.hpp"
+#include <nil/sm/viz.hpp>
 
 int main()
 {
-    return sandbox::viz::run(nil::sm::ir::build<st_main>(), {}, 1102);
+    return nil::sm::viz::run(nil::sm::ir::build<st_main>(), {}, 1102);
 }

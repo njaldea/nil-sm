@@ -8,7 +8,10 @@
     ],
     "features": {
         "sandbox": {
-            "description": "Enable sandboxes",
+            "description": "Enable sandboxes"
+        },
+        "viz": {
+            "description": "Enable the state machine viewer",
             "dependencies": [ "nil-service" ]
         },
         "test": {

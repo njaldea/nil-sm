@@ -49,9 +49,12 @@ project(sandbox_benchmark_4_sm_ir)
 add_executable(${PROJECT_NAME} benchmarks/4_sm_ir.cpp)
 target_link_libraries(${PROJECT_NAME} PRIVATE sm)
 
-add_subdirectory(viz)
-add_subdirectory(showcase)
 add_subdirectory(traffic_lights)
-add_subdirectory(large) # disabled to avoid building the very large synthetic machine by default
 add_subdirectory(tollbooth)
 add_subdirectory(tollbooth_barrier)
+
+# the viewer demos need the viz feature
+if(TARGET sm-viz)
+    add_subdirectory(showcase)
+    add_subdirectory(large) # not built by default, it is a very large synthetic machine
+endif()

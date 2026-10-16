@@ -5,7 +5,7 @@
 #include <cstdint>
 #include <span>
 
-namespace sandbox::viz
+namespace nil::sm::viz
 {
     // Routes are described in viewer.cpp.
     int run(
