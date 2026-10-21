@@ -16,7 +16,7 @@ The sizes and the hover/toggle handlers come from the "viz" context set by Model
     // node: a placed node of the layout; outer_id: the focused state, which gets the dashed outline
     let { node, outer_id } = $props();
 
-    const { NODE, COMPOSITE, hover, toggleable, toggle } = getContext("viz");
+    const { NODE, COMPOSITE, hover, toggleable, toggle, is_open } = getContext("viz");
 </script>
 
 {#if node.kind === "start"}
@@ -73,6 +73,7 @@ The sizes and the hover/toggle handlers come from the "viz" context set by Model
         role="presentation"
         class="composite"
         class:outer={node.data.id === outer_id}
+        class:opened={node.data.id === outer_id}
         class:barrier={node.data.is_barrier}
         class:peer={hover.is_peer(node)}
         class:focus={hover.is_focus(node.data)}
@@ -124,6 +125,7 @@ The sizes and the hover/toggle handlers come from the "viz" context set by Model
         role="presentation"
         class:barrier={node.data.is_barrier}
         class:collapsed={node.data.collapsed}
+        class:opened={is_open(node.data)}
         class:peer={hover.is_peer(node)}
         class:focus={hover.is_focus(node.data)}
         class:link={toggleable(node.data)}
@@ -131,7 +133,9 @@ The sizes and the hover/toggle handlers come from the "viz" context set by Model
         onmouseleave={hover.leave}
         onclick={() => toggle(node.data)}
     >
-        {#if node.data.collapsed}
+        {#if is_open(node.data)}
+            <title>shown beside, click to hide</title>
+        {:else if node.data.collapsed}
             <title>{node.data.region_count} region(s) hidden, click to show</title>
         {/if}
     </rect>
@@ -153,7 +157,7 @@ The sizes and the hover/toggle handlers come from the "viz" context set by Model
         <ToggleIcon
             right={node.x + node.width}
             y={node.y + 10}
-            plus
+            plus={!is_open(node.data)}
             ontoggle={() => toggle(node.data)}
         />
     {/if}

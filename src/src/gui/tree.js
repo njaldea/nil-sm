@@ -148,11 +148,11 @@ const find_node = (nodes, id) => {
 };
 
 /*
- * The states to lay out. `focus` is the barrier to show (null: the root), `focused` the open
- * state the diagram is narrowed to (null: none).
+ * The states to lay out. `focus` is the barrier to show (null: the root), `pane` the open state
+ * to show on its own (null: the whole tree). `open_ids` is the path down to `pane`.
  * The root is shown as one unnamed state so it lists what it provides and lacks like any state.
  */
-export const build_tree = async ({ focus, root_props, open_ids, focused }) => {
+export const build_tree = async ({ focus, root_props, open_ids, pane }) => {
     const judged = focus == null;
     const placement = new Map();
     const regions = await load_regions(
@@ -167,13 +167,13 @@ export const build_tree = async ({ focus, root_props, open_ids, focused }) => {
     );
 
     // Its siblings are hidden, so its start marker and transitions would point at nothing.
-    const focus_roots = (nodes) => {
-        const node = focused == null ? null : find_node(nodes, focused);
+    const pane_roots = (nodes) => {
+        const node = pane == null ? null : find_node(nodes, pane);
         return node ? [{ ...node, is_initial: false, transitions: [] }] : nodes;
     };
 
     if (!judged) {
-        return { roots: focus_roots(regions[0]), placement };
+        return { roots: pane_roots(regions[0]), placement };
     }
 
     const { root } = await fetch_json("model_val/0.json");
@@ -190,5 +190,5 @@ export const build_tree = async ({ focus, root_props, open_ids, focused }) => {
         unsatisfied_args: root,
         regions,
     };
-    return { roots: focus_roots([root_node]), placement };
+    return { roots: pane_roots([root_node]), placement };
 };

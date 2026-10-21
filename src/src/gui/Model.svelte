@@ -1,34 +1,31 @@
 <!--
 @component
-One state machine's diagram: the states of a machine (the root tree, or one barrier body) laid out
-as boxes and transitions in an SVG.
+One state machine's diagram: the states of a machine (the root tree, or one barrier body), shown
+as panes side by side, each pane the svg of one opened state.
 
-It loads the states a level at a time, lays them out, and draws them. Clicking a collapsed state
-opens it, and the diagram narrows to that state; clicking it again collapses it and shows its
-parent. That change is animated: the state's box moves between its collapsed and expanded size
-while the page scrolls along with it, and it can be turned around mid-way.
+It loads the states a level at a time and lays out one pane per opened state with its children
+collapsed. Only the last two opened states are shown: a state and its parent. Opening a state
+slides the panes to the left, so the parent that is no longer needed leaves on the left; collapsing
+it slides them back.
 
 Props:
   root_props  the props the root provides, for the root's unmet args
   focus       id of the barrier to show, or null for the root tree
   theme       "light" or "dark"
   show_props  whether each state lists the props it provides
-  zoom_speed  how fast the move is, as a multiple of the default
+  zoom_speed  how fast the slide is, as a multiple of the default
 
 How the pieces fit:
   tree.js      fetches the states        layout.js    places them (with routing.js)
-  scenes.js    decides what to draw      motion.js    easing and the following scroll
-  StateNode, Edge, BoxFrame, ArrowMarkers draw it; Styles.svelte styles it
+  motion.js    easing of the slide       Pane.svelte  draws one pane, with StateNode, Edge and
+                                         ArrowMarkers; Styles.svelte styles them
 -->
 
 <script>
     import "elkjs/lib/elk.bundled.js";
 
-    import { setContext, tick } from "svelte";
-    import ArrowMarkers from "./ArrowMarkers.svelte";
-    import BoxFrame from "./BoxFrame.svelte";
-    import Edge from "./Edge.svelte";
-    import StateNode from "./StateNode.svelte";
+    import { setContext } from "svelte";
+    import Pane from "./Pane.svelte";
     import Styles from "./Styles.svelte";
     import { COMPOSITE, NODE, ROWS, ZOOM } from "./constants.js";
     import { flatten_layout, layout_graph } from "./layout.js";
@@ -39,178 +36,159 @@ How the pieces fit:
         missing_texts,
         prop_texts,
     } from "./measure.js";
-    import { ease, make_follow } from "./motion.js";
-    import { build_scenes } from "./scenes.js";
+    import { ease } from "./motion.js";
     import { build_tree, fetch_json } from "./tree.js";
 
     let { root_props = [], focus = null, theme = "light", show_props = false, zoom_speed = 1 } = $props();
 
     const elk = new window.ELK();
 
+    // space between two panes
+    const GAP = 16;
+
     // ---- what is shown ----
 
-    // the laid out states that are shown, or null before the first layout
-    let layout = $state(null);
     let error = $state(null);
 
-    // ids of the states and barrier hosts that are open; every other one is collapsed
-    let open = $state([]);
-
-    // the open state the diagram is narrowed to, or null for the whole diagram
+    // the opened state whose pane is the last one, or null for the root alone
     let focused = $state(null);
-    // the `focused` of the layout that is shown (it trails `focused` while the next one loads)
-    let shown_focus = $state(null);
 
-    // where each state of the shown layout sits: its parent and its region
-    let placement = new Map();
+    // the panes in the page, left to right: { key, id, layout, flat }
+    let shown = $state.raw([]);
 
-    // ---- the move between a collapsed and an expanded state ----
+    // where each state sits: its parent and its region
+    const placement = new Map();
 
-    // the layout being left, drawn with the shown one while `progress` runs from 0 to 1
-    let previous = $state.raw(null);
-    let progress = $state(1);
+    // the states from the top down to `id`, not counting the root
+    const chain_of = (id) => {
+        const ids = [];
+        for (let at = id; at != null && at !== "root"; at = placement.get(at)?.parent) {
+            ids.unshift(at);
+        }
+        return ids;
+    };
+
+    // the states that are open: the path down to the focused one
+    const opened = $derived(new Set(chain_of(focused)));
+
+    // ---- the panes ----
+
+    // pane layouts that were made; they do not depend on what else is open
+    const cache = new Map();
+    let cached_props = show_props;
+
+    // The pane of a state (null: the root) with its children collapsed.
+    const load_pane = (id) => {
+        const key = id ?? "root";
+        let pane = cache.get(key);
+        if (!pane) {
+            pane = build_tree({ focus, root_props, open_ids: new Set(chain_of(id)), pane: id })
+                .then(async (tree) => {
+                    for (const [state, where] of tree.placement) {
+                        placement.set(state, where);
+                    }
+                    const layout = await layout_graph(tree.roots, { elk, show_props });
+                    return { key, id, layout, flat: flatten_layout(layout) };
+                })
+                .catch((failure) => {
+                    cache.delete(key);
+                    throw failure;
+                });
+            cache.set(key, pane);
+        }
+        return pane;
+    };
+
+    // ---- sliding the panes ----
+
+    // the offset of the panes and the width of what is shown of them, while they slide
+    let offset = $state(0);
+    let view_width = $state(null);
+    let moving = $state(false);
+
     let frame = 0;
+    // ends the slide that is playing
+    let finish = null;
 
-    // the diagram's svg, to scroll along with the moving state
-    let svg = $state(null);
+    const width_of = (panes) =>
+        panes.reduce((sum, pane, i) => sum + (pane.layout.width ?? 0) + (i > 0 ? GAP : 0), 0);
 
-    // scrolls the page for a given progress
-    let follow = () => {};
-    // where the move being played is heading (1: the focused view, 0: the one it left)
-    let target = 1;
-    let playing = false;
-    // the layout that came in during a move; it is taken when the move is over
-    let arrived = null;
+    // how many states are open below the root in what is shown
+    let shown_depth = 0;
 
-    // Runs `progress` from where it is to `to`, taking the share of the move that is left.
-    const play = (to) => {
-        cancelAnimationFrame(frame);
-        target = to;
-        playing = true;
-        const origin = progress;
-        const duration = (ZOOM.MS / zoom_speed) * Math.abs(to - origin);
+    // Shows `next`. Panes that leave or come back slide, in the direction of `depth`; a change that
+    // keeps one of the panes in another place is at once.
+    const go = (next, depth) => {
+        finish?.();
+
+        const before = shown;
+        const before_depth = shown_depth;
+        shown_depth = depth;
+
+        const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        const same = (a, b) => a.key === b.key;
+
+        // forward: the panes move left; `away` are the ones that leave or come in
+        let forward = true;
+        let joined = null;
+        let away = [];
+        if (before.length === 2 && next.length === 2 && same(before[1], next[0])) {
+            joined = [before[0], ...next];
+            away = [before[0]];
+        } else if (before.length === 2 && next.length === 2 && same(before[0], next[1])) {
+            forward = false;
+            joined = [...next, before[1]];
+            away = [next[0]];
+        } else if (before.length > 0 && !before.some((a) => next.some((b) => same(a, b)))) {
+            forward = depth > before_depth;
+            joined = forward ? [...before, ...next] : [...next, ...before];
+            away = forward ? before : next;
+        }
+
+        if (reduced || !joined) {
+            shown = next;
+            return;
+        }
+
+        const shift = width_of(away) + GAP;
+        const from = forward ? 0 : -shift;
+        const to = forward ? -shift : 0;
+        const from_width = width_of(before);
+        const to_width = width_of(next);
+
+        shown = joined;
+        offset = from;
+        view_width = from_width;
+        moving = true;
+
+        finish = () => {
+            cancelAnimationFrame(frame);
+            finish = null;
+            shown = next;
+            offset = 0;
+            view_width = null;
+            moving = false;
+        };
+
+        const duration = ZOOM.MS / zoom_speed;
         const start = performance.now();
         const step = (now) => {
-            const t = duration === 0 ? 1 : Math.min(1, (now - start) / duration);
-            progress = t === 1 ? to : origin + (to - origin) * t;
-            follow(progress);
+            const t = Math.min(1, (now - start) / duration);
+            const e = ease(t);
+            offset = from + (to - from) * e;
+            view_width = from_width + (to_width - from_width) * e;
             if (t < 1) {
                 frame = requestAnimationFrame(step);
             } else {
-                playing = false;
-                settle();
+                finish?.();
             }
         };
         frame = requestAnimationFrame(step);
     };
 
-    // Ends the move once it has stopped: the layout that came in is taken, or the left one is dropped.
-    const settle = () => {
-        if (playing) {
-            return;
-        }
-
-        // the layout shown where the move ended
-        const end_focus = progress === 1 ? shown_focus : previous?.focus;
-        if (arrived && arrived.focus === end_focus) {
-            layout = arrived.result;
-            placement = arrived.placed;
-            shown_focus = arrived.focus;
-            arrived = null;
-            previous = null;
-            progress = 1;
-        } else if (progress === 1) {
-            arrived = null;
-            previous = null;
-        }
-    };
-
-    // A new layout came in while a move is playing. If it is the layout the move left, or the one it
-    // heads for, the move goes there from where it is. Returns false for any other layout.
-    const receive = (result, placed, focus_id) => {
-        const to = focus_id === previous.focus ? 0 : focus_id === shown_focus ? 1 : null;
-        if (to === null) {
-            return false;
-        }
-
-        arrived = { result, placed, focus: focus_id };
-        if (to === target) {
-            settle();
-        } else {
-            play(to);
-        }
-        return true;
-    };
-
-    // The box a state is drawn in within a flattened layout.
-    const state_rect = (flat_nodes, id) => {
-        const node = flat_nodes.find((n) => n.kind === "state" && n.data?.id === id);
-        return node && { x: node.x, y: node.y, w: node.width, h: node.height, data: node.data };
-    };
-
-    // Starts the move from the shown layout to `next`, if a state is expanding or collapsing.
-    // Opening grows the state's box from its collapsed size to the focused view; collapsing
-    // shrinks it back. `before` and `after` are the flattened layouts.
-    const begin_zoom = (before, after, focus_id, next) => {
+    $effect(() => () => {
         cancelAnimationFrame(frame);
-        playing = false;
-        arrived = null;
-        previous = null;
-        progress = 1;
-
-        if (
-            !layout ||
-            focus_id === shown_focus ||
-            window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-        ) {
-            return;
-        }
-
-        let move = null;
-        if (focus_id != null) {
-            const small = state_rect(before.nodes, focus_id);
-            const big = state_rect(after.nodes, focus_id);
-            if (small && big) {
-                move = { opening: true, id: focus_id, small, big };
-            }
-        }
-        if (!move && shown_focus != null) {
-            const big = state_rect(before.nodes, shown_focus);
-            const small = state_rect(after.nodes, shown_focus);
-            if (small && big) {
-                move = { opening: false, id: shown_focus, small, big };
-            }
-        }
-        if (!move) {
-            return;
-        }
-
-        previous = {
-            ...move,
-            focus: shown_focus,
-            width: layout.width ?? 0,
-            height: layout.height ?? 0,
-            containers: before.nodes.filter(is_container),
-            edges: before.edges,
-            leaves: before.nodes.filter((node) => !is_container(node)),
-        };
-        progress = 0;
-
-        follow = make_follow({
-            svg,
-            move,
-            sizes: {
-                before: { width: previous.width, height: previous.height },
-                after: { width: next.width ?? 0, height: next.height ?? 0 },
-            },
-            heading: () => target,
-            tick,
-        });
-
-        play(1);
-    };
-
-    $effect(() => () => cancelAnimationFrame(frame));
+    });
 
     // ---- opening and collapsing states ----
 
@@ -220,57 +198,18 @@ How the pieces fit:
             data.collapsed ||
             (data.regions?.length ?? 0) > 0);
 
-    const is_below = (id, ancestor) => {
-        for (
-            let parent = placement.get(id)?.parent;
-            parent != null;
-            parent = placement.get(parent)?.parent
-        ) {
-            if (parent === ancestor) {
-                return true;
-            }
-        }
-        return false;
-    };
-
-    // Opening a state unloads the opened state of its region, and with it everything below.
+    // Opening a state shows it beside its parent; collapsing an open one goes back to its parent.
     const toggle_node = (data) => {
         if (!toggleable(data)) {
             return;
         }
 
-        // The box of a state that is moving turns around at once, before its layout is ready.
-        if (previous && data.id === previous.id) {
-            arrived = null;
-            play(target === 1 ? 0 : 1);
-        }
-
-        const opened = new Set(open);
-        const unload = (id) => {
-            for (const other of [...opened]) {
-                if (other === id || is_below(other, id)) {
-                    opened.delete(other);
-                }
-            }
-        };
-
         if (opened.has(data.id)) {
-            if (focused != null && (focused === data.id || is_below(focused, data.id))) {
-                const parent = placement.get(data.id)?.parent;
-                focused = parent == null || parent === "root" ? null : parent;
-            }
-            unload(data.id);
+            const parent = placement.get(data.id)?.parent;
+            focused = parent == null || parent === "root" ? null : parent;
         } else {
-            const region = placement.get(data.id)?.region;
-            for (const other of [...opened]) {
-                if (region != null && placement.get(other)?.region === region) {
-                    unload(other);
-                }
-            }
-            opened.add(data.id);
             focused = data.id;
         }
-        open = [...opened];
     };
 
     // ---- loading ----
@@ -303,41 +242,29 @@ How the pieces fit:
     });
 
     $effect(() => {
-        // the layout depends on the rows, which depend on this
-        void show_props;
+        // the layouts depend on the rows, which depend on this
+        if (cached_props !== show_props) {
+            cached_props = show_props;
+            cache.clear();
+        }
 
-        const open_ids = new Set(open);
-        const focus_id = focused;
+        const chain = chain_of(focused);
+        const wanted = [null, ...chain].slice(-2);
         let cancelled = false;
 
-        // The previous layout stays on screen until the levels this one needs have arrived.
-        build_tree({ focus, root_props, open_ids, focused: focus_id })
-            .then(async (tree) => ({
-                result: await layout_graph(tree.roots, { elk, show_props }),
-                placed: tree.placement,
-            }))
-            .then(({ result, placed }) => {
-                if (cancelled) {
-                    return;
+        // What is shown stays until the panes the next view needs have arrived.
+        Promise.all(wanted.map(load_pane))
+            .then((panes) => {
+                if (!cancelled) {
+                    error = null;
+                    go(panes, chain.length);
                 }
-
-                if (previous && receive(result, placed, focus_id)) {
-                    return;
-                }
-
-                begin_zoom(flat, flatten_layout(result), focus_id, result);
-                layout = result;
-                placement = placed;
-                shown_focus = focus_id;
-                error = null;
             })
             .catch((exception) => {
-                if (cancelled) {
-                    return;
+                if (!cancelled) {
+                    shown = [];
+                    error = String(exception);
                 }
-
-                layout = null;
-                error = String(exception);
             });
 
         return () => {
@@ -345,13 +272,7 @@ How the pieces fit:
         };
     });
 
-    // ---- what the template draws ----
-
-    const flat = $derived(layout ? flatten_layout(layout) : { nodes: [], edges: [] });
-    const edges = $derived(flat.edges);
-
-    // id of the edge under the pointer
-    let hovered = $state(null);
+    // ---- hover ----
 
     // barrier_id of the barrier state under the pointer; every host of it is highlighted
     let hovered_barrier = $state(null);
@@ -376,31 +297,6 @@ How the pieces fit:
         node.data.is_barrier &&
         node.data.barrier_id === hovered_barrier;
 
-    // id of the start or end marker under the pointer
-    let hovered_marker = $state(null);
-
-    // A start marker has exactly one transition, so hovering it highlights that transition.
-    const hovered_edge = $derived(
-        edges.find((edge) => edge.id === hovered) ??
-            (hovered_marker == null
-                ? undefined
-                : edges.find((edge) => edge.sources[0] === hovered_marker))
-    );
-
-    // a marker is lit when it is hovered or an end of the highlighted transition
-    const is_marker_hot = (node) =>
-        hovered_marker === node.id ||
-        hovered_edge?.sources[0] === node.id ||
-        hovered_edge?.targets[0] === node.id;
-
-    // Containers are drawn under the edges so their fill does not hide the transitions inside.
-    const is_container = (node) =>
-        node.kind === "region" ||
-        node.composite === true;
-
-    const containers = $derived(flat.nodes.filter(is_container));
-    const leaves = $derived(flat.nodes.filter((node) => !is_container(node)));
-
     // what the components that draw the states need from here
     setContext("viz", {
         NODE,
@@ -418,19 +314,12 @@ How the pieces fit:
             leave,
             is_peer,
             is_focus: (data) => hovered_state === data.id,
-            is_marker_hot,
-            enter_marker: (node) => (hovered_marker = node.id),
-            leave_marker: () => (hovered_marker = null),
+            state: () => hovered_state,
         },
         toggleable,
         toggle: toggle_node,
+        is_open: (data) => opened.has(data.id),
     });
-
-    const eased = $derived(ease(progress));
-
-    const scenes = $derived(
-        build_scenes({ focus: shown_focus, containers, edges, leaves }, previous, progress)
-    );
 </script>
 
 <div class="model-container" class:dark={theme === "dark"}>
@@ -442,93 +331,18 @@ How the pieces fit:
     {/if}
     {#if error}
         <pre class="error">{error}</pre>
-    {:else if layout}
-        <!--
-            During a move the svg keeps the larger of the two sizes, so the page under the scroll does
-            not shrink; the canvas behind the states is drawn at the size in between.
-        -->
-        {@const width = Math.max(layout.width ?? 0, previous?.width ?? 0)}
-        {@const height = Math.max(layout.height ?? 0, previous?.height ?? 0)}
-        {@const canvas_w = previous ? previous.width + ((layout.width ?? 0) - previous.width) * eased : width}
-        {@const canvas_h = previous ? previous.height + ((layout.height ?? 0) - previous.height) * eased : height}
-        <svg bind:this={svg} {width} {height} viewBox={`0 0 ${width} ${height}`}>
-            <defs>
-                <ArrowMarkers />
-            </defs>
-
-            {#snippet scene_shapes(scene)}
-                {#each scene.containers as node (node.id)}
-                    <StateNode {node} outer_id={scene.focus} />
+    {:else if shown.length > 0}
+        <div
+            class="viewport"
+            class:moving
+            style:width={view_width == null ? null : `${view_width}px`}
+        >
+            <div class="strip" style:gap="{GAP}px" style:transform="translateX({offset}px)">
+                {#each shown as pane (pane.key)}
+                    <Pane {pane} />
                 {/each}
-
-                <!-- edges are drawn over the containers -->
-                {#each scene.edges as edge (edge.id)}
-                    <Edge
-                        {edge}
-                        onenter={() => (hovered = edge.id)}
-                        onleave={() => (hovered = null)}
-                    />
-                {/each}
-
-                <!-- the hovered edge is drawn again on top, so reordering never disturbs the hover -->
-                {#if scene.live && hovered_edge}
-                    <Edge edge={hovered_edge} hot />
-                {/if}
-            {/snippet}
-
-            <clipPath id="canvas-clip">
-                <rect width={canvas_w} height={canvas_h} rx="6" />
-            </clipPath>
-
-            <rect
-                class="canvas"
-                x="0.5"
-                y="0.5"
-                width={Math.max(0, canvas_w - 1)}
-                height={Math.max(0, canvas_h - 1)}
-                rx="5.5"
-            />
-
-            <g clip-path="url(#canvas-clip)">
-                {#each scenes as scene (scene.key)}
-                    {#if scene.kind === "box" || scene.kind === "chrome"}
-                        <BoxFrame {scene} part={scene.kind} />
-                    {:else if scene.kind === "inside"}
-                        <clipPath id="morph-clip">
-                            <rect
-                                x={scene.box.x}
-                                y={scene.box.y}
-                                width={scene.box.w}
-                                height={scene.box.h}
-                                rx="6"
-                            />
-                        </clipPath>
-
-                        <g clip-path="url(#morph-clip)">
-                            <g
-                                class="stale"
-                                transform={`translate(${scene.shift.x} ${scene.shift.y})`}
-                                opacity={scene.opacity}
-                            >
-                                {@render scene_shapes(scene)}
-
-                                {#each scene.leaves as node (node.id)}
-                                    <StateNode {node} outer_id={scene.focus} />
-                                {/each}
-                            </g>
-                        </g>
-                    {:else}
-                        <g class:stale={!scene.live} opacity={scene.opacity}>
-                            {@render scene_shapes(scene)}
-
-                            {#each scene.leaves as node (node.id)}
-                                <StateNode {node} outer_id={scene.focus} />
-                            {/each}
-                        </g>
-                    {/if}
-                {/each}
-            </g>
-        </svg>
+            </div>
+        </div>
     {/if}
 </div>
 
@@ -550,6 +364,7 @@ How the pieces fit:
         --edge: #475569;
         --edge-label: #0284c7;
         --edge-hot: #2563eb;
+        --opened-stroke: #ea580c;
         --terminal: #0f172a;
         --barrier-fill: #eef2ff;
         --barrier-stroke: #6366f1;
@@ -568,6 +383,7 @@ How the pieces fit:
         flex-direction: column;
         gap: 8px;
         align-items: flex-start;
+        max-width: 100%;
     }
 
     .model-container.dark {
@@ -585,6 +401,7 @@ How the pieces fit:
         --edge: #a3a3a3;
         --edge-label: #5eead4;
         --edge-hot: #facc15;
+        --opened-stroke: #fb923c;
         --terminal: #e5e5e5;
         --barrier-fill: #2a2433;
         --barrier-stroke: #a78bfa;
@@ -599,22 +416,31 @@ How the pieces fit:
         color-scheme: dark;
     }
 
-    svg {
-        font-family:
-            system-ui,
-            -apple-system,
-            BlinkMacSystemFont,
-            "Segoe UI",
-            Roboto,
-            sans-serif;
-
-        font-size: 11px;
+    .viewport {
+        max-width: 100%;
+        overflow-x: auto;
     }
 
-    rect.canvas {
-        fill: var(--canvas);
-        stroke: var(--canvas-edge);
-        stroke-width: 1;
+    /* the panes leave and enter past the edges while sliding */
+    .viewport.moving {
+        max-width: none;
+        overflow: hidden;
+    }
+
+    .strip {
+        display: flex;
+        align-items: flex-start;
+        width: max-content;
+    }
+
+    .strip > :global(svg) {
+        animation: enter 200ms ease-out;
+    }
+
+    @keyframes enter {
+        from {
+            opacity: 0;
+        }
     }
 
     .requirements {

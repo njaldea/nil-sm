@@ -49,8 +49,8 @@ export const ROUTE = {
     EDGE_MARGIN: 6,
 };
 
-// the move between a collapsed and an expanded state; the fade is a window of its progress
-export const ZOOM = { MS: 450, FADE_START: 0.25, FADE_SPAN: 0.5 };
+// the slide between panes, in ms
+export const ZOOM = { MS: 450 };
 
 // levels fetched from the server that are kept, oldest dropped first
 export const CACHE_LIMIT = 256;

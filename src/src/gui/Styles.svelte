@@ -1,18 +1,12 @@
 <!--
 @component
 How everything the diagram draws looks: states, regions, transitions, markers and text. The rules
-are global but scoped to `.model-container`, so StateNode, BoxFrame, Edge and the other drawing
+are global but scoped to `.model-container`, so StateNode, Edge and the other drawing
 components share them. The colours are variables defined by that container in Model.svelte.
 Render it once, next to the diagram.
 -->
 
 <style>
-    /* a state under the move animation or an outgoing layout takes no input */
-    :global(.model-container g.stale),
-    :global(.model-container g.stale *) {
-        pointer-events: none !important;
-    }
-
     /* ordinary state */
     :global(.model-container rect) {
         fill: var(--state);
@@ -36,6 +30,10 @@ Render it once, next to the diagram.
 
     :global(.model-container rect.composite.outer.focus:not(.barrier)) {
         stroke: var(--edge-hot);
+    }
+
+    :global(.model-container rect.composite.outer.opened:not(.barrier, .focus)) {
+        stroke: var(--opened-stroke);
     }
 
     /* regions are deliberately visually distinct from states */
@@ -81,6 +79,12 @@ Render it once, next to the diagram.
     /* the state under the pointer */
     :global(.model-container rect.focus) {
         stroke: var(--edge-hot);
+        stroke-width: 2;
+    }
+
+    /* the open state, in its pane and in its parent's; the pointer's highlight wins */
+    :global(.model-container rect.opened:not(.focus)) {
+        stroke: var(--opened-stroke);
         stroke-width: 2;
     }
 
