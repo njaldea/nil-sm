@@ -213,6 +213,10 @@ namespace nil::sm::format::json
                         string(o.field("event"), action.event_name);
                     }
                     string(o.field("response"), name(action.response));
+                    if (!action.emitted_event_name.empty())
+                    {
+                        string(o.field("emitted_event"), action.emitted_event_name);
+                    }
                 },
                 info
             );

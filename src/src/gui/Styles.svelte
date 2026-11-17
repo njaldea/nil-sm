@@ -22,20 +22,6 @@ Render it once, next to the diagram.
         stroke-width: 1.5;
     }
 
-    /* the state the view is narrowed to carries the outline of the expandable state it came from */
-    :global(.model-container rect.composite.outer:not(.barrier)) {
-        stroke: var(--collapsed-stroke);
-        stroke-width: 2;
-    }
-
-    :global(.model-container rect.composite.outer.focus:not(.barrier)) {
-        stroke: var(--edge-hot);
-    }
-
-    :global(.model-container rect.composite.outer.opened:not(.barrier, .focus)) {
-        stroke: var(--opened-stroke);
-    }
-
     /* regions are deliberately visually distinct from states */
     :global(.model-container rect.region) {
         fill: var(--region);
@@ -46,23 +32,16 @@ Render it once, next to the diagram.
         stroke-dasharray: 4 3;
     }
 
-    /* a barrier is an ordinary state in another colour: a solid outline, plus the dashed inset when collapsed */
-    :global(.model-container rect.barrier),
-    :global(.model-container rect.collapsed.barrier) {
-        fill: var(--barrier-fill);
-        stroke: var(--barrier-stroke);
-    }
-
-    :global(.model-container rect.barrier.peer) {
-        fill: var(--peer-fill);
-        stroke: var(--peer-stroke);
-        stroke-width: 2;
-    }
-
     /* a state that hides its regions */
     :global(.model-container rect.collapsed) {
         fill: var(--composite);
         stroke: var(--collapsed-stroke);
+    }
+
+    /* a barrier is an ordinary state in another colour: a solid outline, plus the dashed inset when collapsed */
+    :global(.model-container rect.barrier) {
+        fill: var(--barrier-fill);
+        stroke: var(--barrier-stroke);
     }
 
     :global(.model-container rect.inset) {
@@ -76,14 +55,23 @@ Render it once, next to the diagram.
         stroke: var(--barrier-stroke);
     }
 
-    /* the state under the pointer */
-    :global(.model-container rect.focus) {
+    /*
+     * What the pointer and the selection do to a state, for every kind of state alike. Each rule
+     * outranks the kinds above and the ones before it, so the order is the priority:
+     * the other hosts of a hovered barrier < the hovered state < the open (selected) state.
+     */
+    :global(.model-container rect.state.peer) {
+        fill: var(--peer-fill);
+        stroke: var(--peer-stroke);
+        stroke-width: 2;
+    }
+
+    :global(.model-container rect.state.focus) {
         stroke: var(--edge-hot);
         stroke-width: 2;
     }
 
-    /* the open state, in its pane and in its parent's; the pointer's highlight wins */
-    :global(.model-container rect.opened:not(.focus)) {
+    :global(.model-container rect.state.opened) {
         stroke: var(--opened-stroke);
         stroke-width: 2;
     }

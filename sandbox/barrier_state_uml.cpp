@@ -95,7 +95,7 @@ namespace demo
     struct first_parent
     {
         missing_one one;
-        using props = nil::xalt::tlist<nil::sm::prop<missing_one, &first_parent::one>>;
+        using props = nil::xalt::tlist<nil::sm::prop<&first_parent::one>>;
         using regions = nil::xalt::tlist<shared_barrier>;
     };
 

@@ -112,7 +112,7 @@ namespace
     struct dependency_provider
     {
         dependency value;
-        using props = nil::xalt::tlist<nil::sm::prop<dependency, &dependency_provider::value>>;
+        using props = nil::xalt::tlist<nil::sm::prop<&dependency_provider::value>>;
         using regions = nil::xalt::tlist<dependency_consumer>;
     };
 
@@ -152,7 +152,7 @@ namespace
     {
         dependency value;
         using props
-            = nil::xalt::tlist<nil::sm::prop<dependency, &transition_dependency_provider::value>>;
+            = nil::xalt::tlist<nil::sm::prop<&transition_dependency_provider::value>>;
         using regions = nil::xalt::tlist<transition_to_dependency_consumer>;
     };
 

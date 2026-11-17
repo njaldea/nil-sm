@@ -19,18 +19,24 @@ namespace nil::sm::format::mermaid
                 using T = std::decay_t<decltype(info)>;
                 if constexpr (std::is_same_v<T, ir::action::Entry>)
                 {
-                    return std::format("on Enter / {}", action_name(info.response));
+                    return std::format(
+                        "on Enter / {}",
+                        with_emitted(action_name(info.response), info.emitted_event_name)
+                    );
                 }
                 else if constexpr (std::is_same_v<T, ir::action::Exit>)
                 {
-                    return std::format("on Exit / {}", action_name(info.response));
+                    return std::format(
+                        "on Exit / {}",
+                        with_emitted(action_name(info.response), info.emitted_event_name)
+                    );
                 }
                 else if constexpr (std::is_same_v<T, ir::action::RegionsFinalized>)
                 {
                     return std::format(
                         "on {} / {}",
                         reserved::ev_regions_finalized,
-                        action_name(info.response)
+                        with_emitted(action_name(info.response), info.emitted_event_name)
                     );
                 }
                 else if constexpr (std::is_same_v<T, ir::action::Capture>)
@@ -38,12 +44,16 @@ namespace nil::sm::format::mermaid
                     return std::format(
                         "on {} [c] / {}",
                         info.event_name,
-                        action_name(info.response)
+                        with_emitted(action_name(info.response), info.emitted_event_name)
                     );
                 }
                 else
                 {
-                    return std::format("on {} / {}", info.event_name, action_name(info.response));
+                    return std::format(
+                        "on {} / {}",
+                        info.event_name,
+                        with_emitted(action_name(info.response), info.emitted_event_name)
+                    );
                 }
             },
             action

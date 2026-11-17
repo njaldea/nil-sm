@@ -14,18 +14,22 @@ export const edge_text_width = (text = "") => Math.max(20, text.length * TEXT.CH
 // the root is the one state without a name, so it has no name row
 export const has_title = (data) => data.id !== "root";
 
+// an emit names the event it emits
+const response_text = (action) =>
+    action.emitted_event ? `${action.response} ${action.emitted_event}` : action.response;
+
 const action_text = (action) => {
     switch (action.type) {
         case "entry":
-            return `on_enter / ${action.response}`;
+            return `on_enter / ${response_text(action)}`;
         case "exit":
-            return `on_exit / ${action.response}`;
+            return `on_exit / ${response_text(action)}`;
         case "regions_finalized":
-            return `on_regions_finalized / ${action.response}`;
+            return `on_regions_finalized / ${response_text(action)}`;
         case "capture":
-            return `capture ${action.event} / ${action.response}`;
+            return `capture ${action.event} / ${response_text(action)}`;
         default:
-            return `${action.event} / ${action.response}`;
+            return `${action.event} / ${response_text(action)}`;
     }
 };
 

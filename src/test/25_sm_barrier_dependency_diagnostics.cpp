@@ -48,7 +48,7 @@ namespace
     {
         static constexpr auto name = "state 1";
         A value;
-        using props = nil::xalt::tlist<nil::sm::prop<A, &two_levels_ok_root::value>>;
+        using props = nil::xalt::tlist<nil::sm::prop<&two_levels_ok_root::value>>;
         using regions = nil::xalt::tlist<needs_a>;
     };
 
@@ -68,7 +68,7 @@ namespace
     {
         static constexpr auto name = "state 1";
         A value;
-        using props = nil::xalt::tlist<nil::sm::prop<A, &two_levels_barrier_ok_root::value>>;
+        using props = nil::xalt::tlist<nil::sm::prop<&two_levels_barrier_ok_root::value>>;
         using regions = nil::xalt::tlist<two_levels_barrier>;
     };
 

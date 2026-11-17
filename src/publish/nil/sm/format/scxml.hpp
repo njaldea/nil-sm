@@ -74,6 +74,11 @@ namespace nil::sm::format::scxml
         return ir::target_id(transition);
     }
 
+    inline std::string raised_event(const std::string& emitted, const std::string& fallback)
+    {
+        return emitted.empty() ? fallback : emitted;
+    }
+
     // Render entry/exit and event action executable content (raise-based, no <script> needed)
     inline void render_actions(
         std::ostream& os,
@@ -93,7 +98,9 @@ namespace nil::sm::format::scxml
                         {
                             indent(os, depth) << "<onentry>\n";
                             indent(os, depth + 1)
-                                << "<raise event=\"" << state_id << ".onentry.emit\"/>\n";
+                                << "<raise event=\""
+                                << raised_event(info.emitted_event_name, state_id + ".onentry.emit")
+                                << "\"/>\n";
                             indent(os, depth) << "</onentry>\n";
                         }
                     }
@@ -103,7 +110,9 @@ namespace nil::sm::format::scxml
                         {
                             indent(os, depth) << "<onexit>\n";
                             indent(os, depth + 1)
-                                << "<raise event=\"" << state_id << ".onexit.emit\"/>\n";
+                                << "<raise event=\""
+                                << raised_event(info.emitted_event_name, state_id + ".onexit.emit")
+                                << "\"/>\n";
                             indent(os, depth) << "</onexit>\n";
                         }
                     }
@@ -112,7 +121,10 @@ namespace nil::sm::format::scxml
                         indent(os, depth) << "<transition event=\"" << info.event_name << "\">\n";
                         if (info.response == ir::response::EEvent::emit)
                         {
-                            indent(os, depth + 1) << "<raise event=\"" << state_id << ".emit\"/>\n";
+                            indent(os, depth + 1)
+                                << "<raise event=\""
+                                << raised_event(info.emitted_event_name, state_id + ".emit")
+                                << "\"/>\n";
                         }
                         else
                         {
@@ -127,7 +139,10 @@ namespace nil::sm::format::scxml
                         indent(os, depth + 1) << "<!-- captured before regions -->\n";
                         if (info.response == ir::response::EEvent::emit)
                         {
-                            indent(os, depth + 1) << "<raise event=\"" << state_id << ".emit\"/>\n";
+                            indent(os, depth + 1)
+                                << "<raise event=\""
+                                << raised_event(info.emitted_event_name, state_id + ".emit")
+                                << "\"/>\n";
                         }
                         else
                         {
@@ -142,8 +157,12 @@ namespace nil::sm::format::scxml
                             << "<transition event=\"done.state." << state_id << "\">\n";
                         if (info.response == ir::response::ERegionsFinalized::emit)
                         {
-                            indent(os, depth + 1)
-                                << "<raise event=\"" << state_id << ".regions_finalized.emit\"/>\n";
+                            indent(os, depth + 1) << "<raise event=\""
+                                                  << raised_event(
+                                                         info.emitted_event_name,
+                                                         state_id + ".regions_finalized.emit"
+                                                     )
+                                                  << "\"/>\n";
                         }
                         else
                         {

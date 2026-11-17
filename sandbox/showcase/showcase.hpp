@@ -251,7 +251,7 @@ namespace viz_demo::showcase
         static constexpr std::string_view name = "pipeline:failed";
 
         telemetry sensors;
-        using props = nil::xalt::tlist<nil::sm::prop<telemetry, &failed::sensors>>;
+        using props = nil::xalt::tlist<nil::sm::prop<&failed::sensors>>;
 
         using regions = nil::xalt::tlist<diagnostics_barrier>;
         using events = nil::xalt::tlist<ev_retry, ev_halt>;

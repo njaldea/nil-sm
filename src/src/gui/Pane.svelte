@@ -13,7 +13,8 @@ The hover of transitions and start/end markers is kept here, since both live in 
     import StateNode from "./StateNode.svelte";
 
     // pane: { id, layout, flat } of a state; id is null for the root
-    let { pane } = $props();
+    // shift: how far down the pane is moved to stay in view while the page is scrolled
+    let { pane, shift = 0 } = $props();
 
     const uid = $props.id();
     const viz = getContext("viz");
@@ -31,26 +32,28 @@ The hover of transitions and start/end markers is kept here, since both live in 
     // id of the start or end marker under the pointer
     let hovered_marker = $state(null);
 
-    // The transitions to highlight: the one under the pointer, the one of a hovered start marker,
-    // and every one into or out of the hovered state.
+    // The transitions to highlight: the one under the pointer, every one into or out of a hovered
+    // start/end marker, and every one into or out of the hovered state.
+    const touches = (edge, id) => edge.sources[0] === id || edge.targets[0] === id;
+
     const hot_edges = $derived.by(() => {
         const state = viz.hover.state();
         return edges.filter(
             (edge) =>
                 edge.id === hovered ||
-                (hovered_marker != null && edge.sources[0] === hovered_marker) ||
-                (state != null && (edge.sources[0] === state || edge.targets[0] === state))
+                (hovered_marker != null && touches(edge, hovered_marker)) ||
+                (state != null && touches(edge, state))
         );
     });
 
-    // the states a hovered transition (or a hovered start marker's) runs between
+    // the states a hovered transition (or a hovered marker's) runs between
     const ends = $derived(
         new Set(
             edges
                 .filter(
                     (edge) =>
                         edge.id === hovered ||
-                        (hovered_marker != null && edge.sources[0] === hovered_marker)
+                        (hovered_marker != null && touches(edge, hovered_marker))
                 )
                 .flatMap((edge) => [edge.sources[0], edge.targets[0]])
         )
@@ -58,8 +61,7 @@ The hover of transitions and start/end markers is kept here, since both live in 
 
     // a marker is lit when it is hovered or an end of a highlighted transition
     const is_marker_hot = (node) =>
-        hovered_marker === node.id ||
-        hot_edges.some((edge) => edge.sources[0] === node.id || edge.targets[0] === node.id);
+        hovered_marker === node.id || hot_edges.some((edge) => touches(edge, node.id));
 
     setContext("viz", {
         ...viz,
@@ -76,7 +78,7 @@ The hover of transitions and start/end markers is kept here, since both live in 
     const height = $derived(pane.layout.height ?? 0);
 </script>
 
-<svg {width} {height} viewBox={`0 0 ${width} ${height}`}>
+<svg {width} {height} viewBox={`0 0 ${width} ${height}`} style:transform="translateY({shift}px)">
     <defs>
         <ArrowMarkers />
 

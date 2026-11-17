@@ -33,7 +33,7 @@ namespace
         }
     };
 
-        using child_api = nil::sm::api::Default<>;
+    using child_api = nil::sm::api::Default<>;
 
     struct child
     {
@@ -76,8 +76,7 @@ namespace
         {
         }
 
-        static constexpr auto base_ctx_ptr = &root::base_ctx;
-        using props = nil::xalt::tlist<nil::sm::prop<std::shared_ptr<base_context>, base_ctx_ptr>>;
+        using props = nil::xalt::tlist<nil::sm::prop<&root::base_ctx>>;
     };
 }
 

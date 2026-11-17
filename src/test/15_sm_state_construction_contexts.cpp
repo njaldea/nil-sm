@@ -166,9 +166,9 @@ namespace
         }
 
         using props = nil::xalt::tlist<
-            nil::sm::prop<data_member_prop, &prop_parent::data_member_value>,
-            nil::sm::prop<member_function_prop, &prop_parent::get_member_function>,
-            nil::sm::prop<free_function_prop, &get_free_function_prop>>;
+            nil::sm::prop<&prop_parent::data_member_value>,
+            nil::sm::prop<&prop_parent::get_member_function>,
+            nil::sm::prop<&get_free_function_prop>>;
     };
 
     free_function_prop* get_free_function_prop(prop_parent& state)

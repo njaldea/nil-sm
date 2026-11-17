@@ -39,43 +39,96 @@ namespace nil::sm
         using type = void;
     };
 
-    // Declares a value a state exposes via get(): `using props = tlist<prop<Member,
-    // &State::member>>;`. The descriptor can store a value or pointer data member, a non-const
-    // member accessor, or a free accessor accepting the state by reference, each returning
-    // Member*.
-    template <typename Member, auto MemberPtr>
-    struct prop final
+    namespace detail
     {
-        static_assert(!std::is_const_v<Member>, "Properties must expose a mutable type.");
+        template <typename>
+        struct member_object_traits;
 
-        using type = Member;
-        static constexpr auto ptr = MemberPtr;
-
-        template <typename State>
-        static type* get(State& state)
+        template <typename State, typename Data>
+        struct member_object_traits<Data State::*>
         {
-            if constexpr (std::is_member_object_pointer_v<decltype(ptr)>)
-            {
-                return std::addressof(state.*ptr);
-            }
-            else if constexpr (std::is_member_function_pointer_v<decltype(ptr)>)
-            {
-                static_assert(
-                    !std::is_invocable_v<decltype(ptr), const State&>,
-                    "Property member functions must not be const."
-                );
-                return (state.*ptr)();
-            }
-            else
-            {
-                return ptr(state);
-            }
+            using data_type = Data;
+        };
+
+        template <typename>
+        struct member_function_traits
+        {
+            static constexpr bool valid = false;
+        };
+
+        template <typename State, typename Data>
+        struct member_function_traits<Data* (State::*)()>
+        {
+            using data_type = Data;
+
+            static constexpr bool valid = true;
+        };
+
+        template <typename>
+        struct free_function_traits
+        {
+            static constexpr bool valid = false;
+        };
+
+        template <typename State, typename Data>
+        struct free_function_traits<Data* (*)(State&)>
+        {
+            using data_type = Data;
+            static constexpr bool valid = true;
+        };
+    }
+
+    template <auto Ptr>
+    struct prop;
+
+    template <auto Ptr>
+        requires std::is_member_object_pointer_v<decltype(Ptr)>
+    struct prop<Ptr> final
+    {
+        using traits = detail::member_object_traits<decltype(Ptr)>;
+
+        using type = typename traits::data_type;
+
+        static_assert(!std::is_const_v<type>, "Properties must expose a mutable type.");
+
+        static type* get(auto& state)
+        {
+            return std::addressof(state.*Ptr);
         }
     };
 
-    // Exposes the state itself as its base type: `using props = tlist<as_parent<Base>>;`.
-    // Children reach it with `args = tlist<Base>` or, for the immediate parent only,
-    // `args = tlist<direct_parent<Base>>`.
+    template <auto Ptr>
+        requires detail::member_function_traits<decltype(Ptr)>::valid
+    struct prop<Ptr> final
+    {
+        using traits = detail::member_function_traits<decltype(Ptr)>;
+
+        using type = typename traits::data_type;
+
+        static_assert(!std::is_const_v<type>, "Properties must expose a mutable type.");
+
+        static type* get(auto& state)
+        {
+            return (state.*Ptr)();
+        }
+    };
+
+    template <auto Ptr>
+        requires detail::free_function_traits<decltype(Ptr)>::valid
+    struct prop<Ptr> final
+    {
+        using traits = detail::free_function_traits<decltype(Ptr)>;
+
+        using type = typename traits::data_type;
+
+        static_assert(!std::is_const_v<type>, "Properties must expose a mutable type.");
+
+        static type* get(auto& state)
+        {
+            return Ptr(state);
+        }
+    };
+
     template <typename Base>
     struct as_parent final
     {
@@ -83,14 +136,9 @@ namespace nil::sm
 
         using type = Base;
 
-        template <typename State>
-        static type* get(State& state)
+        static type* get(Base& state)
         {
-            static_assert(
-                std::is_convertible_v<State*, Base*>,
-                "as_parent needs the state to derive from Base."
-            );
-            return static_cast<Base*>(std::addressof(state));
+            return std::addressof(state);
         }
     };
 
@@ -246,6 +294,7 @@ namespace nil::sm
             std::copy_constructible<T>,
             "Events emitted through Emit must be copy constructible."
         );
+        using type = T;
 
         template <typename... Args>
         explicit Emit(Args&&... args)
@@ -304,7 +353,6 @@ namespace nil::sm
         }
 
     private:
-        using type = T;
         const void* id = nullptr;
         void (*deleter)(void*) = nullptr;
         void* (*cloner)(void*) = nullptr;

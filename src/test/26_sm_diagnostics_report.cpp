@@ -35,7 +35,7 @@ namespace
     struct provider_root
     {
         dependency value;
-        using props = nil::xalt::tlist<nil::sm::prop<dependency, &provider_root::value>>;
+        using props = nil::xalt::tlist<nil::sm::prop<&provider_root::value>>;
         using regions = nil::xalt::tlist<needs_dependency>;
     };
 
@@ -93,7 +93,7 @@ namespace
     struct supplying_parent
     {
         dependency value;
-        using props = nil::xalt::tlist<nil::sm::prop<dependency, &supplying_parent::value>>;
+        using props = nil::xalt::tlist<nil::sm::prop<&supplying_parent::value>>;
         using regions = nil::xalt::tlist<shared_barrier>;
     };
 

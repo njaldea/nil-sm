@@ -23,27 +23,37 @@ namespace nil::sm::format::puml
                 if constexpr (std::is_same_v<T, ir::action::Entry>)
                 {
                     indent(os, depth)
-                        << node_id << " : on Enter / " << action_name(info.response) << "\n";
+                        << node_id << " : on Enter / "
+                        << with_emitted(action_name(info.response), info.emitted_event_name)
+                        << "\n";
                 }
                 else if constexpr (std::is_same_v<T, ir::action::Exit>)
                 {
                     indent(os, depth)
-                        << node_id << " : on Exit / " << action_name(info.response) << "\n";
+                        << node_id << " : on Exit / "
+                        << with_emitted(action_name(info.response), info.emitted_event_name)
+                        << "\n";
                 }
                 else if constexpr (std::is_same_v<T, ir::action::RegionsFinalized>)
                 {
-                    indent(os, depth) << node_id << " : on " << reserved::ev_regions_finalized
-                                      << " / " << action_name(info.response) << "\n";
+                    indent(os, depth)
+                        << node_id << " : on " << reserved::ev_regions_finalized << " / "
+                        << with_emitted(action_name(info.response), info.emitted_event_name)
+                        << "\n";
                 }
                 else if constexpr (std::is_same_v<T, ir::action::Capture>)
                 {
-                    indent(os, depth) << node_id << " : on " << info.event_name << " [c] / "
-                                      << action_name(info.response) << "\n";
+                    indent(os, depth)
+                        << node_id << " : on " << info.event_name << " [c] / "
+                        << with_emitted(action_name(info.response), info.emitted_event_name)
+                        << "\n";
                 }
                 else
                 {
-                    indent(os, depth) << node_id << " : on " << info.event_name << " / "
-                                      << action_name(info.response) << "\n";
+                    indent(os, depth)
+                        << node_id << " : on " << info.event_name << " / "
+                        << with_emitted(action_name(info.response), info.emitted_event_name)
+                        << "\n";
                 }
             },
             action

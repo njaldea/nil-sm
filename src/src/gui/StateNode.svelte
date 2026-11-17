@@ -71,8 +71,7 @@ The sizes and the hover/toggle handlers come from the "viz" context set by Model
         height={node.height}
         rx="6"
         role="presentation"
-        class="composite"
-        class:outer={node.data.id === outer_id}
+        class="state composite"
         class:opened={node.data.id === outer_id}
         class:barrier={node.data.is_barrier}
         class:peer={hover.is_peer(node)}
@@ -123,6 +122,7 @@ The sizes and the hover/toggle handlers come from the "viz" context set by Model
         height={node.height}
         rx="5"
         role="presentation"
+        class="state"
         class:barrier={node.data.is_barrier}
         class:collapsed={node.data.collapsed}
         class:opened={is_open(node.data)}

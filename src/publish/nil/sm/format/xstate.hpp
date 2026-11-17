@@ -156,7 +156,11 @@ namespace nil::sm::format::xstate
                             }
                             indent(os, depth + 2)
                                 << "\""
-                                << (info.response == ir::response::EEntry::emit ? "Emit" : "NOOP")
+                                << with_emitted(
+                                       info.response == ir::response::EEntry::emit ? "Emit"
+                                                                                   : "NOOP",
+                                       info.emitted_event_name
+                                   )
                                 << "\"";
                             first_entry = false;
                         }
@@ -189,7 +193,10 @@ namespace nil::sm::format::xstate
                             }
                             indent(os, depth + 2)
                                 << "\""
-                                << (info.response == ir::response::EExit::emit ? "Emit" : "NOOP")
+                                << with_emitted(
+                                       info.response == ir::response::EExit::emit ? "Emit" : "NOOP",
+                                       info.emitted_event_name
+                                   )
                                 << "\"";
                             first_exit = false;
                         }

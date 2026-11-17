@@ -5,7 +5,9 @@
 
 #include "../ir.hpp"
 
+#include <format>
 #include <ostream>
+#include <string>
 #include <string_view>
 
 namespace nil::sm::format
@@ -18,6 +20,12 @@ namespace nil::sm::format
         }
 
         return os;
+    }
+
+    // "Emit(Name)" when the emitted event is known, otherwise the plain label.
+    inline std::string with_emitted(std::string_view label, const std::string& emitted)
+    {
+        return emitted.empty() ? std::string(label) : std::format("{}({})", label, emitted);
     }
 
     inline std::string_view action_name(ir::response::EEntry response)

@@ -4,9 +4,10 @@ One state machine's diagram: the states of a machine (the root tree, or one barr
 as panes side by side, each pane the svg of one opened state.
 
 It loads the states a level at a time and lays out one pane per opened state with its children
-collapsed. Only the last two opened states are shown: a state and its parent. Opening a state
-slides the panes to the left, so the parent that is no longer needed leaves on the left; collapsing
-it slides them back.
+collapsed. Only the last three opened states are shown: a state and its two ancestors. Opening a
+state shows it on the right, sliding the panes to the left once all three are taken, so the
+ancestor that is no longer needed leaves on the left; collapsing it slides them back. Going
+deeper scrolls to the new state and, if both fit, its parent.
 
 Props:
   root_props  the props the root provides, for the root's unmet args
@@ -24,7 +25,7 @@ How the pieces fit:
 <script>
     import "elkjs/lib/elk.bundled.js";
 
-    import { setContext } from "svelte";
+    import { setContext, tick } from "svelte";
     import Pane from "./Pane.svelte";
     import Styles from "./Styles.svelte";
     import { COMPOSITE, NODE, ROWS, ZOOM } from "./constants.js";
@@ -45,6 +46,9 @@ How the pieces fit:
 
     // space between two panes
     const GAP = 16;
+
+    // how many panes are shown at most: the focused state and its ancestors
+    const LEVELS = 3;
 
     // ---- what is shown ----
 
@@ -116,41 +120,129 @@ How the pieces fit:
     // how many states are open below the root in what is shown
     let shown_depth = 0;
 
-    // Shows `next`. Panes that leave or come back slide, in the direction of `depth`; a change that
-    // keeps one of the panes in another place is at once.
+    // the scrolling element around the panes
+    let viewport = $state(null);
+
+    // ---- keeping the panes in view ----
+
+    // the strip of panes, and where its top is relative to the window
+    let strip = $state(null);
+    let strip_top = $state(0);
+
+    const track_strip = () => {
+        strip_top = strip?.getBoundingClientRect().top ?? 0;
+    };
+
+    $effect(() => {
+        // the strip moves when the panes change, without a scroll
+        shown;
+        tick().then(track_strip);
+    });
+
+    const strip_height = $derived(Math.max(0, ...shown.map((pane) => pane.layout.height ?? 0)));
+
+    // A pane shorter than the strip follows the page down, so it stays in view.
+    const shift_of = (pane) =>
+        Math.min(Math.max(0, -strip_top), Math.max(0, strip_height - (pane.layout.height ?? 0)));
+
+    // Scrolls just enough to show the newest pane, with the pane before it when both fit.
+    // Both the viewport and the page may be the one that overflows.
+    const reveal_newest = async () => {
+        await tick();
+
+        const panes = strip ? [...strip.children] : [];
+        const last = panes.at(-1);
+        if (!last) {
+            return;
+        }
+        const before = panes.at(-2) ?? last;
+
+        // how far a scroller has to move, given the range [low, high] it shows
+        const delta = (low, high) => {
+            const a = last.getBoundingClientRect();
+            const p = before.getBoundingClientRect();
+            const start = a.right - p.left <= high - low ? p.left : a.left;
+            if (a.right - start > high - low) {
+                return start - low;
+            }
+            if (a.right > high) {
+                return a.right - high;
+            }
+            return start < low ? start - low : 0;
+        };
+
+        if (viewport) {
+            const box = viewport.getBoundingClientRect();
+            viewport.scrollBy({ left: delta(box.left, box.left + viewport.clientWidth) });
+        }
+        window.scrollBy({ left: delta(0, document.documentElement.clientWidth) });
+    };
+
+    // Shows `next`. A pane that comes in or leaves at the right opens or closes the view, panes
+    // that move along slide, in the direction of `depth`; a change that keeps none of the panes is at
+    // once. Going deeper scrolls to the new state.
     const go = (next, depth) => {
         finish?.();
 
         const before = shown;
         const before_depth = shown_depth;
         shown_depth = depth;
+        const deeper = depth > before_depth;
 
         const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
         const same = (a, b) => a.key === b.key;
+
+        // whether `a` begins with all of `b`
+        const starts_with = (a, b) => b.length <= a.length && b.every((pane, i) => same(pane, a[i]));
+
+        // how many panes at the end of `a` are the start of `b`
+        const overlap = (a, b) => {
+            for (let k = Math.min(a.length, b.length); k > 0; k--) {
+                if (a.slice(-k).every((pane, i) => same(pane, b[i]))) {
+                    return k;
+                }
+            }
+            return 0;
+        };
 
         // forward: the panes move left; `away` are the ones that leave or come in
         let forward = true;
         let joined = null;
         let away = [];
-        if (before.length === 2 && next.length === 2 && same(before[1], next[0])) {
-            joined = [before[0], ...next];
-            away = [before[0]];
-        } else if (before.length === 2 && next.length === 2 && same(before[0], next[1])) {
-            forward = false;
-            joined = [...next, before[1]];
-            away = [next[0]];
-        } else if (before.length > 0 && !before.some((a) => next.some((b) => same(a, b)))) {
-            forward = depth > before_depth;
-            joined = forward ? [...before, ...next] : [...next, ...before];
-            away = forward ? before : next;
+        // the same states with other layouts (the rows changed) are swapped at once
+        const unchanged = before.length === next.length && starts_with(next, before);
+        if (before.length > 0 && !unchanged) {
+            const ahead = overlap(before, next);
+            const back = overlap(next, before);
+            if (starts_with(next, before)) {
+                // a pane comes in at the right
+                joined = next;
+            } else if (starts_with(before, next)) {
+                // a pane leaves at the right
+                joined = before;
+            } else if (ahead > 0) {
+                away = before.slice(0, before.length - ahead);
+                joined = [...before, ...next.slice(ahead)];
+            } else if (back > 0) {
+                forward = false;
+                away = next.slice(0, next.length - back);
+                joined = [...away, ...before];
+            } else {
+                forward = depth > before_depth;
+                joined = forward ? [...before, ...next] : [...next, ...before];
+                away = forward ? before : next;
+            }
         }
 
         if (reduced || !joined) {
             shown = next;
+            if (deeper) {
+                reveal_newest();
+            }
             return;
         }
 
-        const shift = width_of(away) + GAP;
+        const shift = away.length > 0 ? width_of(away) + GAP : 0;
         const from = forward ? 0 : -shift;
         const to = forward ? -shift : 0;
         const from_width = width_of(before);
@@ -168,6 +260,9 @@ How the pieces fit:
             offset = 0;
             view_width = null;
             moving = false;
+            if (deeper) {
+                reveal_newest();
+            }
         };
 
         const duration = ZOOM.MS / zoom_speed;
@@ -249,7 +344,7 @@ How the pieces fit:
         }
 
         const chain = chain_of(focused);
-        const wanted = [null, ...chain].slice(-2);
+        const wanted = [null, ...chain].slice(-LEVELS);
         let cancelled = false;
 
         // What is shown stays until the panes the next view needs have arrived.
@@ -322,6 +417,8 @@ How the pieces fit:
     });
 </script>
 
+<svelte:window onscroll={track_strip} onresize={track_strip} />
+
 <div class="model-container" class:dark={theme === "dark"}>
     {#if focus != null && requirements.length > 0}
         <div class="requirements">
@@ -335,11 +432,17 @@ How the pieces fit:
         <div
             class="viewport"
             class:moving
+            bind:this={viewport}
             style:width={view_width == null ? null : `${view_width}px`}
         >
-            <div class="strip" style:gap="{GAP}px" style:transform="translateX({offset}px)">
+            <div
+                class="strip"
+                bind:this={strip}
+                style:gap="{GAP}px"
+                style:transform="translateX({offset}px)"
+            >
                 {#each shown as pane (pane.key)}
-                    <Pane {pane} />
+                    <Pane {pane} shift={shift_of(pane)} />
                 {/each}
             </div>
         </div>

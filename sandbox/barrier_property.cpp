@@ -62,8 +62,7 @@ namespace demo
         {
         }
 
-        static constexpr auto child_ptr = &root::child;
-        using props = nil::xalt::tlist<nil::sm::prop<child_context, child_ptr>>;
+        using props = nil::xalt::tlist<nil::sm::prop<&root::child>>;
     };
 }
 

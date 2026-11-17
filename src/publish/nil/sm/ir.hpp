@@ -46,31 +46,37 @@ namespace nil::sm::ir::response
 
 namespace nil::sm::ir::action
 {
+    // emitted_event_name is the type name of T in Emit<T>; empty unless the response is emit.
     struct Entry
     {
         response::EEntry response;
+        std::string emitted_event_name{};
     };
 
     struct Exit
     {
         response::EExit response;
+        std::string emitted_event_name{};
     };
 
     struct RegionsFinalized
     {
         response::ERegionsFinalized response;
+        std::string emitted_event_name{};
     };
 
     struct Event
     {
         std::string event_name;
         response::EEvent response;
+        std::string emitted_event_name{};
     };
 
     struct Capture
     {
         std::string event_name;
         response::EEvent response;
+        std::string emitted_event_name{};
     };
 
     using Info = std::variant<Entry, Exit, RegionsFinalized, Event, Capture>;
@@ -260,7 +266,10 @@ namespace nil::sm::ir::detail
         }
         else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
         {
-            actions.push_back(ActionT{ResponseT::emit});
+            actions.push_back(ActionT{
+                ResponseT::emit,
+                std::string(nil::sm::detail::type_name<typename R::type>())
+            });
         }
         else if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
         {
@@ -304,9 +313,10 @@ namespace nil::sm::ir::detail
         }
         else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
         {
-            node.actions.emplace_back(
-                ir::action::RegionsFinalized{ir::response::ERegionsFinalized::emit}
-            );
+            node.actions.emplace_back(ir::action::RegionsFinalized{
+                ir::response::ERegionsFinalized::emit,
+                std::string(nil::sm::detail::type_name<typename R::type>())
+            });
         }
         else if constexpr (nil::xalt::is_of_template_v<R, std::variant>)
         {
@@ -335,9 +345,11 @@ namespace nil::sm::ir::detail
         }
         else if constexpr (nil::xalt::is_of_template_v<R, Emit>)
         {
-            node.actions.emplace_back(
-                ActionInfoT{std::string(event_name), ir::response::EEvent::emit}
-            );
+            node.actions.emplace_back(ActionInfoT{
+                std::string(event_name),
+                ir::response::EEvent::emit,
+                std::string(nil::sm::detail::type_name<typename R::type>())
+            });
         }
         else if constexpr (std::is_same_v<R, Forward>)
         {

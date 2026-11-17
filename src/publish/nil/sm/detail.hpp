@@ -165,38 +165,29 @@ namespace nil::sm::detail
         template <typename Consume>
         void flush(Consume consume)
         {
-            while (!defer.empty())
+            while (!defer.empty() || !emit.empty())
             {
-                auto emitted = defer.front();
-                defer.pop();
-                consume(emitted);
-                emitted.deleter(emitted.data);
-            }
+                while (!defer.empty())
+                {
+                    auto emitted = defer.front();
+                    defer.pop();
+                    consume(emitted);
+                    emitted.deleter(emitted.data);
+                }
 
-            while (!emit.empty())
-            {
-                auto emitted = emit.front();
-                emit.pop();
-                consume(emitted);
-                emitted.deleter(emitted.data);
+                while (!emit.empty())
+                {
+                    auto emitted = emit.front();
+                    emit.pop();
+                    consume(emitted);
+                    emitted.deleter(emitted.data);
+                }
             }
         }
 
         ~Queues()
         {
-            while (!defer.empty())
-            {
-                auto emitted = defer.front();
-                defer.pop();
-                emitted.deleter(emitted.data);
-            }
-
-            while (!emit.empty())
-            {
-                auto emitted = emit.front();
-                emit.pop();
-                emitted.deleter(emitted.data);
-            }
+            flush([](const auto& /* event */) {});
         }
 
     private:

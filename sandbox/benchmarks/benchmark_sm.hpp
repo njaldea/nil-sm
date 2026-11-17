@@ -306,7 +306,7 @@ namespace benchmark
         telemetry_context telemetry{};
         using regions = nil::xalt::tlist<active>;
         using captures = nil::xalt::tlist<ev_reset>;
-        using props = nil::xalt::tlist<nil::sm::prop<telemetry_context, &root::telemetry>>;
+        using props = nil::xalt::tlist<nil::sm::prop<&root::telemetry>>;
 
         static auto on_capture(const ev_reset& /* event */)
         {
