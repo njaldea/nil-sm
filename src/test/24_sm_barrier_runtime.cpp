@@ -355,3 +355,64 @@ TEST(BarrierRuntime, ChildLifecycleRunsWithoutDescriptorLifecycle)
 
     lifecycle_machine machine(&mock);
 }
+
+namespace
+{
+    struct direct_parent_base
+    {
+        int marker = 42;
+    };
+
+    struct direct_parent_body
+    {
+        using args = nil::xalt::tlist<nil::sm::direct_parent<direct_parent_base>>;
+
+        inline static int received_marker = 0;
+
+        explicit direct_parent_body(direct_parent_base* parent_value)
+        {
+            received_marker = parent_value != nullptr ? parent_value->marker : -1;
+        }
+    };
+
+    NIL_SM_BARRIER_DECLARE(direct_parent_barrier_state, default_api);
+    NIL_SM_BARRIER_DEFINE(direct_parent_barrier_state, direct_parent_body);
+    using direct_parent_barrier
+        = nil::sm::barrier::State<nil::sm::Terminate, direct_parent_barrier_state>;
+
+    struct direct_parent_host: direct_parent_base
+    {
+        using props = nil::xalt::tlist<nil::sm::as_parent<direct_parent_base>>;
+        using regions = nil::xalt::tlist<direct_parent_barrier>;
+    };
+
+    // the first state of this barrier is itself a barrier
+    NIL_SM_BARRIER_DECLARE(nested_direct_parent_barrier_state, default_api);
+    NIL_SM_BARRIER_DEFINE(nested_direct_parent_barrier_state, direct_parent_barrier);
+    using nested_direct_parent_barrier
+        = nil::sm::barrier::State<nil::sm::Terminate, nested_direct_parent_barrier_state>;
+
+    struct nested_direct_parent_host: direct_parent_base
+    {
+        using props = nil::xalt::tlist<nil::sm::as_parent<direct_parent_base>>;
+        using regions = nil::xalt::tlist<nested_direct_parent_barrier>;
+    };
+}
+
+TEST(BarrierRuntime, DirectParentFromBodyRootReachesBarrierParent)
+{
+    direct_parent_body::received_marker = 0;
+
+    nil::sm::DefaultSM<direct_parent_host> machine;
+
+    EXPECT_EQ(direct_parent_body::received_marker, 42);
+}
+
+TEST(BarrierRuntime, DirectParentSkipsNestedBarriersToReachTheirParent)
+{
+    direct_parent_body::received_marker = 0;
+
+    nil::sm::DefaultSM<nested_direct_parent_host> machine;
+
+    EXPECT_EQ(direct_parent_body::received_marker, 42);
+}

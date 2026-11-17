@@ -121,6 +121,42 @@ namespace
     {
         return node.regions.front().front();
     }
+
+    struct direct_parent_body
+    {
+        using args = nil::xalt::tlist<nil::sm::direct_parent<parent_base>>;
+
+        explicit direct_parent_body(parent_base* /* value */)
+        {
+        }
+    };
+
+    NIL_SM_BARRIER_DECLARE(direct_parent_barrier_state, body_api);
+    NIL_SM_BARRIER_DEFINE(direct_parent_barrier_state, direct_parent_body);
+    using direct_parent_barrier
+        = nil::sm::barrier::State<nil::sm::Terminate, direct_parent_barrier_state>;
+
+    struct exposing_barrier_host: parent_base
+    {
+        using props = nil::xalt::tlist<nil::sm::as_parent<parent_base>>;
+        using regions = nil::xalt::tlist<direct_parent_barrier>;
+    };
+
+    struct plain_barrier_host: parent_base
+    {
+        using regions = nil::xalt::tlist<direct_parent_barrier>;
+    };
+
+    // the first state of this barrier is itself a barrier
+    NIL_SM_BARRIER_DECLARE(nested_direct_parent_barrier_state, body_api);
+    NIL_SM_BARRIER_DEFINE(nested_direct_parent_barrier_state, direct_parent_barrier);
+    using nested_direct_parent_barrier
+        = nil::sm::barrier::State<nil::sm::Terminate, nested_direct_parent_barrier_state>;
+
+    struct plain_nested_barrier_host: parent_base
+    {
+        using regions = nil::xalt::tlist<nested_direct_parent_barrier>;
+    };
 }
 
 TEST(sm_feature_diagnostics_report, shallow_level_omits_regions_and_counts_them)
@@ -417,4 +453,83 @@ TEST(sm_feature_diagnostics_report, reports_are_written_as_json)
     );
     EXPECT_NE(text.find("\"as_parent\":false"), std::string::npos);
     EXPECT_NE(text.find("\"subtree_unmet\":0"), std::string::npos);
+}
+
+TEST(sm_feature_diagnostics_report, a_barrier_body_direct_parent_is_met_by_the_barrier_parent)
+{
+    const auto model = nil::sm::ir::build<exposing_barrier_host>();
+    const auto diagnostics = nil::sm::Diagnostics(model, {});
+    const auto& host = first_child(model.roots.front());
+
+    {
+        const auto reports = diagnostics.children("0");
+
+        ASSERT_TRUE(reports.has_value());
+        ASSERT_EQ(reports->size(), 1U);
+        EXPECT_TRUE(reports->front().issues.empty());
+    }
+
+    {
+        const auto reports = diagnostics.children(host.id);
+
+        ASSERT_TRUE(reports.has_value());
+        ASSERT_EQ(reports->size(), 1U);
+        EXPECT_TRUE(reports->front().issues.empty());
+    }
+}
+
+TEST(sm_feature_diagnostics_report, reports_both_sides_of_an_unmet_barrier_body_direct_parent)
+{
+    const auto model = nil::sm::ir::build<plain_barrier_host>();
+    const auto diagnostics = nil::sm::Diagnostics(model, {});
+    const auto& host = first_child(model.roots.front());
+
+    {
+        const auto reports = diagnostics.children("0");
+
+        ASSERT_TRUE(reports.has_value());
+        ASSERT_EQ(reports->size(), 1U);
+        ASSERT_EQ(reports->front().issues.size(), 1U);
+        EXPECT_TRUE(reports->front().issues.front().as_parent);
+        EXPECT_TRUE(reports->front().issues.front().dependency.is_direct_parent);
+    }
+
+    {
+        const auto reports = diagnostics.children(host.id);
+
+        ASSERT_TRUE(reports.has_value());
+        ASSERT_EQ(reports->size(), 1U);
+        ASSERT_EQ(reports->front().issues.size(), 1U);
+        EXPECT_FALSE(reports->front().issues.front().as_parent);
+        EXPECT_TRUE(reports->front().issues.front().dependency.is_direct_parent);
+    }
+}
+
+TEST(sm_feature_diagnostics_report, reports_a_direct_parent_through_nested_barriers)
+{
+    const auto model = nil::sm::ir::build<plain_nested_barrier_host>();
+    const auto diagnostics = nil::sm::Diagnostics(model, {});
+    const auto& outer_host = first_child(model.roots.front());
+    const auto* outer = nil::sm::ir::find_barrier(model, outer_host.barrier_id);
+    ASSERT_NE(outer, nullptr);
+    const auto occurrence = std::string(outer_host.id) + "::" + std::string(outer->roots.front().id);
+
+    {
+        const auto reports = diagnostics.children("0");
+
+        ASSERT_TRUE(reports.has_value());
+        ASSERT_EQ(reports->size(), 1U);
+        ASSERT_EQ(reports->front().issues.size(), 1U);
+        EXPECT_TRUE(reports->front().issues.front().as_parent);
+    }
+
+    {
+        const auto reports = diagnostics.children(occurrence);
+
+        ASSERT_TRUE(reports.has_value());
+        ASSERT_EQ(reports->size(), 1U);
+        ASSERT_EQ(reports->front().issues.size(), 1U);
+        EXPECT_FALSE(reports->front().issues.front().as_parent);
+        EXPECT_TRUE(reports->front().issues.front().dependency.is_direct_parent);
+    }
 }

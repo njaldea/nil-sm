@@ -41,7 +41,8 @@ namespace nil::sm::detail
                                             : provides(ancestor_props);
     }
 
-    // A barrier looks props up through its host, but never reaches direct_parent.
+    // A barrier body is checked where it is hosted: props come from the host's ancestors and
+    // direct_parent from the barrier's parent.
     // NOLINTNEXTLINE
     constexpr bool nodes_satisfied(
         const ir::Model& model,
@@ -85,7 +86,7 @@ namespace nil::sm::detail
 
                 const auto* barrier = ir::find_barrier(model, node.barrier_id);
                 return node.barrier_id == nullptr || barrier == nullptr
-                    || nodes_satisfied(model, barrier->roots, ancestor_props, nullptr);
+                    || nodes_satisfied(model, barrier->roots, ancestor_props, parent);
             }
         );
     }
@@ -270,7 +271,7 @@ namespace nil::sm
                 = node.barrier_id == nullptr ? nullptr : ir::find_barrier(*model, node.barrier_id);
             if (barrier != nullptr)
             {
-                for (auto& issue : collect(barrier->roots, props, nullptr))
+                for (auto& issue : collect(barrier->roots, props, parent))
                 {
                     issue.barrier_path.insert(issue.barrier_path.begin(), barrier->name);
                     issues.push_back(std::move(issue));
@@ -279,29 +280,50 @@ namespace nil::sm
             return unique(std::move(issues));
         }
 
-        // What `node` would have to expose for the direct_parent<T> args of its children.
-        static std::vector<Issue> parent_issues(const ir::Node& node)
+        // What `node` would have to expose for the direct_parent<T> args of its children,
+        // including the root states of the barrier bodies hosted under it.
+        std::vector<Issue> parent_issues(const ir::Node& node) const
         {
             std::vector<Issue> issues;
             for (const auto& region : node.regions)
             {
                 for (const auto& child : region)
                 {
-                    for (const auto& dependency : child.required_args)
-                    {
-                        const auto provided = std::any_of(
-                            node.provided_props.begin(),
-                            node.provided_props.end(),
-                            [&](const auto& prop) { return prop.type_id == dependency.type_id; }
-                        );
-                        if (dependency.is_direct_parent && !provided)
-                        {
-                            issues.push_back(Issue{dependency, {}, node.display_name, true});
-                        }
-                    }
+                    append_parent_issues(issues, node, child);
                 }
             }
             return unique(std::move(issues));
+        }
+
+        void append_parent_issues(
+            std::vector<Issue>& issues,
+            const ir::Node& parent,
+            const ir::Node& child
+        ) const
+        {
+            for (const auto& dependency : child.required_args)
+            {
+                const auto provided = std::any_of(
+                    parent.provided_props.begin(),
+                    parent.provided_props.end(),
+                    [&](const auto& prop) { return prop.type_id == dependency.type_id; }
+                );
+                if (dependency.is_direct_parent && !provided)
+                {
+                    issues.push_back(Issue{dependency, {}, parent.display_name, true});
+                }
+            }
+
+            // a barrier forwards direct_parent from its body's roots to its own parent
+            const auto* barrier
+                = child.barrier_id == nullptr ? nullptr : ir::find_barrier(*model, child.barrier_id);
+            if (barrier != nullptr)
+            {
+                for (const auto& root : barrier->roots)
+                {
+                    append_parent_issues(issues, parent, root);
+                }
+            }
         }
 
         std::vector<Issue> collect(
@@ -369,6 +391,9 @@ namespace nil::sm
             const void* scope = nullptr;
             std::string prefix;
             const ir::Node* owner = nullptr;
+            const ir::Node* owner_parent = nullptr;
+            // the parent a barrier body forwards direct_parent to, for the scope being walked
+            const ir::Node* scope_parent = nullptr;
             Props visible;
 
             for (std::size_t begin = 0; begin <= occurrence.size();)
@@ -401,6 +426,7 @@ namespace nil::sm
                         return std::nullopt;
                     }
                     base = visible;
+                    scope_parent = entry->parent != nullptr ? entry->parent : scope_parent;
                     scope = entry->node->barrier_id;
                     prefix += segment;
                     prefix += "::";
@@ -408,6 +434,7 @@ namespace nil::sm
                 else
                 {
                     owner = entry->node;
+                    owner_parent = entry->parent != nullptr ? entry->parent : scope_parent;
                 }
                 begin = end + 2;
             }
@@ -421,8 +448,13 @@ namespace nil::sm
                 }
                 prefix += owner->id;
                 prefix += "::";
-                // a barrier looks props up through its host, but never reaches direct_parent
-                return Level{{&barrier->roots}, std::move(visible), nullptr, std::move(prefix)};
+                // the body's root states reach the barrier's parent through direct_parent
+                return Level{
+                    {&barrier->roots},
+                    std::move(visible),
+                    owner_parent,
+                    std::move(prefix)
+                };
             }
 
             Level level{{}, std::move(visible), owner, std::move(prefix)};

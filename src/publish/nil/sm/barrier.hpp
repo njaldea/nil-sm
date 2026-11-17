@@ -208,6 +208,12 @@ namespace nil::sm
             return parent != nullptr ? parent->get(requested_id) : nullptr;
         }
 
+        // The barrier has no props, so direct_parent from its first states asks its parent.
+        void* get_own(const void* requested_id) override
+        {
+            return parent != nullptr ? parent->get_own(requested_id) : nullptr;
+        }
+
         detail::on_event_t on_event(const Event& e) override
         {
             if (finalized)

@@ -218,6 +218,65 @@ namespace
     };
 
     using transitioned_to_nested_barrier = state_1a;
+
+    struct direct_parent_body_root
+    {
+        static constexpr auto name = "state 2";
+        using args = nil::xalt::tlist<nil::sm::direct_parent<A>>;
+
+        explicit direct_parent_body_root(A* /* dependency */)
+        {
+        }
+    };
+
+    NIL_SM_BARRIER_DECLARE(direct_parent_barrier_state, barrier_api, "barrier 2");
+    NIL_SM_BARRIER_DEFINE(direct_parent_barrier_state, direct_parent_body_root);
+
+    using direct_parent_barrier
+        = nil::sm::barrier::State<nil::sm::Terminate, direct_parent_barrier_state>;
+
+    struct direct_parent_exposing_host
+    {
+        static constexpr auto name = "state 1";
+        A value;
+        using props = nil::xalt::tlist<nil::sm::prop<&direct_parent_exposing_host::value>>;
+        using regions = nil::xalt::tlist<direct_parent_barrier>;
+    };
+
+    struct direct_parent_plain_host
+    {
+        static constexpr auto name = "state 1";
+        using regions = nil::xalt::tlist<direct_parent_barrier>;
+    };
+
+    struct direct_parent_grandparent_only
+    {
+        static constexpr auto name = "state 0";
+        A value;
+        using props = nil::xalt::tlist<nil::sm::prop<&direct_parent_grandparent_only::value>>;
+        using regions = nil::xalt::tlist<direct_parent_plain_host>;
+    };
+
+    // the first state of this barrier is itself a barrier
+    NIL_SM_BARRIER_DECLARE(nested_direct_parent_barrier_state, barrier_api, "barrier 1");
+    NIL_SM_BARRIER_DEFINE(nested_direct_parent_barrier_state, direct_parent_barrier);
+
+    using nested_direct_parent_barrier
+        = nil::sm::barrier::State<nil::sm::Terminate, nested_direct_parent_barrier_state>;
+
+    struct nested_direct_parent_exposing_host
+    {
+        static constexpr auto name = "state 1";
+        A value;
+        using props = nil::xalt::tlist<nil::sm::prop<&nested_direct_parent_exposing_host::value>>;
+        using regions = nil::xalt::tlist<nested_direct_parent_barrier>;
+    };
+
+    struct nested_direct_parent_plain_host
+    {
+        static constexpr auto name = "state 1";
+        using regions = nil::xalt::tlist<nested_direct_parent_barrier>;
+    };
 }
 
 TEST(sm_feature_barrier_dependency_diagnostics, two_levels_are_satisfied)
@@ -290,4 +349,24 @@ TEST(sm_feature_barrier_dependency_diagnostics, transition_reaches_nested_barrie
     EXPECT_EQ(model.barriers[1].name, "barrier 3");
     EXPECT_FALSE(nil::sm::validate(model));
     EXPECT_TRUE(nil::sm::validate(model, nil::sm::ir::make_root_props<B>()));
+}
+
+TEST(sm_feature_barrier_dependency_diagnostics, direct_parent_from_body_root_needs_barrier_parent)
+{
+    EXPECT_TRUE((nil::sm::validate<direct_parent_exposing_host, barrier_api>()));
+    EXPECT_FALSE((nil::sm::validate<direct_parent_plain_host, barrier_api>()));
+}
+
+TEST(
+    sm_feature_barrier_dependency_diagnostics,
+    direct_parent_from_body_root_does_not_reach_grandparent
+)
+{
+    EXPECT_FALSE((nil::sm::validate<direct_parent_grandparent_only, barrier_api>()));
+}
+
+TEST(sm_feature_barrier_dependency_diagnostics, direct_parent_skips_nested_barriers)
+{
+    EXPECT_TRUE((nil::sm::validate<nested_direct_parent_exposing_host, barrier_api>()));
+    EXPECT_FALSE((nil::sm::validate<nested_direct_parent_plain_host, barrier_api>()));
 }

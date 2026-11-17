@@ -51,31 +51,30 @@ struct parent
 {
     AppContext app;
     using props = nil::xalt::tlist<
-        nil::sm::prop<AppContext, &parent::app>>;
+        nil::sm::prop<&parent::app>>;
     using regions = nil::xalt::tlist<child>;
 };
 ```
 
-`prop<T, Accessor>` requires a mutable, non-const `T` and exposes `T*`. Its
-accessor may be one of the following forms:
+`prop<Ptr>` takes the accessor pointer and gets the exposed type from it, which must be
+mutable (non-const). The accessor may be one of the following forms:
 
 ```cpp
-T parent::*member;                  // value member: T C::*, use prop<T, ...>
-T* parent::*member;                 // pointer member: T* C::*, use prop<T*, ...>
-T* parent::get_member();            // non-const member function: T* (C::*)()
-T* get_member(parent&);             // free function: T* (*)(C&)
+T parent::*member;                  // value member: T C::*, the child gets T*
+T* parent::*member;                 // pointer member: T* C::*, the child gets T**
+T* parent::get_member();            // member function: T* (C::*)(), the child gets T*
+T* get_member(parent&);             // free function: T* (*)(C&), the child gets T*
 ```
 
 Data members are always exposed by address. Therefore, a `T C::*` property
 resolves to `T*`, while a `T* C::*` property resolves to `T**`. A child that
 requests the latter uses `args = tlist<T*>` and receives `T**`.
 
-The member function and free function receive mutable state. A `const` member
-function, a free function taking `const C&`, and a `prop<const T, ...>` are not
-valid property accessors.
+The member function and free function receive the mutable state. An accessor that returns
+a `const T*` is not valid; it fails a `static_assert`.
 
-`direct_parent<T>` is an explicit escape hatch for the immediate parent. Only that parent's
-own props are searched, so it must expose `T`; `as_parent<Base>` exposes the state itself
+`direct_parent<T>` takes `T` from the direct parent only, never from anything above it.
+The parent must expose `T` in its own props; `as_parent<Base>` exposes the state itself
 as its base type:
 
 ```cpp
@@ -90,7 +89,9 @@ struct child
 };
 ```
 
-It is not available across a barrier boundary.
+The first states of a barrier's child machine have the barrier as their direct parent, but
+a barrier has no props. For those states, `direct_parent<T>` takes `T` from the barrier's
+parent instead.
 
 ## Argument validation in diagrams
 
@@ -116,10 +117,8 @@ static_assert(nil::sm::validate<parent, api, app_context>());
 assert(nil::sm::validate(model, nil::sm::ir::make_root_props<app_context>()));
 ```
 
-A barrier looks props up through its host but never reaches `direct_parent`, so its
-requirements are checked against each host's ancestors. To see which state is missing
-what, use the `viz` sandbox: it evaluates the model per occurrence and lists the
-unmet args on each state, barrier host, and root.
+A barrier body is checked at every place it is hosted. To see what is missing, use the
+`viz` sandbox: it lists the unmet args on each state, barrier host, and root.
 
 ## Type erasure
 

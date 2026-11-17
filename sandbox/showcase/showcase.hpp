@@ -383,8 +383,7 @@ namespace viz_demo::showcase
         using captures = nil::xalt::tlist<ev_audit>;
 
         config cfg;
-        static constexpr auto cfg_ptr = &plant::cfg;
-        using props = nil::xalt::tlist<nil::sm::prop<config, cfg_ptr>>;
+        using props = nil::xalt::tlist<nil::sm::prop<&plant::cfg>>;
 
         static auto on_capture(const ev_audit& /* event */)
         {

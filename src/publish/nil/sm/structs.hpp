@@ -3,10 +3,12 @@
 
 #pragma once
 
+#include <nil/xalt/fn_sign.hpp>
 #include <nil/xalt/str_name.hpp>
 #include <nil/xalt/typed.hpp>
 
 #include <cstddef>
+#include <functional>
 #include <limits>
 #include <string_view>
 #include <type_traits>
@@ -49,83 +51,36 @@ namespace nil::sm
         {
             using data_type = Data;
         };
-
-        template <typename>
-        struct member_function_traits
-        {
-            static constexpr bool valid = false;
-        };
-
-        template <typename State, typename Data>
-        struct member_function_traits<Data* (State::*)()>
-        {
-            using data_type = Data;
-
-            static constexpr bool valid = true;
-        };
-
-        template <typename>
-        struct free_function_traits
-        {
-            static constexpr bool valid = false;
-        };
-
-        template <typename State, typename Data>
-        struct free_function_traits<Data* (*)(State&)>
-        {
-            using data_type = Data;
-            static constexpr bool valid = true;
-        };
     }
 
     template <auto Ptr>
     struct prop;
 
     template <auto Ptr>
+        requires xalt::is_fn<decltype(Ptr)>
+    struct prop<Ptr> final
+    {
+        using type = std::remove_pointer_t<typename xalt::fn_sign<decltype(Ptr)>::return_type>;
+
+        static_assert(!std::is_const_v<type>, "Properties must expose a mutable type.");
+
+        static type* get(auto& state)
+        {
+            return std::invoke(Ptr, state);
+        }
+    };
+
+    template <auto Ptr>
         requires std::is_member_object_pointer_v<decltype(Ptr)>
     struct prop<Ptr> final
     {
-        using traits = detail::member_object_traits<decltype(Ptr)>;
-
-        using type = typename traits::data_type;
+        using type = typename detail::member_object_traits<decltype(Ptr)>::data_type;
 
         static_assert(!std::is_const_v<type>, "Properties must expose a mutable type.");
 
         static type* get(auto& state)
         {
             return std::addressof(state.*Ptr);
-        }
-    };
-
-    template <auto Ptr>
-        requires detail::member_function_traits<decltype(Ptr)>::valid
-    struct prop<Ptr> final
-    {
-        using traits = detail::member_function_traits<decltype(Ptr)>;
-
-        using type = typename traits::data_type;
-
-        static_assert(!std::is_const_v<type>, "Properties must expose a mutable type.");
-
-        static type* get(auto& state)
-        {
-            return (state.*Ptr)();
-        }
-    };
-
-    template <auto Ptr>
-        requires detail::free_function_traits<decltype(Ptr)>::valid
-    struct prop<Ptr> final
-    {
-        using traits = detail::free_function_traits<decltype(Ptr)>;
-
-        using type = typename traits::data_type;
-
-        static_assert(!std::is_const_v<type>, "Properties must expose a mutable type.");
-
-        static type* get(auto& state)
-        {
-            return Ptr(state);
         }
     };
 
@@ -142,9 +97,9 @@ namespace nil::sm
         }
     };
 
-    // Opt-in escape hatch: `using args = tlist<direct_parent<Type>>;` resolves `Type*` from the
-    // immediate parent's own props only (never its ancestors), so the parent must expose `Type`,
-    // for example with `as_parent<Type>`. Not available across a barrier boundary.
+    // Opt-in escape hatch: `using args = tlist<direct_parent<Type>>;` takes `Type*` from the
+    // direct parent's own props only, so the parent must expose `Type`, for example with
+    // `as_parent<Type>`. In a barrier's first states it uses the barrier's parent instead.
     template <typename T>
     struct direct_parent final
     {

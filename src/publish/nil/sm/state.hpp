@@ -160,7 +160,7 @@ namespace nil::sm
             return state_t::make(contexts, metadata, resolve_arg<Args>(parent)...);
         }
 
-        // Matches requested_id against every prop<Member, Ptr> in props_t, resolving
+        // Matches requested_id against every prop<Ptr> in props_t, resolving
         // its value through the descriptor when one matches.
         template <typename... Props>
         void* match_props(

@@ -46,9 +46,9 @@ The descriptor supplies the child machine's API, stable identity, `make()`, and
 
 ## Data and contexts
 
-Child states can use ordinary `args` and `props` dependencies. Property lookups
-can pass through the barrier to the owning state; `direct_parent` stops at the
-boundary.
+Child states can use ordinary `args` and `props` dependencies, and lookups pass through the
+barrier to the owning state. `direct_parent` only looks at the direct parent, so for the
+first states of the child machine it takes the prop from the barrier's parent.
 
 The child API context is adapted from the parent with
 `nil::sm::barrier::context_adapter<Parent, Child>`:
@@ -68,8 +68,7 @@ a child `Terminate` finalizes the barrier region and applies the configured
 completion action. The owner then receives its normal `on_regions_finalized()`
 event when appropriate.
 
-Child states are isolated from `direct_parent` access to the host. The barrier
-itself has no user lifecycle hooks and does not own a descriptor instance.
+The barrier itself has no user lifecycle hooks and does not own a descriptor instance.
 
 ## Diagrams
 
