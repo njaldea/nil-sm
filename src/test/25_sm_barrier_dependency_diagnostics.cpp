@@ -42,7 +42,7 @@ namespace
         }
     };
 
-    using barrier_api = nil::sm::api::Default<>;
+    using barrier_api = nil::sm::api::Default;
 
     struct two_levels_ok_root
     {

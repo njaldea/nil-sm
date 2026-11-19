@@ -88,14 +88,8 @@ namespace demo::states
     };
 }
 
-struct SandboxAPIContext
-{
-};
-
 struct SandboxAPI
 {
-    using context_t = SandboxAPIContext;
-
     template <typename T>
     struct state
     {
@@ -123,9 +117,9 @@ struct SandboxAPI
             }
         }
 
-        static T make(context_t* /* contexts */, const nil::sm::Metadata& metadata)
+        static T make(const nil::sm::Metadata& metadata)
         {
-            auto r = nil::sm::api::Default<>::state<T>::make(nullptr, metadata);
+            auto r = nil::sm::api::Default::state<T>::make(metadata);
 
             if (metadata.subregions == 0)
             {
@@ -136,9 +130,9 @@ struct SandboxAPI
             return r;
         }
 
-        static auto on_enter(T& state, SandboxAPIContext* /* contexts */)
+        static auto on_enter(T& state)
         {
-            return nil::sm::api::Default<>::state<T>::on_enter(state, nullptr);
+            return nil::sm::api::Default::state<T>::on_enter(state);
         }
     };
 };
@@ -151,8 +145,7 @@ int main()
 
     using top_state = demo::states::multi_region<random_flavor>;
 
-    SandboxAPIContext context;
-    nil::sm::SM<nil::sm::api::Coalesce<SandboxAPI>, top_state> ss{&context};
+    nil::sm::SM<nil::sm::api::Coalesce<SandboxAPI>, top_state> ss;
 
     {
         demo::events::e1 e;

@@ -13,6 +13,6 @@ Use the pages in this order:
 
 - States and events are ordinary C++ types.
 - `post()` is synchronous and the machine is not thread-safe.
-- `SM` borrows context and root-argument objects; the caller owns them.
+- `SM` borrows root-argument objects; the caller owns them.
 - Use `args` for state construction dependencies and `props` for explicit member exposure.
 - Use `captures` for events that must run before child regions.

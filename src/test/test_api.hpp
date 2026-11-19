@@ -7,6 +7,10 @@
 
 #include <gmock/gmock.h>
 
+#include <tuple>
+#include <type_traits>
+#include <utility>
+
 // Convenience using declarations for common template types
 using nil::sm::Defer;
 using nil::sm::Discard;
@@ -48,83 +52,105 @@ public:
     MOCK_METHOD(void, on_state_event, (const void* state_id, const void* event_id), ());
 };
 
-// Custom API template that receives mock through APIContexts
-// This allows lifecycle hooks (on_enter, on_exit, etc.) to call mock methods
+// Owns a state together with the mock it reports to.
+template <typename Mock, typename State>
+struct mocked
+{
+    template <typename... Args>
+    explicit mocked(Mock* init_mock, Args*... args)
+        : state{args...}
+        , mock(init_mock)
+    {
+    }
+
+    State state;
+    Mock* mock;
+};
+
+// Custom API that reports every hook to a mock. The mock is passed to the machine as a root
+// argument; every state receives it through an extra arg and keeps it in a wrapper that owns
+// the state, so Fin and final states (such as barrier descriptors) are wrapped as well.
+// Prop accessors are applied to the wrapped `state` member.
 struct TestAPI
 {
-    using context_t = testing::StrictMock<APIMock>;
+    using mock_t = testing::StrictMock<APIMock>;
 
     template <typename State>
     struct state
     {
-        using state_t = State;
-        using default_state_t = typename nil::sm::api::Default<context_t>::template state<State>;
+        static constexpr bool reports = !std::is_same_v<State, nil::sm::Fin>;
+
+        using instance_t = mocked<mock_t, State>;
+        using default_state_t = typename nil::sm::api::Default::template state<State>;
         using regions_t = nil::xalt::coalesce_t<State, nil::sm::detail::regions_tag>;
         using events_t = nil::xalt::coalesce_t<State, nil::sm::detail::events_tag>;
         using captures_t = nil::xalt::coalesce_t<State, nil::sm::detail::captures_tag>;
-        using args_t = nil::xalt::coalesce_t<State, nil::sm::detail::args_tag>;
         using props_t = nil::xalt::coalesce_t<State, nil::sm::detail::props_tag>;
+        using args_t = nil::xalt::tlist_join_t<
+            nil::xalt::tlist<mock_t>,
+            nil::xalt::coalesce_t<State, nil::sm::detail::args_tag>>;
 
-        // Make the state - delegate to api::Default
+        // The mock is the first arg; the rest are the state's own args.
         template <typename... Args>
-        static state_t make(context_t* contexts, const nil::sm::Metadata& metadata, Args*... args)
+        static instance_t make(const nil::sm::Metadata& /* metadata */, mock_t* mock, Args*... args)
         {
-            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            if constexpr (reports)
             {
-                contexts->on_make_called(nil::xalt::type_id<state_t>);
+                mock->on_make_called(nil::xalt::type_id<State>);
             }
-            return default_state_t::make(contexts, metadata, args...);
+
+            return instance_t(mock, args...);
         }
 
-        // Lifecycle hooks that receive the mock from APIContexts
-        static auto on_enter(state_t& state, context_t* contexts)
+        static auto on_enter(instance_t& instance)
         {
-            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            if constexpr (reports)
             {
-                contexts->on_enter_called(nil::xalt::type_id<state_t>);
+                instance.mock->on_enter_called(nil::xalt::type_id<State>);
             }
-            return default_state_t::on_enter(state, contexts);
+            return default_state_t::on_enter(instance.state);
         }
 
-        static auto on_exit(state_t& state, context_t* contexts)
+        static auto on_exit(instance_t& instance)
         {
-            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            if constexpr (reports)
             {
-                contexts->on_exit_called(nil::xalt::type_id<state_t>);
+                instance.mock->on_exit_called(nil::xalt::type_id<State>);
             }
-            return default_state_t::on_exit(state, contexts);
+            return default_state_t::on_exit(instance.state);
         }
 
-        static auto on_regions_finalized(state_t& state, context_t* contexts)
+        static auto on_regions_finalized(instance_t& instance)
         {
-            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            if constexpr (reports)
             {
-                contexts->on_regions_finalized_called(nil::xalt::type_id<state_t>);
+                instance.mock->on_regions_finalized_called(nil::xalt::type_id<State>);
             }
-            return default_state_t::on_regions_finalized(state, contexts);
-        }
-
-        template <typename E>
-        static auto on_event(state_t& state, const E& event, context_t* contexts)
-        {
-            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
-            {
-                contexts->on_event_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
-            }
-            return default_state_t::on_event(state, event, contexts);
+            return default_state_t::on_regions_finalized(instance.state);
         }
 
         template <typename E>
-        static auto on_capture(state_t& state, const E& event, context_t* contexts)
+        static auto on_event(instance_t& instance, const E& event)
         {
-            if constexpr (!std::is_same_v<state_t, nil::sm::Fin>)
+            if constexpr (reports)
             {
-                contexts->on_capture_called(nil::xalt::type_id<state_t>, nil::xalt::type_id<E>);
+                instance.mock->on_event_called(nil::xalt::type_id<State>, nil::xalt::type_id<E>);
             }
-            return default_state_t::on_capture(state, event, contexts);
+            return default_state_t::on_event(instance.state, event);
+        }
+
+        template <typename E>
+        static auto on_capture(instance_t& instance, const E& event)
+        {
+            if constexpr (reports)
+            {
+                instance.mock->on_capture_called(nil::xalt::type_id<State>, nil::xalt::type_id<E>);
+            }
+            return default_state_t::on_capture(instance.state, event);
         }
     };
 };
 
+// The mock is the first root argument, ahead of the test's own root arguments.
 template <typename T, typename... RootArgs>
-using TestSM = nil::sm::SM<TestAPI, T, RootArgs...>;
+using TestSM = nil::sm::SM<TestAPI, T, TestAPI::mock_t, RootArgs...>;

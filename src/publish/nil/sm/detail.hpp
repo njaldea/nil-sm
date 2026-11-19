@@ -202,7 +202,6 @@ namespace nil::sm::detail
         const Metadata* parent_metadata = nullptr;
 
         Queues* queues = nullptr;
-        void* contexts = nullptr;
         std::unique_ptr<IState> active_state;
         std::vector<Event> deferred;
         bool terminated = false;
@@ -218,18 +217,15 @@ namespace nil::sm::detail
             std::size_t init_index,
             IState* init_parent,
             Queues* init_queues,
-            void* init_contexts,
             const Metadata* init_parent_metadata
         )
             : index(init_index)
             , parent(init_parent)
             , parent_metadata(init_parent_metadata)
             , queues(init_queues)
-            , contexts(init_contexts)
             , active_state(std::make_unique<State<API, R>>(
                   init_parent,
                   init_queues,
-                  static_cast<typename API::context_t*>(init_contexts),
                   make_metadata<
                       R>(init_index, 0, API::template state<R>::regions_t::size, parent_metadata)
               ))
@@ -278,7 +274,6 @@ namespace nil::sm::detail
                         active_state = RegionDispatcher::make(
                             parent,
                             queues,
-                            static_cast<typename RegionDispatcher::context_t*>(contexts),
                             index,
                             parent_metadata,
                             r.target
@@ -342,20 +337,18 @@ namespace nil::sm::detail
     {
     private:
         using state_t = typename API::template state<StateT>;
-        using context_t = typename API::context_t;
+        using instance_t = typename state_t::instance_t;
 
         template <typename E>
         using event_result_t = decltype(state_t::template on_event<E>(
-            std::declval<StateT&>(),
-            std::declval<const E&>(),
-            static_cast<context_t*>(nullptr)
+            std::declval<instance_t&>(),
+            std::declval<const E&>()
         ));
 
         template <typename E>
         using capture_result_t = decltype(state_t::template on_capture<E>(
-            std::declval<StateT&>(),
-            std::declval<const E&>(),
-            static_cast<context_t*>(nullptr)
+            std::declval<instance_t&>(),
+            std::declval<const E&>()
         ));
 
         template <typename EventList>
@@ -382,10 +375,8 @@ namespace nil::sm::detail
         using type = nil::xalt::tlist_dedupe_t<nil::xalt::tlist_join_t<
             typename collect_targets<typename state_t::events_t>::type,
             typename collect_capture_targets<typename state_t::captures_t>::type,
-            typename transit_targets_from_action<decltype(state_t::on_regions_finalized(
-                std::declval<StateT&>(),
-                static_cast<context_t*>(nullptr)
-            ))>::type>>;
+            typename transit_targets_from_action<
+                decltype(state_t::on_regions_finalized(std::declval<instance_t&>()))>::type>>;
     };
 
     template <typename API, typename Pending, typename Seen>
@@ -473,15 +464,13 @@ namespace nil::sm::detail
     template <typename API, typename... State>
     struct state_maker<API, nil::xalt::tlist<State...>>
     {
-        using context_t = typename API::context_t;
         using maker_t = std::unique_ptr<
-            IState> (*)(IState*, Queues*, context_t*, std::size_t, std::size_t, const Metadata*);
+            IState> (*)(IState*, Queues*, std::size_t, std::size_t, const Metadata*);
 
         template <typename Candidate>
         static std::unique_ptr<IState> make(
             IState* parent,
             Queues* queues,
-            context_t* contexts,
             std::size_t region,
             std::size_t state,
             const Metadata* parent_metadata
@@ -490,7 +479,6 @@ namespace nil::sm::detail
             return std::make_unique<::nil::sm::State<API, Candidate>>(
                 parent,
                 queues,
-                contexts,
                 make_metadata<Candidate>(
                     region,
                     state,
@@ -510,7 +498,6 @@ namespace nil::sm::detail
     template <typename API, typename InitialState>
     struct region_reachability_graph
     {
-        using context_t = typename API::context_t;
         // This graph describes one region. Composite states have one graph per
         // region because each region can have a different reachable state set.
         using states = typename region_state_set<
@@ -545,7 +532,6 @@ namespace nil::sm::detail
             const void* target,
             IState* parent,
             Queues* queues,
-            context_t* contexts,
             const Metadata* parent_metadata
         )
         {
@@ -558,7 +544,6 @@ namespace nil::sm::detail
             return state_maker<API, states>::get_maker(state)(
                 parent,
                 queues,
-                contexts,
                 region,
                 state,
                 parent_metadata
@@ -574,12 +559,9 @@ namespace nil::sm::detail
     template <typename API, typename... Region>
     struct region_dispatcher<API, nil::xalt::tlist<Region...>>
     {
-    public:
-        using context_t = typename API::context_t;
-
     private:
         using maker_t = std::unique_ptr<
-            IState> (*)(std::size_t, const void*, IState*, Queues*, context_t*, const Metadata*);
+            IState> (*)(std::size_t, const void*, IState*, Queues*, const Metadata*);
 
         template <std::size_t I>
         static std::unique_ptr<IState> make_indexed(
@@ -587,13 +569,12 @@ namespace nil::sm::detail
             const void* target,
             IState* parent,
             Queues* queues,
-            context_t* contexts,
             const Metadata* parent_metadata
         )
         {
             using region_t = typename nil::xalt::tlist<Region...>::template at<I>;
             using graph_t = region_reachability_graph<API, region_t>;
-            return graph_t::make(region, target, parent, queues, contexts, parent_metadata);
+            return graph_t::make(region, target, parent, queues, parent_metadata);
         }
 
         template <std::size_t... I>
@@ -608,7 +589,6 @@ namespace nil::sm::detail
         static std::unique_ptr<IState> make(
             IState* parent,
             Queues* queues,
-            context_t* contexts,
             std::size_t region,
             const Metadata* parent_metadata,
             const void* target
@@ -619,7 +599,6 @@ namespace nil::sm::detail
                 return std::make_unique<::nil::sm::State<API, Fin>>(
                     parent,
                     queues,
-                    contexts,
                     make_metadata<Fin>(
                         region,
                         Fin::state_index,
@@ -631,7 +610,7 @@ namespace nil::sm::detail
 
             if (region < table.size())
             {
-                return table[region](region, target, parent, queues, contexts, parent_metadata);
+                return table[region](region, target, parent, queues, parent_metadata);
             }
 
             return {};
@@ -671,12 +650,15 @@ namespace nil::sm::detail
 
     struct event_dispatch_policy
     {
-        template <typename API, typename StateT, typename Event, typename ApiContext>
-        static on_event_t invoke(StateT& state, const Event& event, ApiContext* context)
+        template <typename API, typename StateT, typename Event>
+        static on_event_t invoke(
+            typename API::template state<StateT>::instance_t& state,
+            const Event& event
+        )
         {
-            using state_t = API::template state<StateT>;
+            using api_state_t = API::template state<StateT>;
             return to_runtime_action_as<on_event_t>(
-                state_t::template on_event<Event>(state, event, context)
+                api_state_t::template on_event<Event>(state, event)
             );
         }
     };
@@ -685,12 +667,15 @@ namespace nil::sm::detail
     // only the API hook selected by the policy differs.
     struct capture_dispatch_policy
     {
-        template <typename API, typename StateT, typename Event, typename ApiContext>
-        static on_event_t invoke(StateT& state, const Event& event, ApiContext* context)
+        template <typename API, typename StateT, typename Event>
+        static on_event_t invoke(
+            typename API::template state<StateT>::instance_t& state,
+            const Event& event
+        )
         {
-            using state_t = API::template state<StateT>;
+            using api_state_t = API::template state<StateT>;
             return to_runtime_action_as<on_event_t>(
-                state_t::template on_capture<Event>(state, event, context)
+                api_state_t::template on_capture<Event>(state, event)
             );
         }
     };
@@ -703,21 +688,20 @@ namespace nil::sm::detail
     {
     private:
         using api_t = typename S::api_t;
-        using context_t = typename S::api_t::context_t;
+        using instance_t = typename api_t::template state<T>::instance_t;
 
         struct event_handler
         {
             const void* id = nullptr;
-            on_event_t (*invoke)(T&, const void*, void*) = nullptr;
+            on_event_t (*invoke)(instance_t&, const void*) = nullptr;
         };
 
         template <typename EV>
-        static on_event_t call(T& state_value, const void* event, void* contexts)
+        static on_event_t call(instance_t& state_value, const void* event)
         {
-            return Policy::template invoke<api_t, T, EV, context_t>(
+            return Policy::template invoke<api_t, T, EV>(
                 state_value,
-                *static_cast<const EV*>(event),
-                static_cast<context_t*>(contexts)
+                *static_cast<const EV*>(event)
             );
         }
 
@@ -726,13 +710,13 @@ namespace nil::sm::detail
         };
 
     public:
-        static on_event_t dispatch(const Event& event, T& state, context_t* contexts)
+        static on_event_t dispatch(const Event& event, instance_t& state)
         {
             for (const auto& handler : handlers)
             {
                 if (handler.id == event.id)
                 {
-                    return handler.invoke(state, event.data, contexts);
+                    return handler.invoke(state, event.data);
                 }
             }
 

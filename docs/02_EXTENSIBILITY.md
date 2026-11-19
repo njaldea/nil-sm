@@ -136,7 +136,7 @@ machine->post(start{});
 ```
 
 `ISM` is non-copyable and has a virtual destructor. The machine owns its state
-objects; context and root arguments remain borrowed.
+objects; root arguments remain borrowed.
 
 ## Custom hooks
 
@@ -144,42 +144,31 @@ A custom API provides a nested `state<State>` template. Use `Coalesce` when only
 selected hooks need to change:
 
 ```cpp
-struct Observer
-{
-    void entered(const void* state_id);
-};
-
 struct LoggingAPI
 {
-    using context_t = Observer;
-
     template <typename State>
     struct state
     {
-        static auto on_enter(State& state, Observer* observer)
+        static auto on_enter(State& state)
         {
             if constexpr (!std::is_same_v<State, nil::sm::Fin>)
-                observer->entered(nil::xalt::type_id<State>);
-            return nil::sm::api::Default<Observer>::state<State>::on_enter(
-                state,
-                observer
-            );
+                std::cout << "entered\n";
+            return nil::sm::api::Default::state<State>::on_enter(state);
         }
     };
 };
 
 AppContext app{42};
-Observer observer;
-nil::sm::CoalescedSM<LoggingAPI, logged_in, AppContext> machine{&observer, &app};
+nil::sm::CoalescedSM<LoggingAPI, logged_in, AppContext> machine{&app};
 ```
 
 `Coalesce` supplies missing aliases and hooks from `api::Default`. Delegate to
 `Default` when the normal state behavior should remain active. The complete
-hook contract is in [Advanced API](05_ADVANCED.md).
+hook contract is in [Advanced API](05_ADVANCED.md). Hooks receive no per-instance data;
+an API that needs a logger, tracer or similar service for each state can wrap the
+state, see [Wrapping the state](05_ADVANCED.md#wrapping-the-state).
 
-## Threading and services
+## Threading
 
 `post()` is synchronous and the library is not thread-safe. A common integration
-is an application queue drained by one owner thread. Custom APIs can also add
-logging, profiling, timers, allocation, or other services through `context_t`
-and `make()`.
+is an application queue drained by one owner thread.

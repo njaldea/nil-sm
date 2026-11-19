@@ -14,7 +14,7 @@ namespace viz_demo::showcase
 
 int main()
 {
-    const auto valid = nil::sm::validate<viz_demo::showcase::plant, nil::sm::api::Default<>>();
+    const auto valid = nil::sm::validate<viz_demo::showcase::plant, nil::sm::api::Default>();
     std::cout << "showcase: " << (valid ? "valid" : "unmet args") << '\n';
     const auto model = nil::sm::ir::build<viz_demo::showcase::plant>();
     return nil::sm::viz::run(model);

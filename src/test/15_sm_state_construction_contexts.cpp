@@ -25,12 +25,6 @@ namespace
         int marker = 0;
     };
 
-    struct parent_identity_context
-    {
-        parent_base* entered_parent = nullptr;
-        parent_base* received_parent = nullptr;
-    };
-
     class ConstructionObserver
     {
     public:
@@ -102,19 +96,40 @@ namespace
         }
     };
 
+    struct identity_recorder
+    {
+        parent_base* entered_parent = nullptr;
+        parent_base* received_parent = nullptr;
+    };
+
     struct parent_identity_child
     {
-        using args = nil::xalt::tlist<nil::sm::direct_parent<parent_base>>;
+        using args = nil::xalt::tlist<nil::sm::direct_parent<parent_base>, identity_recorder>;
 
-        explicit parent_identity_child(parent_base* /* parent */)
+        explicit parent_identity_child(parent_base* parent, identity_recorder* recorder)
         {
+            recorder->received_parent = parent;
         }
     };
 
     struct parent_identity_parent: parent_base
     {
+        using args = nil::xalt::tlist<identity_recorder>;
         using props = nil::xalt::tlist<nil::sm::as_parent<parent_base>>;
         using regions = nil::xalt::tlist<parent_identity_child>;
+
+        identity_recorder* recorder;
+
+        explicit parent_identity_parent(identity_recorder* init_recorder)
+            : recorder(init_recorder)
+        {
+        }
+
+        auto on_enter()
+        {
+            recorder->entered_parent = this;
+            return NOOP{};
+        }
     };
 
     struct data_member_prop
@@ -129,27 +144,35 @@ namespace
     {
     };
 
+    struct prop_recorder
+    {
+        data_member_prop* data_member = nullptr;
+        member_function_prop* member_function = nullptr;
+        free_function_prop* free_function = nullptr;
+    };
+
     struct prop_parent;
     free_function_prop* get_free_function_prop(prop_parent& state);
 
     struct prop_child
     {
-        using args = nil::xalt::tlist<data_member_prop, member_function_prop, free_function_prop>;
+        using args = nil::xalt::tlist<
+            data_member_prop,
+            member_function_prop,
+            free_function_prop,
+            prop_recorder>;
 
         prop_child(
             data_member_prop* init_data_member,
             member_function_prop* init_member_function,
-            free_function_prop* init_free_function
+            free_function_prop* init_free_function,
+            prop_recorder* recorder
         )
         {
-            data_member = init_data_member;
-            member_function = init_member_function;
-            free_function = init_free_function;
+            recorder->data_member = init_data_member;
+            recorder->member_function = init_member_function;
+            recorder->free_function = init_free_function;
         }
-
-        static inline data_member_prop* data_member = nullptr;
-        static inline member_function_prop* member_function = nullptr;
-        static inline free_function_prop* free_function = nullptr;
     };
 
     struct prop_parent
@@ -175,67 +198,6 @@ namespace
     {
         return &state.free_function_value;
     }
-
-    struct parent_identity_api
-    {
-        using context_t = parent_identity_context;
-
-        template <typename T>
-        struct state
-        {
-            using state_t = nil::sm::api::Default<context_t>::template state<T>;
-            using regions_t = typename state_t::regions_t;
-            using events_t = typename state_t::events_t;
-            using captures_t = typename state_t::captures_t;
-            using args_t = typename state_t::args_t;
-            using props_t = typename state_t::props_t;
-
-            template <typename... Args>
-            static T make(context_t* context, nil::sm::Metadata metadata, Args*... args)
-            {
-                if constexpr (std::is_same_v<T, parent_identity_child>)
-                {
-                    auto capture_first = []<typename First, typename... Rest>(
-                                             First* first,
-                                             Rest*... /* rest */
-                                         ) { return first; };
-                    context->received_parent = capture_first(args...);
-                }
-                return state_t::make(context, metadata, args...);
-            }
-
-            static auto on_enter(T& state, context_t* context)
-            {
-                if constexpr (std::is_same_v<T, parent_identity_parent>)
-                {
-                    context->entered_parent = static_cast<parent_base*>(&state);
-                }
-                return state_t::on_enter(state, context);
-            }
-
-            static auto on_exit(T& state, context_t* context)
-            {
-                return state_t::on_exit(state, context);
-            }
-
-            static auto on_regions_finalized(T& state, context_t* context)
-            {
-                return state_t::on_regions_finalized(state, context);
-            }
-
-            template <typename E>
-            static auto on_event(T& state, const E& event, context_t* context)
-            {
-                return state_t::on_event(state, event, context);
-            }
-
-            template <typename E>
-            static auto on_capture(T& state, const E& event, context_t* context)
-            {
-                return state_t::on_capture(state, event, context);
-            }
-        };
-    };
 }
 
 TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_context_args)
@@ -248,11 +210,8 @@ TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_co
     testing::InSequence seq;
 
     EXPECT_CALL(obs, on_construct(42)).Times(1);
-    using sm_t = nil::sm::SM<
-        nil::sm::api::Default<void>,
-        parent_and_context_state,
-        custom_context,
-        ConstructionObserver>;
+    using sm_t = nil::sm::
+        SM<nil::sm::api::Default, parent_and_context_state, custom_context, ConstructionObserver>;
     sm_t sm(&ctx, &obs);
     {
         EXPECT_CALL(obs, on_react()).Times(1);
@@ -267,7 +226,7 @@ TEST(
 {
     testing::StrictMock<ConstructionObserver> obs;
 
-    using sm_t = nil::sm::SM<nil::sm::api::Default<void>, default_only_state, ConstructionObserver>;
+    using sm_t = nil::sm::SM<nil::sm::api::Default, default_only_state, ConstructionObserver>;
     sm_t sm{&obs};
     {
         EXPECT_CALL(obs, on_react()).Times(1);
@@ -286,7 +245,7 @@ TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_tw
 
     EXPECT_CALL(obs, on_construct_two(7, 99)).Times(1);
     using sm_t = nil::sm::SM<
-        nil::sm::api::Default<void>,
+        nil::sm::api::Default,
         parent_and_two_contexts_state,
         custom_context,
         custom_context2,
@@ -301,20 +260,21 @@ TEST(sm_feature_state_construction_contexts, state_constructs_with_parent_and_tw
 
 TEST(sm_feature_state_construction_contexts, child_receives_immediate_parent)
 {
-    parent_identity_context context;
+    identity_recorder recorder;
 
-    using sm_t = nil::sm::SM<parent_identity_api, parent_identity_parent>;
-    sm_t sm(&context);
+    nil::sm::DefaultSM<parent_identity_parent, identity_recorder> sm{&recorder};
 
-    EXPECT_EQ(context.received_parent, context.entered_parent);
+    EXPECT_NE(recorder.entered_parent, nullptr);
+    EXPECT_EQ(recorder.received_parent, recorder.entered_parent);
 }
 
 TEST(sm_feature_state_construction_contexts, child_receives_values_from_all_prop_accessor_forms)
 {
-    using sm_t = nil::sm::SM<nil::sm::api::Default<void>, prop_parent>;
-    sm_t sm;
+    prop_recorder recorder;
 
-    EXPECT_NE(prop_child::data_member, nullptr);
-    EXPECT_NE(prop_child::member_function, nullptr);
-    EXPECT_NE(prop_child::free_function, nullptr);
+    nil::sm::DefaultSM<prop_parent, prop_recorder> sm{&recorder};
+
+    EXPECT_NE(recorder.data_member, nullptr);
+    EXPECT_NE(recorder.member_function, nullptr);
+    EXPECT_NE(recorder.free_function, nullptr);
 }

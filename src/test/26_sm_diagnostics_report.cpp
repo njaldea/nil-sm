@@ -84,7 +84,7 @@ namespace
         using regions = nil::xalt::tlist<base_child>;
     };
 
-    using body_api = nil::sm::api::Default<>;
+    using body_api = nil::sm::api::Default;
 
     NIL_SM_BARRIER_DECLARE(shared_barrier_state, body_api);
     NIL_SM_BARRIER_DEFINE(shared_barrier_state, needs_dependency);

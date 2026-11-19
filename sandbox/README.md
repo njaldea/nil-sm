@@ -9,8 +9,8 @@ Small programs used to exercise `nil::sm` and measure compile cost.
 | `sandbox_tollbooth` | `tollbooth/` | toll booth machine, single translation unit |
 | `uml_sandbox_tollbooth` | `tollbooth/uml.cpp` | PlantUML for the toll booth machine |
 | `sandbox_tollbooth_barrier` | `tollbooth_barrier/` | same machine, jobs behind `nil::sm::barrier::State` |
-| `sandbox_barrier_property` | `barrier_property.cpp` | barrier state context selected from a parent property |
-| `sandbox_barrier_shared_ptr` | `barrier_shared_ptr.cpp` | shared_ptr barrier context converted to a base |
+| `sandbox_barrier_property` | `barrier_property.cpp` | barrier child value selected from a parent property |
+| `sandbox_barrier_shared_ptr` | `barrier_shared_ptr.cpp` | shared_ptr value converted to a base for the barrier child |
 | `uml_sandbox_barrier_state` | `barrier_state_uml.cpp` | one barrier state used twice, with root and standalone PlantUML output |
 
 ## Visualization
@@ -75,14 +75,13 @@ printf 'job collection\narrive 1\ntick\nreceipt\npay 7\nok\ndepart\nclose\nok\nr
 `receipt` is deferred in `lane:await_payment` and replayed in `lane:paid`; `lane:classify` emits
 `gate_open`, which the gate region in another orthogonal region reacts to.
 
-## Barrier context adapters
+## Barrier data sharing
 
-`barrier_property.cpp` shows a barrier state context selected from a property of the parent
-context. `barrier_shared_ptr.cpp` shows a parent-owned `std::shared_ptr<Derived>` converted to a
-barrier context of type `std::shared_ptr<Base>`.
+`barrier_property.cpp` shows a barrier child receiving a value from a property of the parent.
+`barrier_shared_ptr.cpp` shows a parent-owned `std::shared_ptr<Derived>` exposed to the barrier
+child as `std::shared_ptr<Base>`.
 
-State and API adapters are separate template parameters. The barrier state supplies the child machine
-and its context types; the barrier owns adapter storage for the child lifetime.
+Both go through `props`/`args`; the barrier child has no separate API context.
 
 `repl::loop` and `repl::feed` are shared. `repl::feed` is written against anything exposing
 `post<E>()`, so it accepts a concrete `SM<...>` and a `nil::sm::ISM` without change.

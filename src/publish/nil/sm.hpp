@@ -8,4 +8,4 @@
 #include "sm/ir.hpp"               // IWYU pragma: export
 #include "sm/state.hpp"            // IWYU pragma: export
 #include "sm/state_validation.hpp" // IWYU pragma: export
-#include "sm/uml.hpp" // IWYU pragma: export
+#include "sm/uml.hpp"              // IWYU pragma: export

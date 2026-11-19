@@ -9,20 +9,19 @@
 #include <nil/xalt/MACROS.h>
 
 #include <memory> // IWYU pragma: keep
-#include <type_traits>
 
 // Not `final`: to override `name` or add other state properties, inherit from the
 // generated struct and declare them in the derived class.
-#define NIL_SM_BARRIER_DECLARE_IMPL(NAME, API, DISPLAY_NAME)                                                              \
-    struct NAME                                                                                                           \
-    {                                                                                                                     \
-        using api = API;                                                                                                  \
-        static constexpr auto name = DISPLAY_NAME;                                                                        \
-        [[maybe_unused]] static constexpr auto id                                                                         \
-            = nil::xalt::type_id<typename API::template state<NAME>>;                                                     \
-        static std::unique_ptr<nil::sm::ISM>                                                                              \
-            make(nil::sm::detail::IState*, nil::sm::detail::Queues*, typename API::context_t*, const nil::sm::Metadata*); \
-        static nil::sm::ir::Model ir(const nil::sm::Metadata*);                                                           \
+#define NIL_SM_BARRIER_DECLARE_IMPL(NAME, API, DISPLAY_NAME)                                       \
+    struct NAME                                                                                    \
+    {                                                                                              \
+        using api = API;                                                                           \
+        static constexpr auto name = DISPLAY_NAME;                                                 \
+        [[maybe_unused]] static constexpr auto id                                                  \
+            = nil::xalt::type_id<typename API::template state<NAME>>;                              \
+        static std::unique_ptr<nil::sm::ISM>                                                       \
+            make(nil::sm::detail::IState*, nil::sm::detail::Queues*, const nil::sm::Metadata*);    \
+        static nil::sm::ir::Model ir(const nil::sm::Metadata*);                                    \
     }
 
 #define NIL_SM_BARRIER_DECLARE_1(NAME, API) NIL_SM_BARRIER_DECLARE_IMPL(NAME, API, #NAME)
@@ -35,14 +34,12 @@
     [[maybe_unused]] std::unique_ptr<nil::sm::ISM> NAME::make(                                     \
         nil::sm::detail::IState* parent,                                                           \
         nil::sm::detail::Queues* queues,                                                           \
-        typename NAME::api::context_t* contexts,                                                   \
         const nil::sm::Metadata* parent_metadata                                                   \
     )                                                                                              \
     {                                                                                              \
         return std::make_unique<nil::sm::barrier::SM<NAME::api, STATE>>(                           \
             parent,                                                                                \
             queues,                                                                                \
-            contexts,                                                                              \
             parent_metadata                                                                        \
         );                                                                                         \
     }                                                                                              \
@@ -53,90 +50,20 @@
 
 namespace nil::sm::barrier
 {
-    // Customization point: fully specialize for context pairs the defaults below cannot handle.
-    template <typename ParentContext, typename ChildContext>
-    struct context_adapter;
-
-    template <typename ParentContext, typename ChildContext>
-    concept borrowable_context = std::is_convertible_v<ParentContext*, ChildContext*>;
-
-    template <typename ParentContext, typename ChildContext>
-    concept constructible_context = std::is_constructible_v<ChildContext, ParentContext>;
-
-    template <typename ParentContext, typename ChildContext>
-        requires borrowable_context<ParentContext, ChildContext>
-    void adapt_context(ParentContext* parent_context, ChildContext** out)
-    {
-        *out = parent_context;
-    }
-
-    // Resolved against the overload above and any found through argument-dependent lookup;
-    // the child context slot is the output parameter.
-    template <typename ParentContext, typename ChildContext>
-    concept adapted_context = requires(ParentContext* parent_context, ChildContext** out) {
-        adapt_context(parent_context, out);
-    };
-
-    template <typename ParentContext, typename ChildContext>
-        requires adapted_context<ParentContext, ChildContext>
-    struct context_adapter<ParentContext, ChildContext> final
-    {
-        explicit context_adapter(ParentContext* parent_context)
-        {
-            adapt_context(parent_context, &child_context);
-        }
-
-        ChildContext* context()
-        {
-            return child_context;
-        }
-
-    private:
-        ChildContext* child_context = nullptr;
-    };
-
-    template <typename ParentContext, typename ChildContext>
-        requires(!adapted_context<ParentContext, ChildContext> && constructible_context<ParentContext, ChildContext>)
-    struct context_adapter<ParentContext, ChildContext> final
-    {
-        explicit context_adapter(ParentContext* parent_context)
-            : child_context(*parent_context)
-        {
-        }
-
-        ChildContext* context()
-        {
-            return &child_context;
-        }
-
-    private:
-        ChildContext child_context;
-    };
-
-    // Borrows the host queues and contexts; the host remains responsible for flushing queues.
+    // Borrows the host queues; the host remains responsible for flushing queues.
     template <typename API, typename T>
     class SM final: public ISM
     {
-        using context_t = typename API::context_t;
         using region_dispatcher_t = detail::region_dispatcher<API, nil::xalt::tlist<T>>;
 
     public:
         explicit SM(
             detail::IState* init_parent,
             detail::Queues* init_queues,
-            context_t* init_contexts,
             const Metadata* init_parent_metadata = nullptr
         )
             : queues(init_queues)
-            , contexts(init_contexts)
-            , region(
-                  detail::Region::tag<API, T>{},
-                  0,
-                  init_parent,
-                  queues,
-                  contexts,
-                  init_parent_metadata
-              )
+            , region(detail::Region::tag<API, T>{}, 0, init_parent, queues, init_parent_metadata)
         {
         }
 
@@ -154,7 +81,6 @@ namespace nil::sm::barrier
 
     private:
         detail::Queues* queues;
-        context_t* contexts;
         detail::Region region;
 
         action_t post_impl(Event event) override
@@ -173,26 +99,15 @@ namespace nil::sm
     template <typename API, typename Action, typename T>
     class State<API, barrier::State<Action, T>> final: public detail::IState
     {
-        using child_context_t = typename T::api::context_t;
-        using parent_context_t = typename API::context_t;
-        using api_adapter_t = barrier::context_adapter<parent_context_t, child_context_t>;
-
     public:
         explicit State(
             detail::IState* init_parent,
             detail::Queues* init_queues,
-            parent_context_t* init_contexts,
             Metadata init_metadata
         )
             : detail::IState(init_parent, init_metadata)
-            , api_adapter(init_contexts)
             , queues(init_queues)
-            , child(T::make(
-                  this,
-                  init_queues,
-                  this->api_adapter.context(),
-                  std::addressof(this->metadata)
-              ))
+            , child(T::make(this, init_queues, std::addressof(this->metadata)))
         {
         }
 
@@ -233,7 +148,6 @@ namespace nil::sm
         }
 
     private:
-        api_adapter_t api_adapter;
         detail::Queues* queues;
         std::unique_ptr<ISM> child;
         bool finalized = false;

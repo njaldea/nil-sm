@@ -171,8 +171,8 @@ namespace
     // Overloads are currently legal in this runtime.
     static_assert(nil::sm::concepts::has_valid_on_event<overloads_are_legal, e1>);
 
-    static_assert(nil::sm::validate<dependency_provider, nil::sm::api::Default<>>());
-    static_assert(!nil::sm::validate<missing_dependency_provider, nil::sm::api::Default<>>());
+    static_assert(nil::sm::validate<dependency_provider, nil::sm::api::Default>());
+    static_assert(!nil::sm::validate<missing_dependency_provider, nil::sm::api::Default>());
 }
 
 TEST(sm_feature_compile_time_diagnostics, static_checks_compile)
@@ -197,7 +197,7 @@ TEST(sm_feature_compile_time_diagnostics, ir_build_validates_ancestor_properties
 TEST(sm_feature_compile_time_diagnostics, root_props_satisfy_requirements)
 {
     static_assert(
-        nil::sm::validate<missing_dependency_provider, nil::sm::api::Default<>, dependency>()
+        nil::sm::validate<missing_dependency_provider, nil::sm::api::Default, dependency>()
     );
 
     const auto model = nil::sm::ir::build<missing_dependency_provider>();
@@ -230,6 +230,6 @@ namespace
 
 TEST(sm_feature_compile_time_diagnostics, direct_parent_needs_the_parent_to_expose_the_type)
 {
-    EXPECT_TRUE((nil::sm::validate<exposing_parent, nil::sm::api::Default<>>()));
-    EXPECT_FALSE((nil::sm::validate<plain_parent, nil::sm::api::Default<>>()));
+    EXPECT_TRUE((nil::sm::validate<exposing_parent, nil::sm::api::Default>()));
+    EXPECT_FALSE((nil::sm::validate<plain_parent, nil::sm::api::Default>()));
 }

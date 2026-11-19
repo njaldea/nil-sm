@@ -417,17 +417,14 @@ namespace nil::sm::ir::detail
     )
     {
         using state_t = API::template state<T>;
-        using context_t = typename API::context_t;
+        using instance_t = typename state_t::instance_t;
 
         (emit_reaction_action<
              API,
              RegionInitial,
              E,
-             decltype(state_t::template on_event<E>(
-                 std::declval<T&>(),
-                 std::declval<const E&>(),
-                 static_cast<context_t*>(nullptr)
-             )),
+             decltype(state_t::template on_event<
+                      E>(std::declval<instance_t&>(), std::declval<const E&>())),
              ir::action::Event,
              ir::transit::Event>(metadata, node),
          ...);
@@ -441,17 +438,14 @@ namespace nil::sm::ir::detail
     )
     {
         using state_t = API::template state<T>;
-        using context_t = typename API::context_t;
+        using instance_t = typename state_t::instance_t;
 
         (emit_reaction_action<
              API,
              RegionInitial,
              E,
-             decltype(state_t::template on_capture<E>(
-                 std::declval<T&>(),
-                 std::declval<const E&>(),
-                 static_cast<context_t*>(nullptr)
-             )),
+             decltype(state_t::template on_capture<
+                      E>(std::declval<instance_t&>(), std::declval<const E&>())),
              ir::action::Capture,
              ir::transit::Capture>(metadata, node),
          ...);
@@ -461,15 +455,11 @@ namespace nil::sm::ir::detail
     constexpr void emit_node_annotations(const nil::sm::Metadata& metadata, ir::Node& node)
     {
         using state_t = API::template state<T>;
-        using context_t = typename API::context_t;
-        using on_enter_result_t
-            = decltype(state_t::on_enter(std::declval<T&>(), static_cast<context_t*>(nullptr)));
-        using on_exit_result_t
-            = decltype(state_t::on_exit(std::declval<T&>(), static_cast<context_t*>(nullptr)));
-        using on_regions_finalized_result_t = decltype(state_t::on_regions_finalized(
-            std::declval<T&>(),
-            static_cast<context_t*>(nullptr)
-        ));
+        using instance_t = typename state_t::instance_t;
+        using on_enter_result_t = decltype(state_t::on_enter(std::declval<instance_t&>()));
+        using on_exit_result_t = decltype(state_t::on_exit(std::declval<instance_t&>()));
+        using on_regions_finalized_result_t
+            = decltype(state_t::on_regions_finalized(std::declval<instance_t&>()));
 
         emit_lifecycle_action<on_enter_result_t, ir::action::Entry, ir::response::EEntry>(
             node.actions
@@ -634,7 +624,7 @@ namespace nil::sm::ir
 {
     namespace detail
     {
-        template <typename T, typename API = nil::sm::api::Default<>>
+        template <typename T, typename API = nil::sm::api::Default>
         constexpr Model build_unchecked(const nil::sm::Metadata* parent)
         {
             auto context = BuildContext{};
@@ -645,7 +635,7 @@ namespace nil::sm::ir
         }
     }
 
-    template <typename T, typename API = nil::sm::api::Default<>>
+    template <typename T, typename API = nil::sm::api::Default>
     constexpr Model build(const nil::sm::Metadata* parent = nullptr)
     {
         return detail::build_unchecked<T, API>(parent);

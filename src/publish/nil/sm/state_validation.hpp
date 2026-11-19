@@ -7,6 +7,9 @@
 
 #include <nil/xalt/tlist.hpp>
 
+#include <concepts>
+#include <type_traits>
+
 namespace nil::sm::detail
 {
     template <typename Arg>
@@ -37,6 +40,7 @@ namespace nil::sm::detail
     template <typename API, typename T>
     concept has_state_typedefs
         = requires {
+              typename API::template state<T>::instance_t;
               typename API::template state<T>::regions_t;
               typename API::template state<T>::events_t;
               typename API::template state<T>::captures_t;
@@ -47,15 +51,15 @@ namespace nil::sm::detail
     template <typename API, typename T, typename ArgsList>
     struct is_make_invocable_helper;
 
+    // make() must return the instance_t declared by the API. It is usually T, but an API may
+    // use a wrapper so that it can carry services next to the state. Hooks and props receive
+    // instance_t, not T.
     template <typename API, typename T, typename... Args>
     struct is_make_invocable_helper<API, T, nil::xalt::tlist<Args...>>
     {
-        static constexpr auto value = requires(
-            typename API::context_t* ctx,
-            Metadata meta,
-            resolved_arg_type_t<Args>*... args
-        ) {
-            { API::template state<T>::make(ctx, meta, args...) } -> std::convertible_to<T>;
+        static constexpr auto value = requires(Metadata meta, resolved_arg_type_t<Args>*... args) {
+            { API::template state<T>::make(meta, args...) }
+                -> std::same_as<typename API::template state<T>::instance_t>;
         };
     };
 
@@ -70,12 +74,32 @@ namespace nil::sm::detail
         using state_t = T;
     };
 
+    // Props are applied to the state itself, not to the instance_t the API stores. When
+    // instance_t is a wrapper (it differs from T and is not a T), the state is its `state` member.
+    template <typename T, typename Instance>
+        requires std::is_convertible_v<Instance&, T&>
+    constexpr T& state_of(Instance& instance)
+    {
+        return instance;
+    }
+
+    template <typename T, typename Instance>
+        requires(!std::is_convertible_v<Instance&, T&>)
+    constexpr auto state_of(Instance& instance) -> decltype((instance.state))
+    {
+        return instance.state;
+    }
+
     template <typename Context, typename Prop>
     struct prop_valid_pred
     {
+        using api_t = typename Context::api_t;
         using state_t = typename Context::state_t;
 
-        static constexpr bool value = requires(state_t& state) { Prop::get(state); };
+        static constexpr bool value
+            = requires(typename api_t::template state<state_t>::instance_t& instance) {
+                  Prop::get(state_of<state_t>(instance));
+              };
     };
 
     template <typename Context, typename List, template <typename, typename> typename Pred>
@@ -95,8 +119,8 @@ namespace nil::sm::detail
 
     template <typename API, typename T, typename Event>
     concept is_event_hook_valid
-        = requires(T& state, const Event& event, typename API::context_t* ctx) {
-              { API::template state<T>::on_event(state, event, ctx) } -> is_action_result_valid;
+        = requires(typename API::template state<T>::instance_t& state, const Event& event) {
+              { API::template state<T>::on_event(state, event) } -> is_action_result_valid;
           };
 
     template <typename Context, typename Event>
@@ -116,8 +140,8 @@ namespace nil::sm::detail
 
     template <typename API, typename T, typename Event>
     concept is_capture_hook_valid
-        = requires(T& state, const Event& event, typename API::context_t* ctx) {
-              { API::template state<T>::on_capture(state, event, ctx) } -> is_action_result_valid;
+        = requires(typename API::template state<T>::instance_t& state, const Event& event) {
+              { API::template state<T>::on_capture(state, event) } -> is_action_result_valid;
           };
 
     template <typename Context, typename Event>
@@ -136,19 +160,20 @@ namespace nil::sm::detail
                               capture_hook_valid_pred>::value;
 
     template <typename API, typename T>
-    concept is_on_enter_hook_valid = requires(T& state, typename API::context_t* ctx) {
-        { API::template state<T>::on_enter(state, ctx) } -> is_hook_result_valid;
+    concept is_on_enter_hook_valid = requires(typename API::template state<T>::instance_t& state) {
+        { API::template state<T>::on_enter(state) } -> is_hook_result_valid;
     };
 
     template <typename API, typename T>
-    concept is_on_exit_hook_valid = requires(T& state, typename API::context_t* ctx) {
-        { API::template state<T>::on_exit(state, ctx) } -> is_hook_result_valid;
+    concept is_on_exit_hook_valid = requires(typename API::template state<T>::instance_t& state) {
+        { API::template state<T>::on_exit(state) } -> is_hook_result_valid;
     };
 
     template <typename API, typename T>
-    concept is_on_regions_finalized_hook_valid = requires(T& state, typename API::context_t* ctx) {
-        { API::template state<T>::on_regions_finalized(state, ctx) } -> is_finalizer_result_valid;
-    };
+    concept is_on_regions_finalized_hook_valid
+        = requires(typename API::template state<T>::instance_t& state) {
+              { API::template state<T>::on_regions_finalized(state) } -> is_finalizer_result_valid;
+          };
 
     template <typename API, typename T>
     concept is_state_valid = has_state_typedefs<API, T> && is_on_enter_hook_valid<API, T>

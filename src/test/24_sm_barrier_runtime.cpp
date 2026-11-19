@@ -43,7 +43,7 @@ namespace
         }
     };
 
-    using default_api = nil::sm::api::Default<>;
+    using default_api = nil::sm::api::Default;
 
     NIL_SM_BARRIER_DECLARE(first_barrier_state, default_api);
     NIL_SM_BARRIER_DECLARE(second_barrier_state, default_api);
@@ -117,7 +117,7 @@ namespace
 
     bool exit_child::exited = false;
 
-    using exit_api = nil::sm::api::Default<>;
+    using exit_api = nil::sm::api::Default;
 
     NIL_SM_BARRIER_DECLARE(exit_barrier_state, exit_api);
     NIL_SM_BARRIER_DEFINE(exit_barrier_state, exit_child);
@@ -183,7 +183,7 @@ namespace
         }
     };
 
-    using owner_child_api = nil::sm::api::Default<>;
+    using owner_child_api = nil::sm::api::Default;
 
     NIL_SM_BARRIER_DECLARE(owner_barrier_state, owner_child_api);
     NIL_SM_BARRIER_DEFINE(owner_barrier_state, child_finishing_state);
@@ -237,7 +237,7 @@ namespace
         capture_observer* observer;
     };
 
-    using capture_child_api = nil::sm::api::Default<>;
+    using capture_child_api = nil::sm::api::Default;
 
     NIL_SM_BARRIER_DECLARE(capture_barrier_state, capture_child_api);
     NIL_SM_BARRIER_DEFINE(capture_barrier_state, capture_child_state);
@@ -276,7 +276,7 @@ namespace
         }
     };
 
-    using bubbling_child_api = nil::sm::api::Default<>;
+    using bubbling_child_api = nil::sm::api::Default;
 
     NIL_SM_BARRIER_DECLARE(bubbling_barrier_state, bubbling_child_api);
     NIL_SM_BARRIER_DEFINE(bubbling_barrier_state, bubbling_child_state);
@@ -306,8 +306,6 @@ namespace
     {
         using regions = nil::xalt::tlist<lifecycle_barrier>;
     };
-
-    using lifecycle_machine = nil::sm::SM<TestAPI, lifecycle_root>;
 }
 
 TEST(BarrierRuntime, OwnerHandlesChildFinalization)
@@ -353,7 +351,7 @@ TEST(BarrierRuntime, ChildLifecycleRunsWithoutDescriptorLifecycle)
     EXPECT_CALL(mock, on_exit_called(nil::xalt::type_id<lifecycle_child>));
     EXPECT_CALL(mock, on_exit_called(nil::xalt::type_id<lifecycle_root>));
 
-    lifecycle_machine machine(&mock);
+    TestSM<lifecycle_root> machine(&mock);
 }
 
 namespace

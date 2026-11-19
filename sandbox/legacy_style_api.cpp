@@ -103,8 +103,6 @@ namespace legacy
 
     struct legacy_api
     {
-        using context_t = void;
-
         template <typename T>
         struct state
         {
@@ -114,8 +112,7 @@ namespace legacy
             using captures_t = nil::xalt::coalesce_t<T, nil::sm::detail::captures_tag>;
             using props_t = nil::xalt::coalesce_t<T, nil::sm::detail::props_tag>;
 
-            using api_t = typename nil::sm::api::Default<context_t>;
-            using state_t = typename api_t::template state<T>;
+            using instance_t = T;
 
             static constexpr auto args_f()
             {
@@ -137,28 +134,24 @@ namespace legacy
 
             using args_t = decltype(args_f());
 
-            static T make(
-                context_t* /* contexts */,
-                const nil::sm::Metadata& /* metadata */,
-                auto*... props
-            )
+            static T make(const nil::sm::Metadata& /* metadata */, auto*... props)
             {
                 return nil::xalt::fn_make<T>(*props...);
             }
 
             template <typename E>
-            static auto on_event(T& state, const E& event, context_t* /* contexts */)
+            static auto on_event(T& state, const E& event)
             {
                 return state.React(event.get());
             }
 
             template <typename E>
-            static auto on_capture(T& state, const E& event, context_t* /* contexts */)
+            static auto on_capture(T& state, const E& event)
             {
                 return state.Capture(event.get());
             }
 
-            static auto on_enter(T& state, context_t* /* contexts */)
+            static auto on_enter(T& state)
             {
                 if constexpr (requires(T s) { s.OnEnter(); })
                 {
@@ -170,7 +163,7 @@ namespace legacy
                 }
             }
 
-            static auto on_exit(T& state, context_t* /* contexts */)
+            static auto on_exit(T& state)
             {
                 if constexpr (requires(T s) { s.OnExit(); })
                 {
@@ -182,7 +175,7 @@ namespace legacy
                 }
             }
 
-            static auto on_regions_finalized(T& state, context_t* /* contexts */)
+            static auto on_regions_finalized(T& state)
             {
                 if constexpr (requires(T s) { s.OnSubTerminate(); })
                 {

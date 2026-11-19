@@ -99,7 +99,7 @@ namespace viz_demo::showcase
         }
     };
 
-    NIL_SM_BARRIER_DECLARE(calibration, nil::sm::api::Default<>);
+    NIL_SM_BARRIER_DECLARE(calibration, nil::sm::api::Default);
     using calibration_barrier = nil::sm::barrier::State<nil::sm::Terminate, calibration>;
 
     // ---- barrier: diagnostics ----
@@ -145,7 +145,7 @@ namespace viz_demo::showcase
         }
     };
 
-    NIL_SM_BARRIER_DECLARE(diagnostics, nil::sm::api::Default<>, "diagnostics");
+    NIL_SM_BARRIER_DECLARE(diagnostics, nil::sm::api::Default, "diagnostics");
     using diagnostics_barrier = nil::sm::barrier::State<nil::sm::Terminate, diagnostics>;
 
     // ---- region: pipeline ----

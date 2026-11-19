@@ -50,16 +50,7 @@ Child states can use ordinary `args` and `props` dependencies, and lookups pass 
 barrier to the owning state. `direct_parent` only looks at the direct parent, so for the
 first states of the child machine it takes the prop from the barrier's parent.
 
-The child API context is adapted from the parent with
-`nil::sm::barrier::context_adapter<Parent, Child>`:
-
-- compatible pointer types are borrowed automatically;
-- constructible child contexts are stored by the adapter;
-- unrelated types can provide an ADL-found `adapt_context(Parent*, Child**)`;
-- a full `context_adapter` specialization handles custom ownership.
-
-The host owns borrowed context objects and must keep them alive while the child
-machine exists.
+The child machine receives no API context; share data with it through `props` and `args`.
 
 ## Runtime contract
 

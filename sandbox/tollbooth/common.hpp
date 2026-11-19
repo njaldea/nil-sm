@@ -60,7 +60,7 @@ namespace toll
         }
     };
 
-    // Counters live in the API context so the tracing layer stays out of the states themselves.
+    // Counters live in the trace_context so the tracing layer stays out of the states themselves.
     struct trace_context final
     {
         std::size_t constructed = 0;
@@ -540,63 +540,77 @@ namespace toll::generic
 
 namespace toll
 {
+    // Owns a state together with the trace_context it counts into.
+    template <typename T>
+    struct traced
+    {
+        template <typename... Args>
+        explicit traced(trace_context* init_trace, Args*... args)
+            : state{args...}
+            , trace(init_trace)
+        {
+        }
+
+        T state;
+        trace_context* trace;
+    };
+
+    // The trace_context is a root argument. Every state receives it as an extra first arg and
+    // keeps it in a wrapper that owns the state, so the hooks can count without any global.
     struct tracing_api
     {
-        using context_t = trace_context;
-
         template <typename T>
         struct state
         {
-            template <typename... Args>
-            static T make(context_t* contexts, const nil::sm::Metadata& metadata, Args*... args)
+            using instance_t = traced<T>;
+            using args_t = nil::xalt::tlist_join_t<
+                nil::xalt::tlist<trace_context>,
+                nil::xalt::coalesce_t<T, nil::sm::detail::args_tag>>;
+
+            static instance_t make(
+                const nil::sm::Metadata& metadata,
+                trace_context* trace,
+                auto*... args
+            )
             {
-                if (contexts != nullptr)
+                trace->constructed++;
+                trace->max_depth = std::max(trace->max_depth, metadata.depth);
+                if (metadata.subregions == 0)
                 {
-                    contexts->constructed++;
-                    contexts->max_depth = std::max(contexts->max_depth, metadata.depth);
-                    if (metadata.subregions == 0)
-                    {
-                        trace_context::print_path(std::cout, &metadata);
-                        std::cout << '\n';
-                    }
+                    trace_context::print_path(std::cout, &metadata);
+                    std::cout << '\n';
                 }
-                return nil::sm::api::Default<trace_context>::state<T>::make(
-                    contexts,
-                    metadata,
-                    args...
-                );
+                return instance_t(trace, args...);
             }
 
             template <typename E>
-            static auto on_event(T& state, const E& event, trace_context* contexts)
+            static auto on_event(instance_t& instance, const E& event)
             {
-                if (contexts != nullptr)
-                {
-                    contexts->events++;
-                }
-                return nil::sm::api::Default<trace_context>::state<T>::on_event(
-                    state,
-                    event,
-                    contexts
-                );
+                instance.trace->events++;
+                return nil::sm::api::Default::state<T>::on_event(instance.state, event);
             }
 
-            static auto on_enter(T& state, trace_context* contexts)
+            template <typename E>
+            static auto on_capture(instance_t& instance, const E& event)
             {
-                if (contexts != nullptr)
-                {
-                    contexts->entered++;
-                }
-                return nil::sm::api::Default<trace_context>::state<T>::on_enter(state, contexts);
+                return nil::sm::api::Default::state<T>::on_capture(instance.state, event);
             }
 
-            static auto on_exit(T& state, trace_context* contexts)
+            static auto on_enter(instance_t& instance)
             {
-                if (contexts != nullptr)
-                {
-                    contexts->exited++;
-                }
-                return nil::sm::api::Default<trace_context>::state<T>::on_exit(state, contexts);
+                instance.trace->entered++;
+                return nil::sm::api::Default::state<T>::on_enter(instance.state);
+            }
+
+            static auto on_exit(instance_t& instance)
+            {
+                instance.trace->exited++;
+                return nil::sm::api::Default::state<T>::on_exit(instance.state);
+            }
+
+            static auto on_regions_finalized(instance_t& instance)
+            {
+                return nil::sm::api::Default::state<T>::on_regions_finalized(instance.state);
             }
         };
     };
@@ -783,7 +797,7 @@ namespace toll::repl
         booth_context state_context;
         trace_context context;
 
-        nil::sm::SM<nil::sm::api::Coalesce<tracing_api>, Top, booth_context> machine{
+        nil::sm::SM<nil::sm::api::Coalesce<tracing_api>, Top, trace_context, booth_context> machine{
             &context,
             &state_context
         };
