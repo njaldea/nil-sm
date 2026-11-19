@@ -46,32 +46,9 @@ machine; use one owner thread or synchronize at the application boundary.
 
 ## Headers
 
-`<nil/sm.hpp>` is the light, header-only core. Everything else is opt-in. The headers whose
-code is compiled once into a library need that library linked, so your own translation units
-do not compile them.
-
-| Include | Provides | Link | Use it for |
-| --- | --- | --- | --- |
-| `<nil/sm.hpp>` | `SM`, `DefaultSM`, actions, `TransitTo`, barriers (`barrier.hpp`), compile-time state checks | `nil::sm` | Running a state machine |
-| `<nil/sm/barrier.hpp>` | Barrier definitions and runtime (already in `<nil/sm.hpp>`) | `nil::sm` | Only when you want barriers without the rest |
-| `<nil/sm/ir.hpp>` | `ir::build<Root, API>()`, `ir::Model`, `ir::make_root_props<...>()` | `nil::sm` | Inspecting the state graph at runtime |
-| `<nil/sm/validate.hpp>` | `validate(model)`, `validate<Root, API, RootProps...>()` | `nil::sm` | Pass/fail check that every state gets its args, usable in `static_assert` |
-| `<nil/sm/format/diagnostics.hpp>` | `Diagnostics`, `Issue`, `ChildReport` (also includes `validate.hpp`, `format/index.hpp`, `ir.hpp`) | `nil::sm-format` | Finding out which state is missing which arg |
-| `<nil/sm/format/index.hpp>` | `Index`, an id-to-node table over `ir::Model` | `nil::sm-format` | Looking a state up by id (viewers, tooling) |
-| `<nil/sm/format/uml.hpp>` | `puml`, `mermaid`, `dot`, `scxml`, `xstate`, `json` formatters | `nil::sm-format` | Generating diagrams or the JSON IR |
-| `<nil/sm/format/{puml,mermaid,dot,scxml,xstate,json}.hpp>` | One formatter each | `nil::sm-format` | A single output format |
-| `<nil/sm/viz.hpp>` | `viz::run(model, root_props, port)` | `nil::sm-viz` (links `nil::sm-format`) | The browser viewer (configure with `-v`) |
-
-`<nil/sm.hpp>` does not include the IR, diagnostics, or formatter headers. Code that
-needs them must include them directly and link the library from the table.
-
-From an installed package, request the component to get the target:
-
-```cmake
-find_package(nil-sm CONFIG REQUIRED COMPONENTS format)  # nil::sm-format
-find_package(nil-sm CONFIG REQUIRED COMPONENTS viz)     # nil::sm-viz, and nil::sm-format with it
-target_link_libraries(app PRIVATE nil::sm nil::sm-format)
-```
+`<nil/sm.hpp>` is the light core; IR, diagnostics, formatters and the viewer are opt-in
+headers, and some of them need a library linked. See [Headers](docs/08_HEADERS.md) for what
+to include and link.
 
 ## Documentation
 
@@ -83,6 +60,7 @@ target_link_libraries(app PRIVATE nil::sm nil::sm-format)
 | [Barriers](docs/07_BARRIER.md) | Structural child-machine boundaries |
 | [Formatters](docs/06_FORMAT.md) | PlantUML, Mermaid, DOT, SCXML, and XState |
 | [Advanced API](docs/05_ADVANCED.md) | Custom API and compile-time extensions |
+| [Headers](docs/08_HEADERS.md) | Which header to include and which library to link |
 
 ## Build
 

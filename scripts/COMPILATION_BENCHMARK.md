@@ -1,74 +1,107 @@
 # Compilation Performance Benchmarks
 
-Compilation time and peak memory (Max RSS) metrics for `nil-sml` across clean Release builds and revisions.
+Compile time and peak memory (Max RSS) of `nil-sml` in clean Release builds.
 
 ---
 
-## 1. Scope of Benchmarks
+## 1. Benchmarks
 
-All four benchmark sandboxes share the exact same state machine topology ([sandbox/benchmarks/benchmark_sm.hpp](sandbox/benchmarks/benchmark_sm.hpp)) exercising all library features:
-- **Hierarchical & Orthogonal Regions**: Nested composite states and parallel regions.
-- **Full Action Suite**: `TransitTo<T>`, `Forward`, `Discard`, `Defer`, `DeferTo<T>`, `Emit<E>`, `Terminate`, and `std::variant`.
-- **Hooks & Captures**: `on_enter()`, `on_exit()`, `on_regions_finalized()`, and `on_capture()`.
-- **Dependency Injection**: Ancestor `props`, descendant `args`, and `direct_parent`.
+All four share one state machine ([sandbox/benchmarks/benchmark_sm.hpp](sandbox/benchmarks/benchmark_sm.hpp)) that uses every library feature: nested and orthogonal regions, the full action suite, hooks and captures, and dependency injection.
 
-### Benchmark Variants
-
-- **Benchmark 1 (Plain SM)** ([sandbox/benchmarks/1_plain.cpp](sandbox/benchmarks/1_plain.cpp)):
-  - **Scope**: Compiles standalone State Machine instantiation (`DefaultSM<Root>`) and runtime event dispatch.
-  - **Focus**: Isolates template instantiation overhead of states, orthogonal/nested regions, lifecycle hooks, and action dispatch.
-- **Benchmark 2 (SM + Validate)** ([sandbox/benchmarks/2_validate.cpp](sandbox/benchmarks/2_validate.cpp)):
-  - **Scope**: Compiles State Machine instantiation + compile-time validation via `static_assert(nil::sm::validate<API, Root>())`.
-  - **Focus**: Measures compile-time evaluation and constant-expression overhead of graph validation.
-- **Benchmark 3 (Build IR only)** ([sandbox/benchmarks/3_ir.cpp](sandbox/benchmarks/3_ir.cpp)):
-  - **Scope**: Compiles standalone IR generation (`nil::sm::ir::build<Root, API>()`).
-  - **Focus**: Measures compile-time and runtime cost of graph reflection and metadata introspection without state machine execution.
-- **Benchmark 4 (SM + Build IR)** ([sandbox/benchmarks/4_sm_ir.cpp](sandbox/benchmarks/4_sm_ir.cpp)):
-  - **Scope**: Compiles both State Machine instantiation and IR build in the same translation unit.
-  - **Focus**: Measures composite template and memory overhead when runtime state machine and IR model coexist.
+| # | Source | Measures |
+|:---|:---|:---|
+| 1 Plain SM | [1_plain.cpp](sandbox/benchmarks/1_plain.cpp) | `DefaultSM<Root>` instantiation and dispatch |
+| 2 SM + Validate | [2_validate.cpp](sandbox/benchmarks/2_validate.cpp) | 1 + `static_assert(nil::sm::validate<Root, API>())` |
+| 3 Build IR only | [3_ir.cpp](sandbox/benchmarks/3_ir.cpp) | `nil::sm::ir::build<Root, API>()` without a state machine |
+| 4 SM + Build IR | [4_sm_ir.cpp](sandbox/benchmarks/4_sm_ir.cpp) | 1 + 3 in one translation unit |
 
 ---
 
-## 2. Feature Benchmark Comparison Matrix (by Commit)
+## 2. Latest: v1.0.1 vs Current
 
-Standalone front-end compilation metrics (`g++ -c` with Release flags, averaged over 3 clean runs). Each cell reports `Avg Wall Time / Avg User CPU` and `Avg Peak RSS`.
+The current tree compiles the formatters, `Diagnostics` and `Index` once into the `nil-sm-format` static library. `nil/sm.hpp` no longer includes IR, diagnostics or formatter headers, and `validate()` lives in the light `nil/sm/validate.hpp`.
 
-| Commit | Date | Benchmark 1<br>(Plain SM) | Benchmark 2<br>(SM + Validate) | Benchmark 3<br>(Build IR only) | Benchmark 4<br>(SM + Build IR) | Notes |
+GCC 13.3, `nil-xalt` 1.4.9, each revision built from its own checkout, 3 runs averaged. Compare only within this section.
+
+### Compile-only (`g++ -c`)
+
+Each cell is `wall / user CPU` and peak RSS.
+
+| Benchmark | v1.0.1 | Current | $\Delta$ Time | $\Delta$ Peak RSS |
+|:---|:---|:---|---:|---:|
+| 1 Plain SM | 2.23 s / 1.98 s<br>294.3 MB | 1.35 s / 1.19 s<br>201.8 MB | -39% | **-92.5 MB (-31%)** |
+| 2 SM + Validate | 2.65 s / 2.35 s<br>311.7 MB | 1.77 s / 1.58 s<br>241.8 MB | -33% | **-69.8 MB (-22%)** |
+| 3 Build IR only | 1.92 s / 1.70 s<br>275.7 MB | 1.28 s / 1.14 s<br>185.2 MB | -33% | **-90.5 MB (-33%)** |
+| 4 SM + Build IR | 2.76 s / 2.49 s<br>319.7 MB | 1.94 s / 1.75 s<br>244.9 MB | -30% | **-74.7 MB (-23%)** |
+
+Benchmark 2 improves least because `validate` still needs `ir.hpp`.
+
+### Full clean build (`ninja`, tests and sandboxes, no viz)
+
+| Revision | Wall | CPU | Peak RSS |
+|:---|---:|---:|---:|
+| v1.0.1 | 29.46 s | 364.4 s | 447.0 MB |
+| Current | 28.48 s (-3%) | 345.4 s (-5%) | 412.1 MB (**-34.9 MB, -7.8%**) |
+
+The gain is small: tests and sandboxes still compile their own template instantiations, and the current tree builds one more library and more tests and sandboxes. Wall time varies about ±8% on this machine, so rely on CPU time and peak RSS.
+
+### Using the formatter and diagnostics headers
+
+A translation unit with `<nil/sm.hpp>`, the formatter and diagnostics headers and an empty `main` (`-c`), before the library split vs now:
+
+| Translation unit | Before | Now |
+|:---|:---|:---|
+| Headers only | 1.35 s / 1.19 s, 224.0 MB | 0.78 s / 0.67 s, 138.9 MB |
+| `sandbox/uml.cpp` | 2.31 s / 2.06 s, 299.0 MB | 1.36 s / 1.19 s, 191.9 MB |
+
+### Where the memory went
+
+Before the split, two changes added the regression (single-run bisect):
+
+- A larger `diagnostics.hpp` plus a new `index.hpp` included by the benchmark header: about +43 MB on all four benchmarks, including Benchmark 3, which has no state machine.
+- `nil/sm.hpp` exporting diagnostics, IR and UML: a further ~+58 MB on Benchmarks 1 and 3, ~+39 MB on 2 and 4.
+
+### Caveats
+
+- One machine, one toolchain; clang and other GCC versions were not checked.
+- The benchmark sources changed since the Section 3 rows (for example an `as_parent` prop), so small differences against them are not due to the library alone.
+
+---
+
+## 3. History (earlier toolchain)
+
+### Compile-only (`g++ -c`, 3-run average unless noted)
+
+| Commit | Date | B1 | B2 | B3 | B4 | Notes |
 |:---|:---|:---|:---|:---|:---|:---|
-| `98a2c6c` | 2026-09-12 | 0.98 s / 0.91 s<br>231.1 MB (236,668 KB) | 1.13 s / 1.00 s<br>267.2 MB (273,612 KB) | 0.71 s / 0.66 s<br>183.7 MB (188,140 KB) | 1.22 s / 1.09 s<br>273.6 MB (280,164 KB) | Baseline (flat vs initial `ff18492` measurement); single-run, not 3-run averaged |
-| `9bf9cde` | 2026-09-13 | 0.80 s / 0.71 s<br>199.2 MB (204,009 KB) | 1.01 s / 0.92 s<br>235.1 MB (240,701 KB) | 0.76 s / 0.70 s<br>183.8 MB (188,192 KB) | 1.12 s / 1.01 s<br>240.6 MB (246,352 KB) | Replaced `std::visit` with a manual index-based `visit()` and replaced `std::variant` with `nil::xalt::tagged_union` (trivially-copyable tagged union, no libstdc++ visit/variant class machinery) for the internal `on_event_t`/`on_enter_t`/`on_exit_t`/`on_regions_finalized_t` action types.<br>3-run average; versus `98a2c6c`:<br>- B1 **-31.9 MB (-13.8%)**<br>- B2 **-32.1 MB (-12.0%)**<br>- B3 +0.1 MB (~0%, unaffected — no `SM`/dispatch instantiation)<br>- B4 **-33.0 MB (-12.1%)** |
-| `52a732f` | 2026-09-13 | 0.80 s / 0.69 s<br>199.2 MB (203,973 KB) | 0.98 s / 0.92 s<br>234.8 MB (240,431 KB) | 0.72 s / 0.66 s<br>183.7 MB (188,064 KB) | 1.09 s / 1.02 s<br>240.6 MB (246,329 KB) | `nil-cmake` v0.0.6 (`-flto=auto`) + `nil-xalt` v1.4.8 bump; no source change to the library itself.<br>3-run average; flat vs `9bf9cde` (all deltas <0.2%) — expected, since these benchmarks are compile-only (`-c`, no link step), so the `-flto=auto` link-parallelism fix from Section 3 doesn't apply here |
-| `52a732f` (re-measured) | — | 1.32 s / 1.17 s<br>200.7 MB (205,472 KB) | 1.69 s / 1.51 s<br>236.0 MB (241,643 KB) | 1.20 s / 1.06 s<br>181.9 MB (186,299 KB) | 1.85 s / 1.65 s<br>242.1 MB (247,953 KB) | Re-run for the comparison below on GCC 13.3 with `nil-xalt` 1.4.9, so absolute numbers differ from the rows above; only compare rows marked with the same environment.<br>3-run average |
-| `485a260` (HEAD, before fix) | 2026-11-19 | 2.04 s / 1.76 s<br>296.1 MB (303,213 KB) | 2.60 s / 2.31 s<br>312.4 MB (319,912 KB) | 1.96 s / 1.74 s<br>278.3 MB (284,979 KB) | 2.81 s / 2.49 s<br>319.8 MB (327,509 KB) | Header-weight regression versus `52a732f`: B1 **+95.4 MB (+48%)**, B2 **+76.4 MB (+32%)**, B3 **+96.4 MB (+53%)**, B4 **+77.7 MB (+32%)**.<br>Bisected to two commits (single run each):<br>- `f672bc2` (grown `sm/diagnostics.hpp` + new `sm/index.hpp`, pulled in by the benchmark header): ~+43 MB on all four.<br>- `ebd4eb4` (`nil/sm.hpp` began exporting `diagnostics.hpp`, `ir.hpp`, `uml.hpp`): a further ~+58 MB on B1/B3, ~+39 MB on B2/B4.<br>3-run average |
-| working tree (uncommitted) | — | 1.30 s / 1.15 s<br>201.8 MB (206,609 KB) | 1.83 s / 1.63 s<br>241.4 MB (247,240 KB) | 1.23 s / 1.08 s<br>185.1 MB (189,495 KB) | 1.79 s / 1.60 s<br>245.2 MB (251,065 KB) | `nil/sm.hpp` exports only `barrier.hpp`, `state.hpp` and `state_validation.hpp` again; `validate()` moved from `diagnostics.hpp` into the light `sm/validate.hpp`; the unused `diagnostics.hpp` include was dropped from `benchmark_sm.hpp`, and B2 includes `<nil/sm/validate.hpp>`.<br>3-run average; versus `485a260`: B1 **-94.3 MB**, B2 **-71.0 MB**, B3 **-93.2 MB**, B4 **-74.6 MB**; within ~3% of the re-measured `52a732f` (B2 +5.4 MB, the larger `ir.hpp`) |
+| `98a2c6c` | 2026-09-12 | 0.98 s / 0.91 s<br>231.1 MB | 1.13 s / 1.00 s<br>267.2 MB | 0.71 s / 0.66 s<br>183.7 MB | 1.22 s / 1.09 s<br>273.6 MB | Baseline (single run) |
+| `9bf9cde` | 2026-09-13 | 0.80 s / 0.71 s<br>199.2 MB | 1.01 s / 0.92 s<br>235.1 MB | 0.76 s / 0.70 s<br>183.8 MB | 1.12 s / 1.01 s<br>240.6 MB | Manual index-based `visit()` and `nil::xalt::tagged_union` replace `std::visit` and `std::variant` in the internal action types. B1 -31.9 MB (-13.8%), B2 -32.1 MB (-12.0%), B3 unchanged, B4 -33.0 MB (-12.1%) |
+| `52a732f` | 2026-09-13 | 0.80 s / 0.69 s<br>199.2 MB | 0.98 s / 0.92 s<br>234.8 MB | 0.72 s / 0.66 s<br>183.7 MB | 1.09 s / 1.02 s<br>240.6 MB | `nil-cmake` 0.0.6 (`-flto=auto`) and `nil-xalt` 1.4.8; flat, as expected for compile-only runs with no link step |
+
+### Full clean build (`ninja -C .build`, 3-run average)
+
+| Commit | Date | Change | Wall | CPU | Peak RSS |
+|:---|:---|:---|---:|---:|---:|
+| `933d993` | 2026-09-08 | Baseline | 25.25 s | 195.61 s | 457.6 MB |
+| `41d78c4` | 2026-09-13 | Simplified API policy, separate `Unhandled` checks | 28.73 s | 230.71 s | 456.6 MB |
+| `9bf9cde` | 2026-09-13 | `visit()` and `tagged_union` (see above) | 30.78 s | 262.87 s | 406.6 MB (**-11.1%** vs baseline) |
+| `52a732f` | 2026-09-13 | `-flto` → `-flto=auto` | 10.89 s | 248.06 s | 406.2 MB |
+
+`52a732f` cut wall time by 64.6% for about the same CPU time: GCC passed plain `-flto` to the link step, so LTRANS ran serially regardless of `-j`. That also shows the `9bf9cde` wall-time regression was this bug, not `tagged_union`. Later revisions add sandboxes, formats and tests, so wall times are not comparable across the whole table.
 
 ---
 
-## 3. Parallel Clean Build History (`ninja -C .build`)
-
-Comparable full test suite and sandbox builds with default parallelism (3 clean runs averaged per commit):
-
-| Commit | Date | Key Changes / Scope | Avg Wall Time | Avg CPU Time | Avg Peak RSS | $\Delta$ Peak RSS vs Baseline |
-|:---|:---|:---|---:|---:|---:|---:|
-| `933d993` | 2026-09-08 | Baseline (`origin/master` barrier layout) | 25.25 s | 195.61 s | 457.6 MB (468,629 KB) | *Baseline* |
-| `41d78c4` | 2026-09-13 | Simplified API policy and separate `Unhandled` boundary checks (last commit before dispatch-internals optimization) | 28.73 s | 230.71 s | 456.6 MB (467,512 KB) | **-1.1 MB (-0.24%)** |
-| `9bf9cde` | 2026-09-13 | Centralized state validation.<br>Replaced `std::visit` with a manual index-based `visit()`.<br>Replaced `std::variant` with `nil::xalt::tagged_union` for `on_event_t`/`on_enter_t`/`on_exit_t`/`on_regions_finalized_t`. | 30.78 s | 262.87 s | 406.6 MB (416,409 KB) | <br>- **-52.7 MB (-11.5%)** vs `41d78c4`<br>- **-51.0 MB (-11.1%)** vs baseline |
-| `52a732f` | 2026-09-13 | Bumped `nil-cmake` dependency to v0.0.6: `-flto` → `-flto=auto` in `toolchain.cmake`.<br>Fixes an unrelated pre-existing bug — GCC forwarded `-flto` to the link step with no parallelism value, so LTRANS ran serially regardless of `-j8`; `-flto=auto` lets it partition across available cores. | 10.89 s | 248.06 s | 406.2 MB (415,941 KB) | <br>- **-0.4 MB (-0.1%)** vs `9bf9cde` (RSS essentially unchanged, as expected — this fix targets link-time parallelism, not instantiation memory)<br>- Wall time: **-19.89 s (-64.6%)** vs `9bf9cde` for roughly the same total CPU time (248.06 s vs 262.87 s) — confirms the earlier `9bf9cde` wall-time regression was this unrelated serial-LTRANS bug, not a cost of `tagged_union` itself |
-
-> **Note on Wall Time**: Later revisions include additional sandbox targets, diagram rendering formats, and new test translation units.
-
----
-
-## 4. Build Environment & Methodology
+## 4. Methodology
 
 - **Compiler**: GCC (`g++`)
 - **Flags**: `-O3 -DNDEBUG -std=gnu++20 -fno-rtti -flto -Wfatal-errors -Wshadow -Werror -Wall -Wextra -Wpedantic -pedantic-errors -Wconversion -Wsign-conversion`
-- **Build System**: Ninja (`.build`)
-- **Measurement Tool**: `/usr/bin/time -f "wall=%e user=%U sys=%S maxrss=%M KB"`
-- **Reproducing Sandbox Benchmarks**:
+- **Build system**: Ninja (`.build`)
+- **Measurement**: `/usr/bin/time -f "wall=%e user=%U sys=%S maxrss=%M KB"`
+- **Reproducing a compile-only benchmark**:
   ```bash
   /usr/bin/time -f "wall=%e user=%U sys=%S maxrss=%M KB" \
-    g++ -Isrc/publish -isystem .build/vcpkg_installed/x64-linux/include/nil-xalt/1.4.5 \
+    g++ -Isrc/publish -isystem .build/vcpkg_installed/x64-linux/include/nil-xalt/<version> \
     -O3 -DNDEBUG -std=gnu++20 -fno-rtti -flto -Wfatal-errors \
     -c sandbox/benchmarks/1_plain.cpp -o /dev/null
   ```
+- **Reproducing a full build**: `scripts/benchmark_build.sh 3`

@@ -8,8 +8,7 @@ Use the pages in this order:
 4. [Barriers](07_BARRIER.md) — structural child-machine boundaries.
 5. [Formatters](06_FORMAT.md) — diagram output.
 6. [Advanced API](05_ADVANCED.md) — custom API authors and compile-time extensions.
-
-Which header to include: see the [header table](../README.md#headers).
+7. [Headers](08_HEADERS.md) — which header to include and which library to link.
 
 ## Rules at a glance
 
