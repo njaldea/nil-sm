@@ -1,18 +1,13 @@
 // Copyright (c) 2026, Neil Aldea <njaldea@gmail.com>
 // SPDX-License-Identifier: BSL-1.0
 
-#pragma once
-
-#include "../ir.hpp"
+#include "utils.hpp"
 
 #include <format>
-#include <ostream>
-#include <string>
-#include <string_view>
 
 namespace nil::sm::format
 {
-    inline std::ostream& indent(std::ostream& os, std::size_t depth)
+    std::ostream& indent(std::ostream& os, std::size_t depth)
     {
         for (std::size_t i = 0; i < depth; ++i)
         {
@@ -22,13 +17,12 @@ namespace nil::sm::format
         return os;
     }
 
-    // "Emit(Name)" when the emitted event is known, otherwise the plain label.
-    inline std::string with_emitted(std::string_view label, const std::string& emitted)
+    std::string with_emitted(std::string_view label, const std::string& emitted)
     {
         return emitted.empty() ? std::string(label) : std::format("{}({})", label, emitted);
     }
 
-    inline std::string_view action_name(ir::response::EEntry response)
+    std::string_view action_name(ir::response::EEntry response)
     {
         switch (response)
         {
@@ -40,7 +34,7 @@ namespace nil::sm::format
         return "";
     }
 
-    inline std::string_view action_name(ir::response::EExit response)
+    std::string_view action_name(ir::response::EExit response)
     {
         switch (response)
         {
@@ -52,7 +46,7 @@ namespace nil::sm::format
         return "";
     }
 
-    inline std::string_view action_name(ir::response::ERegionsFinalized response)
+    std::string_view action_name(ir::response::ERegionsFinalized response)
     {
         switch (response)
         {
@@ -64,7 +58,7 @@ namespace nil::sm::format
         return "";
     }
 
-    inline std::string_view action_name(ir::response::EEvent response)
+    std::string_view action_name(ir::response::EEvent response)
     {
         switch (response)
         {

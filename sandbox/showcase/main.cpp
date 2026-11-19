@@ -2,7 +2,7 @@
 #include <nil/sm/viz.hpp>
 
 #include <nil/sm.hpp>
-#include <nil/sm/diagnostics.hpp>
+#include <nil/sm/format/diagnostics.hpp>
 
 #include <iostream>
 

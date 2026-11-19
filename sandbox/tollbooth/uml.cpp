@@ -3,7 +3,7 @@
 
 #include "jobs.hpp"
 
-#include <nil/sm/uml.hpp>
+#include <nil/sm/format/uml.hpp>
 
 #include <iostream>
 

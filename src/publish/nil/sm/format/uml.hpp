@@ -3,13 +3,13 @@
 
 #pragma once
 
-#include "format/diagram.hpp" // IWYU pragma: export
-#include "format/dot.hpp"     // IWYU pragma: export
-#include "format/json.hpp"    // IWYU pragma: export
-#include "format/mermaid.hpp" // IWYU pragma: export
-#include "format/puml.hpp"    // IWYU pragma: export
-#include "format/scxml.hpp"   // IWYU pragma: export
-#include "format/xstate.hpp"  // IWYU pragma: export
+#include "diagram.hpp" // IWYU pragma: export
+#include "dot.hpp"     // IWYU pragma: export
+#include "json.hpp"    // IWYU pragma: export
+#include "mermaid.hpp" // IWYU pragma: export
+#include "puml.hpp"    // IWYU pragma: export
+#include "scxml.hpp"   // IWYU pragma: export
+#include "xstate.hpp"  // IWYU pragma: export
 
 namespace nil::sm
 {

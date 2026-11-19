@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include <nil/sm/barrier.hpp>
-#include <nil/sm/uml.hpp>
+#include <nil/sm/format/uml.hpp>
 
 #include <gtest/gtest.h>
 

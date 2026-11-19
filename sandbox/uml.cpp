@@ -1,7 +1,7 @@
 // Copyright (c) 2026, Neil Aldea <njaldea@gmail.com>
 // SPDX-License-Identifier: BSL-1.0
 
-#include <nil/sm/uml.hpp>
+#include <nil/sm/format/uml.hpp>
 
 #include <iostream>
 #include <string_view>

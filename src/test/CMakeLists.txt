@@ -28,7 +28,7 @@ add_test_executable(
     26_sm_diagnostics_report.cpp
     27_sm_emit_ir.cpp
 )
-target_link_libraries(sm_test PRIVATE sm)
+target_link_libraries(sm_test PRIVATE sm sm-format)
 target_link_libraries(sm_test PRIVATE GTest::gmock)
 target_link_libraries(sm_test PRIVATE GTest::gtest)
 target_link_libraries(sm_test PRIVATE GTest::gtest_main)

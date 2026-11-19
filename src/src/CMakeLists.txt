@@ -1,3 +1,26 @@
+add_library(
+    ${PROJECT_NAME}-format
+    STATIC
+        format/diagnostics.cpp
+        format/dot.cpp
+        format/index.cpp
+        format/json.cpp
+        format/mermaid.cpp
+        format/puml.cpp
+        format/scxml.cpp
+        format/utils.cpp
+        format/utils.hpp
+        format/xstate.cpp
+)
+set_target_properties(${PROJECT_NAME}-format PROPERTIES OUTPUT_NAME "nil-${PROJECT_NAME}-format")
+target_link_libraries(${PROJECT_NAME}-format PUBLIC ${PROJECT_NAME})
+
+nil_install_targets(${PROJECT_NAME}-format)
+
+if(NOT ENABLE_VIZ)
+    return()
+endif()
+
 find_package(nil-service CONFIG REQUIRED)
 
 set(ASSETS index_html index_js)
@@ -23,6 +46,6 @@ endforeach()
 add_library(${PROJECT_NAME}-viz STATIC viz.cpp ${GENERATED})
 set_target_properties(${PROJECT_NAME}-viz PROPERTIES OUTPUT_NAME "nil-${PROJECT_NAME}-viz")
 target_link_libraries(${PROJECT_NAME}-viz PRIVATE nil::service)
-target_link_libraries(${PROJECT_NAME}-viz PUBLIC sm)
+target_link_libraries(${PROJECT_NAME}-viz PUBLIC ${PROJECT_NAME}-format)
 
 nil_install_targets(${PROJECT_NAME}-viz)

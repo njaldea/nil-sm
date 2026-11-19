@@ -3,7 +3,7 @@
 
 #include "nil/sm/structs.hpp"
 #include <nil/sm/barrier.hpp>
-#include <nil/sm/uml.hpp>
+#include <nil/sm/format/uml.hpp>
 
 #include <iostream>
 

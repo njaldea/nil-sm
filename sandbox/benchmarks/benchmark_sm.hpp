@@ -4,7 +4,6 @@
 #pragma once
 
 #include <nil/sm.hpp>
-#include <nil/sm/diagnostics.hpp>
 
 #include <iostream>
 #include <variant>

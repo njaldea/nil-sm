@@ -9,6 +9,8 @@ Use the pages in this order:
 5. [Formatters](06_FORMAT.md) — diagram output.
 6. [Advanced API](05_ADVANCED.md) — custom API authors and compile-time extensions.
 
+Which header to include: see the [header table](../README.md#headers).
+
 ## Rules at a glance
 
 - States and events are ordinary C++ types.

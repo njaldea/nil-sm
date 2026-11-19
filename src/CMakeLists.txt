@@ -19,8 +19,6 @@ target_link_libraries(${PROJECT_NAME} INTERFACE nil::xalt)
 nil_install_headers(${PROJECT_NAME} INTERFACE)
 nil_install_targets(${PROJECT_NAME})
 
-if(ENABLE_VIZ)
-    add_subdirectory(src)
-endif()
+add_subdirectory(src)
 
 add_test_subdirectory()

@@ -42,15 +42,6 @@ run_amalgamate()
             HEADER_INCLUDES=("../sm.hpp")
             SKIP_FILES=("$REPO_ROOT/src/publish/nil/sm/structs.hpp")
             ;;
-        */sm/uml.hpp)
-            HEADER_INCLUDES=("../sm.hpp" "id.hpp")
-            SKIP_FILES=(
-                "$REPO_ROOT/src/publish/nil/sm/state.hpp"
-                "$REPO_ROOT/src/publish/nil/sm/detail.hpp"
-                "$REPO_ROOT/src/publish/nil/sm/structs.hpp"
-                "$REPO_ROOT/src/publish/nil/sm/id.hpp"
-            )
-            ;;
     esac
 
     declare -A SEEN=()
@@ -236,8 +227,6 @@ mkdir -p "$GEN_SM_DIR"
 
 run_amalgamate "$REPO_ROOT/src/publish/nil/sm.hpp" "$GEN_DIR/sm.hpp"
 run_amalgamate "$REPO_ROOT/src/publish/nil/sm/id.hpp" "$GEN_SM_DIR/id.hpp"
-run_amalgamate "$REPO_ROOT/src/publish/nil/sm/uml.hpp" "$GEN_SM_DIR/uml.hpp"
 
 echo "wrote: $GEN_DIR/sm.hpp"
 echo "wrote: $GEN_SM_DIR/id.hpp"
-echo "wrote: $GEN_SM_DIR/uml.hpp"

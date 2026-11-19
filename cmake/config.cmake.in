@@ -7,6 +7,11 @@ include(CMakeFindDependencyMacro)
 # include(${CMAKE_CURRENT_LIST_DIR}/@CMAKE_PROJECT_NAME@-${additional-targets}-targets.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/@CMAKE_PROJECT_NAME@-targets.cmake)
 
+if("format" IN_LIST @CMAKE_PROJECT_NAME@_FIND_COMPONENTS OR "viz" IN_LIST @CMAKE_PROJECT_NAME@_FIND_COMPONENTS)
+    include(${CMAKE_CURRENT_LIST_DIR}/@CMAKE_PROJECT_NAME@-format-targets.cmake)
+    set(@CMAKE_PROJECT_NAME@_format_FOUND TRUE)
+endif()
+
 if("@ENABLE_VIZ@")
     if("viz" IN_LIST @CMAKE_PROJECT_NAME@_FIND_COMPONENTS)
         find_dependency(nil-service CONFIG)

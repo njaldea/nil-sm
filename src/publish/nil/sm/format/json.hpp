@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "../diagnostics.hpp"
+#include "diagnostics.hpp"
 #include "../ir.hpp"
 #include "diagram.hpp"
 
@@ -13,8 +13,6 @@
 #include <ostream>
 #include <span>
 #include <string_view>
-#include <type_traits>
-#include <variant>
 #include <vector>
 
 // Writes the IR as JSON text without any JSON library. Type ids and barrier ids are written as
@@ -136,283 +134,36 @@ namespace nil::sm::format::json
         os << ']';
     }
 
-    namespace detail
-    {
-        inline std::string_view name(ir::response::EEntry response)
-        {
-            return response == ir::response::EEntry::noop ? "noop" : "emit";
-        }
-
-        inline std::string_view name(ir::response::EExit response)
-        {
-            return response == ir::response::EExit::noop ? "noop" : "emit";
-        }
-
-        inline std::string_view name(ir::response::ERegionsFinalized response)
-        {
-            return response == ir::response::ERegionsFinalized::noop ? "noop" : "emit";
-        }
-
-        inline std::string_view name(ir::response::EEvent response)
-        {
-            switch (response)
-            {
-                case ir::response::EEvent::discard:
-                    return "discard";
-                case ir::response::EEvent::forward:
-                    return "forward";
-                case ir::response::EEvent::defer:
-                    return "defer";
-                case ir::response::EEvent::emit:
-                    return "emit";
-            }
-            return "";
-        }
-
-        inline void write(std::ostream& os, const ir::Prop& prop)
-        {
-            auto o = object(os);
-            pointer(o.field("type_id"), prop.type_id);
-            string(o.field("type_name"), prop.type_name);
-        }
-
-        inline void write(std::ostream& os, const ir::Arg& arg)
-        {
-            auto o = object(os);
-            pointer(o.field("type_id"), arg.type_id);
-            string(o.field("type_name"), arg.type_name);
-            boolean(o.field("is_direct_parent"), arg.is_direct_parent);
-        }
-
-        inline void write(std::ostream& os, const ir::action::Info& info)
-        {
-            std::visit(
-                [&os]<typename T>(const T& action)
-                {
-                    auto o = object(os);
-                    if constexpr (std::is_same_v<T, ir::action::Entry>)
-                    {
-                        string(o.field("type"), "entry");
-                    }
-                    else if constexpr (std::is_same_v<T, ir::action::Exit>)
-                    {
-                        string(o.field("type"), "exit");
-                    }
-                    else if constexpr (std::is_same_v<T, ir::action::RegionsFinalized>)
-                    {
-                        string(o.field("type"), "regions_finalized");
-                    }
-                    else if constexpr (std::is_same_v<T, ir::action::Event>)
-                    {
-                        string(o.field("type"), "event");
-                        string(o.field("event"), action.event_name);
-                    }
-                    else if constexpr (std::is_same_v<T, ir::action::Capture>)
-                    {
-                        string(o.field("type"), "capture");
-                        string(o.field("event"), action.event_name);
-                    }
-                    string(o.field("response"), name(action.response));
-                    if (!action.emitted_event_name.empty())
-                    {
-                        string(o.field("emitted_event"), action.emitted_event_name);
-                    }
-                },
-                info
-            );
-        }
-
-        inline void write(std::ostream& os, const ir::transit::Info& info)
-        {
-            auto o = object(os);
-            string(o.field("type"), ir::is_capture(info) ? "capture" : "event");
-            string(o.field("target"), ir::target_id(info));
-            string(o.field("event"), ir::event_name(info));
-        }
-
-        inline void write(std::ostream& os, const ir::Node& node);
-
-        inline void write(std::ostream& os, const std::vector<ir::Node>& nodes)
-        {
-            array(os, nodes, [](std::ostream& out, const ir::Node& node) { write(out, node); });
-        }
-
-        // Everything of a node except its regions and barrier_id.
-        inline void write_head(object& o, const ir::Node& node)
-        {
-            string(o.field("id"), node.id);
-            string(o.field("display_name"), node.display_name);
-            boolean(o.field("is_initial"), node.is_initial);
-            boolean(o.field("is_final"), node.is_final);
-            boolean(o.field("is_barrier"), node.is_barrier);
-            pointer(o.field("type_id"), node.type_id);
-            array(
-                o.field("required_args"),
-                node.required_args,
-                [](std::ostream& out, const ir::Arg& arg) { write(out, arg); }
-            );
-            array(
-                o.field("provided_props"),
-                node.provided_props,
-                [](std::ostream& out, const ir::Prop& prop) { write(out, prop); }
-            );
-            array(
-                o.field("actions"),
-                node.actions,
-                [](std::ostream& out, const ir::action::Info& info) { write(out, info); }
-            );
-            array(
-                o.field("transitions"),
-                node.transitions,
-                [](std::ostream& out, const ir::transit::Info& info) { write(out, info); }
-            );
-        }
-
-        inline void write(std::ostream& os, const ir::Node& node)
-        {
-            auto o = object(os);
-            write_head(o, node);
-            array(
-                o.field("regions"),
-                node.regions,
-                [](std::ostream& out, const std::vector<ir::Node>& region) { write(out, region); }
-            );
-            pointer(o.field("barrier_id"), node.barrier_id);
-        }
-
-        // Without the regions; `region_sizes` tells how many states each of them holds.
-        inline void write_shallow(std::ostream& os, const ir::Node& node)
-        {
-            auto o = object(os);
-            write_head(o, node);
-            array(
-                o.field("region_sizes"),
-                node.regions,
-                [](std::ostream& out, const std::vector<ir::Node>& region) { out << region.size(); }
-            );
-            pointer(o.field("barrier_id"), node.barrier_id);
-        }
-
-        inline void write(std::ostream& os, const Issue& issue)
-        {
-            auto o = object(os);
-            write(o.field("dependency"), issue.dependency);
-            array(
-                o.field("barrier_path"),
-                issue.barrier_path,
-                [](std::ostream& out, std::string_view name) { string(out, name); }
-            );
-            string(o.field("state"), issue.state);
-            boolean(o.field("as_parent"), issue.as_parent);
-        }
-    }
+    // The functions below are defined in the nil-sm-format library.
 
     // `[issue, ...]`
-    inline void render_issues(std::ostream& os, std::span<const Issue> issues)
-    {
-        array(os, issues, [](std::ostream& out, const Issue& issue) { detail::write(out, issue); });
-    }
+    void render_issues(std::ostream& os, std::span<const Issue> issues);
 
     // `[{"id", "unsatisfied_args", "subtree_unmet"}, ...]`
-    inline void render_reports(std::ostream& os, std::span<const ChildReport> reports)
-    {
-        array(
-            os,
-            reports,
-            [](std::ostream& out, const ChildReport& report)
-            {
-                auto o = object(out);
-                string(o.field("id"), report.id);
-                render_issues(o.field("unsatisfied_args"), report.issues);
-                o.field("subtree_unmet") << report.subtree_unmet;
-            }
-        );
-    }
+    void render_reports(std::ostream& os, std::span<const ChildReport> reports);
 
     // One level of states, each without its own regions: `{"regions": [[node, ...], ...]}`.
-    inline void render_level(std::ostream& os, std::span<const std::vector<ir::Node>> regions)
-    {
-        auto o = object(os);
-        array(
-            o.field("regions"),
-            regions,
-            [](std::ostream& out, const std::vector<ir::Node>& region)
-            {
-                array(
-                    out,
-                    region,
-                    [](std::ostream& inner, const ir::Node& node)
-                    { detail::write_shallow(inner, node); }
-                );
-            }
-        );
-    }
+    void render_level(std::ostream& os, std::span<const std::vector<ir::Node>> regions);
 
     // What a viewer needs before it asks for any level: `{"barriers": [{"id", "name"}],
     // "root_props"}`.
-    inline void write_index(
+    void write_index(
         std::ostream& os,
         const ir::Model& model,
         std::span<const ir::Prop> root_props = {}
-    )
-    {
-        auto o = object(os);
-        array(
-            o.field("barriers"),
-            model.barriers,
-            [](std::ostream& out, const ir::BarrierDefinition& barrier)
-            {
-                auto b = object(out);
-                pointer(b.field("id"), barrier.id);
-                string(b.field("name"), barrier.name);
-            }
-        );
-        array(
-            o.field("root_props"),
-            root_props,
-            [](std::ostream& out, const ir::Prop& prop) { detail::write(out, prop); }
-        );
-    }
+    );
 
     // A JSON array of the nodes, like the other formatters render a region.
-    inline void render(std::ostream& os, std::span<const ir::Node> roots)
-    {
-        array(os, roots, [](std::ostream& out, const ir::Node& node) { detail::write(out, node); });
-    }
+    void render(std::ostream& os, std::span<const ir::Node> roots);
 
     // The whole IR of one machine:
     // {"name", "model": {"roots", "barriers": [{"id", "name", "roots"}]}, "root_props"}.
     // `root_props` are the SM constructor args, which count as props above the roots.
-    inline void write(
+    void write(
         std::ostream& os,
         const ir::Model& model,
         std::span<const ir::Prop> root_props = {}
-    )
-    {
-        auto machine = object(os);
-
-        {
-            auto m = object(machine.field("model"));
-            detail::write(m.field("roots"), model.roots);
-            array(
-                m.field("barriers"),
-                model.barriers,
-                [](std::ostream& out, const ir::BarrierDefinition& barrier)
-                {
-                    auto b = object(out);
-                    pointer(b.field("id"), barrier.id);
-                    string(b.field("name"), barrier.name);
-                    detail::write(b.field("roots"), barrier.roots);
-                }
-            );
-        }
-
-        array(
-            machine.field("root_props"),
-            root_props,
-            [](std::ostream& out, const ir::Prop& prop) { detail::write(out, prop); }
-        );
-    }
+    );
 }
 
 namespace nil::sm

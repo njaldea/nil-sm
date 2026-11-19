@@ -1,7 +1,7 @@
 #include "assets.hpp"
 
 #include <nil/service.hpp>
-#include <nil/sm/diagnostics.hpp>
+#include <nil/sm/format/diagnostics.hpp>
 #include <nil/sm/format/json.hpp>
 #include <nil/sm/viz.hpp>
 

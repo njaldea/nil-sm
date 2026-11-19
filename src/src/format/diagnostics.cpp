@@ -1,10 +1,7 @@
 // Copyright (c) 2026, Neil Aldea <njaldea@gmail.com>
 // SPDX-License-Identifier: BSL-1.0
 
-#pragma once
-
-#include "index.hpp"
-#include "ir.hpp"
+#include <nil/sm/format/diagnostics.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -21,118 +18,11 @@
 
 namespace nil::sm::detail
 {
-    // direct_parent<T> needs the immediate parent to expose T; other args look through ancestors.
-    constexpr bool diagnostic_satisfied(
-        const ir::Arg& requirement,
-        const std::vector<ir::Prop>& ancestor_props,
-        const ir::Node* parent
-    )
-    {
-        const auto provides = [&](const std::vector<ir::Prop>& props)
-        {
-            return std::any_of(
-                props.begin(),
-                props.end(),
-                [&](const auto& property) { return property.type_id == requirement.type_id; }
-            );
-        };
-
-        return requirement.is_direct_parent ? parent != nullptr && provides(parent->provided_props)
-                                            : provides(ancestor_props);
-    }
-
-    // A barrier body is checked where it is hosted: props come from the host's ancestors and
-    // direct_parent from the barrier's parent.
-    // NOLINTNEXTLINE
-    constexpr bool nodes_satisfied(
-        const ir::Model& model,
-        const std::vector<ir::Node>& nodes,
-        const std::vector<ir::Prop>& ancestor_props,
-        const ir::Node* parent
-    )
-    {
-        return std::all_of(
-            nodes.begin(),
-            nodes.end(),
-            [&](const ir::Node& node)
-            {
-                const auto own_satisfied = std::all_of(
-                    node.required_args.begin(),
-                    node.required_args.end(),
-                    [&](const auto& requirement)
-                    { return diagnostic_satisfied(requirement, ancestor_props, parent); }
-                );
-                if (!own_satisfied)
-                {
-                    return false;
-                }
-
-                auto descendant_props = ancestor_props;
-                descendant_props.insert(
-                    descendant_props.end(),
-                    node.provided_props.begin(),
-                    node.provided_props.end()
-                );
-                const auto regions_satisfied = std::all_of(
-                    node.regions.begin(),
-                    node.regions.end(),
-                    [&](const auto& region)
-                    { return nodes_satisfied(model, region, descendant_props, &node); }
-                );
-                if (!regions_satisfied)
-                {
-                    return false;
-                }
-
-                const auto* barrier = ir::find_barrier(model, node.barrier_id);
-                return node.barrier_id == nullptr || barrier == nullptr
-                    || nodes_satisfied(model, barrier->roots, ancestor_props, parent);
-            }
-        );
-    }
-}
-
-namespace nil::sm
-{
-    // True when every state's args are provided by an ancestor prop or by a root arg.
-    // Use the viz sandbox to see which state is missing what.
-    constexpr bool validate(const ir::Model& model, const std::vector<ir::Prop>& root_props = {})
-    {
-        return detail::nodes_satisfied(model, model.roots, root_props, nullptr);
-    }
-
-    // Not consteval: a barrier's definition is built by its out-of-line ir() at runtime.
-    template <typename T, typename API, typename... RootProps>
-    constexpr bool validate()
-    {
-        return validate(ir::build<T, API>(), ir::make_root_props<RootProps...>());
-    }
-
-    // One unmet requirement. States that miss the same thing the same way are merged into one.
-    struct Issue
-    {
-        ir::Arg dependency;
-        // Barriers entered to reach the requirement, outermost first.
-        std::vector<std::string_view> barrier_path;
-        // The first state it was found on.
-        std::string_view state;
-        // Reported on the parent that has to expose `dependency` for a child's direct_parent<T>.
-        bool as_parent = false;
-    };
-
-    struct ChildReport
-    {
-        std::string_view id;
-        std::vector<Issue> issues;
-        // Unmet requirements below this state; they stay out of sight while it is collapsed.
-        std::size_t subtree_unmet = 0;
-    };
-
-    // The details behind validate(), reported one level at a time. Holds a reference to `model`.
-    class Diagnostics final
+    // Holds a reference to the model; the mutex guards the caches below.
+    class DiagnosticsImpl final
     {
     public:
-        Diagnostics(const ir::Model& init_model, std::vector<ir::Prop> init_root_props)
+        DiagnosticsImpl(const ir::Model& init_model, std::vector<ir::Prop> init_root_props)
             : model(&init_model)
             , index(init_model)
             , root_props(std::move(init_root_props))
@@ -477,4 +367,36 @@ namespace nil::sm
         mutable std::optional<std::vector<Issue>> cached_root_issues;
         mutable std::map<std::string, std::size_t> cached_subtree;
     };
+}
+
+namespace nil::sm
+{
+    Diagnostics::Diagnostics(const ir::Model& init_model, std::vector<ir::Prop> init_root_props)
+        : impl(std::make_unique<detail::DiagnosticsImpl>(init_model, std::move(init_root_props)))
+    {
+    }
+
+    Diagnostics::~Diagnostics() = default;
+
+    const Index& Diagnostics::lookup() const
+    {
+        return impl->lookup();
+    }
+
+    std::optional<std::vector<ChildReport>> Diagnostics::children(std::string_view occurrence) const
+    {
+        return impl->children(occurrence);
+    }
+
+    const std::vector<Issue>& Diagnostics::root_issues() const
+    {
+        return impl->root_issues();
+    }
+
+    std::optional<std::vector<Issue>> Diagnostics::barrier_requirements(
+        const void* barrier_id
+    ) const
+    {
+        return impl->barrier_requirements(barrier_id);
+    }
 }

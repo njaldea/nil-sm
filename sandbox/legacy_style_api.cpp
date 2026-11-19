@@ -7,7 +7,7 @@
 // constructor, regardless of what (if anything) the state itself declares via `args`.
 
 #include <nil/sm.hpp>
-#include <nil/sm/diagnostics.hpp>
+#include <nil/sm/format/diagnostics.hpp>
 #include <nil/sm/format/puml.hpp>
 
 #include <nil/xalt/fn_make.hpp>

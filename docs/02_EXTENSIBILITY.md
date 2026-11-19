@@ -101,7 +101,8 @@ parent instead.
 validation results, because a shared barrier can be satisfied at one host and not at
 another.
 
-`nil::sm::validate` answers pass/fail: does every state get its args from an ancestor
+`nil::sm::validate` (`#include <nil/sm/validate.hpp>`; the model comes from
+`<nil/sm/ir.hpp>`) answers pass/fail: does every state get its args from an ancestor
 prop or a root arg?
 
 ```cpp
@@ -118,7 +119,9 @@ assert(nil::sm::validate(model, nil::sm::ir::make_root_props<app_context>()));
 ```
 
 A barrier body is checked at every place it is hosted. To see what is missing, use the
-`viz` sandbox: it lists the unmet args on each state, barrier host, and root.
+`viz` sandbox, or `nil::sm::Diagnostics` (`#include <nil/sm/format/diagnostics.hpp>`, link
+`nil::sm-format`): they list
+the unmet args on each state, barrier host, and root.
 
 ## Type erasure
 

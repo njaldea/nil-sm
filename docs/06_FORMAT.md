@@ -1,9 +1,10 @@
 # Formatters
 
-Include the formatter header only when diagrams are needed:
+Include the formatter header only when diagrams are needed, and link `nil::sm-format`
+(the formatters are compiled into that library, not in your translation unit):
 
 ```cpp
-#include <nil/sm/uml.hpp>
+#include <nil/sm/format/uml.hpp>
 ```
 
 Formatters use the compile-time state graph. They do not need a machine instance.

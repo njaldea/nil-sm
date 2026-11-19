@@ -3,6 +3,8 @@
 
 #include "benchmark_sm.hpp"
 
+#include <nil/sm/validate.hpp>
+
 static_assert(nil::sm::validate<benchmark::root, nil::sm::api::Default>());
 
 int main()

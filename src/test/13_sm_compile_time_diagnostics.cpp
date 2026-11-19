@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include <nil/sm.hpp>
-#include <nil/sm/diagnostics.hpp>
+#include <nil/sm/format/diagnostics.hpp>
 #include <nil/sm/format/puml.hpp>
 
 #include <gtest/gtest.h>
